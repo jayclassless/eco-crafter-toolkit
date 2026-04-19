@@ -130,7 +130,7 @@ export function PriceCalculator() {
 
   return (
     <div className="flex flex-column h-screen">
-      <div className="flex align-items-center gap-3 p-2 surface-ground border-bottom-1 surface-border">
+      <div className="flex align-items-center gap-3 p-2 pb-0">
         <DatasetSelector activeDatasetId={activeDatasetId} onSelect={setActiveDatasetId} />
         <BuildSelector
           datasetId={activeDatasetId}
@@ -146,17 +146,14 @@ export function PriceCalculator() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="col-3 overflow-y-auto p-3 border-right-1 surface-border">
+        <div className="col-3 overflow-y-auto p-3">
           <ConfigPanel
             buildId={activeBuildId}
             datasetId={activeDatasetId}
             onDeleteBuild={handleDeleteBuild}
           />
         </div>
-        <div
-          className="col-4 p-3 border-right-1 surface-border flex flex-column"
-          style={{ minHeight: 0 }}
-        >
+        <div className="col-4 p-3 flex flex-column" style={{ minHeight: 0 }}>
           <Materials
             buildId={activeBuildId}
             datasetId={activeDatasetId}

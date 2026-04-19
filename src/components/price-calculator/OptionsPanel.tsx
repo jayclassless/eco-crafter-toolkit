@@ -125,9 +125,9 @@ export function OptionsPanel({ buildId, onDeleteBuild }: Props) {
     <NumericField
       value={row.percent}
       onChange={(v) => marginMgmt.updateMargin(row.id, 'percent', v ?? 0)}
-      suffix="%"
       min={0}
       max={999}
+      className="w-full"
     />
   )
 
@@ -162,12 +162,16 @@ export function OptionsPanel({ buildId, onDeleteBuild }: Props) {
             />
           </div>
           {margins.length > 0 && (
-            <DataTable value={margins} size="small">
+            <DataTable
+              value={margins}
+              size="small"
+              tableStyle={{ width: '100%', tableLayout: 'fixed' }}
+            >
               <Column header={t('priceCalculator.config.marginName')} body={marginNameTemplate} />
               <Column
                 header={t('priceCalculator.config.marginPercent')}
                 body={marginPercentTemplate}
-                style={{ width: '8rem' }}
+                style={{ width: '5rem' }}
               />
               <Column body={marginDefaultTemplate} style={{ width: '3rem' }} />
               <Column body={marginDeleteTemplate} style={{ width: '3rem' }} />

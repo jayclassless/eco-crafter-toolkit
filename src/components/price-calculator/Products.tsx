@@ -3,13 +3,13 @@ import { Checkbox } from 'primereact/checkbox'
 import { Column } from 'primereact/column'
 import { DataTable } from 'primereact/datatable'
 import { OverlayPanel } from 'primereact/overlaypanel'
-import { RadioButton } from 'primereact/radiobutton'
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Store } from 'tinybase'
 
 import { DebouncedSearchInput } from '@/components/common/DebouncedSearchInput'
 import { EcoIcon } from '@/components/common/EcoIcon'
+import { PriceModeButton } from '@/components/common/PriceModeButton'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { usePriceManagement } from '@/hooks/use-price-management'
 import { usePriceCell, useRecipePriceCell, type PriceSignal } from '@/hooks/use-prices-signal'
@@ -55,14 +55,6 @@ const FILTER_BUILD_TABLES = [
 // Product mode picker omits 'manual' — users override product prices from
 // the Materials list, not the Products panel.
 const PRODUCT_MODE_ORDER: PriceMode[] = ['min', 'max', 'avg', 'mirror']
-
-const MODE_ICON: Record<PriceMode, string> = {
-  manual: 'pi pi-pencil',
-  min: 'pi pi-sort-amount-down',
-  max: 'pi pi-sort-amount-up',
-  avg: 'pi pi-calculator',
-  mirror: 'pi pi-link',
-}
 
 interface Props {
   buildId: string
@@ -137,67 +129,6 @@ const MarginCell = memo(function MarginCell({ value, rowId, options, onChange }:
   )
 })
 
-interface ProductModeButtonProps {
-  productId: string
-  userPriceId: string
-  buildStore: Store
-  onSelectMode: (productId: string, mode: PriceMode, userPriceId: string) => void
-}
-
-// Parent product mode button. Subscribes to the product's priceMode cell so
-// mode edits re-render only this button, not the DataTable.
-const ProductModeButton = memo(function ProductModeButton({
-  productId,
-  userPriceId,
-  buildStore,
-  onSelectMode,
-}: ProductModeButtonProps) {
-  const { t } = useTranslation()
-  const op = useRef<OverlayPanel>(null)
-  const stored = useCellValue<string>(buildStore, 'userPrices', userPriceId, 'priceMode')
-  const mode: PriceMode = ((stored ?? 'min') as PriceMode) || 'min'
-  const activeMode: PriceMode = mode === 'manual' ? 'min' : mode
-
-  return (
-    <>
-      <Button
-        icon={MODE_ICON[activeMode]}
-        text
-        size="small"
-        aria-label={t('priceCalculator.materials.priceMode.label')}
-        tooltip={t('priceCalculator.materials.priceMode.modeTooltip', {
-          mode: t(`priceCalculator.materials.priceMode.${activeMode}`),
-        })}
-        tooltipOptions={{ position: 'top' }}
-        onClick={(e) => op.current?.toggle(e)}
-      />
-      <OverlayPanel ref={op}>
-        <div className="flex flex-column gap-2">
-          {PRODUCT_MODE_ORDER.map((m) => {
-            const inputId = `pmode-${userPriceId || productId}-${m}`
-            return (
-              <div key={m} className="flex align-items-center gap-2">
-                <RadioButton
-                  inputId={inputId}
-                  checked={activeMode === m}
-                  onChange={() => {
-                    onSelectMode(productId, m, userPriceId)
-                    op.current?.hide()
-                  }}
-                />
-                <label htmlFor={inputId} className="text-sm cursor-pointer">
-                  <i className={`${MODE_ICON[m]} mr-2`} />
-                  {t(`priceCalculator.materials.priceMode.${m}`)}
-                </label>
-              </div>
-            )
-          })}
-        </div>
-      </OverlayPanel>
-    </>
-  )
-})
-
 interface ProductParentNameProps {
   parent: ProductParent
   userPriceId: string
@@ -229,7 +160,7 @@ const ProductParentName = memo(function ProductParentName({
     return (
       <div className="flex align-items-center gap-2">
         {icon}
-        <span className="font-bold">{parent.primaryProductName}</span>
+        <span className="font-bold text-left">{parent.primaryProductName}</span>
       </div>
     )
   }
@@ -241,6 +172,7 @@ const ProductParentName = memo(function ProductParentName({
         label={parent.primaryProductName}
         link
         className="p-0 font-bold"
+        pt={{ label: { style: { textAlign: 'left' } } }}
         onClick={() => {
           const winner = signal.getRecipeIdFor(parent.primaryProductId)
           if (winner) onOpenRecipe(winner)
@@ -766,6 +698,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
               label={p.recipeName}
               link
               className="p-0"
+              pt={{ label: { style: { textAlign: 'left' } } }}
               onClick={() => setSelectedRecipeId(p.recipeId)}
             />
           </div>
@@ -780,6 +713,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
             label={p.recipeName}
             link
             className="p-0"
+            pt={{ label: { style: { textAlign: 'left' } } }}
             onClick={() => setSelectedRecipeId(p.recipeId)}
           />
         </div>
@@ -794,10 +728,12 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
         return (
           <div className="flex align-items-center justify-content-end gap-1">
             <ItemCostCell signal={priceSignal} itemId={row.parent.primaryProductId} />
-            <ProductModeButton
-              productId={row.parent.primaryProductId}
+            <PriceModeButton
+              entityId={row.parent.primaryProductId}
               userPriceId={row.parent.userPriceId}
               buildStore={buildStore}
+              modes={PRODUCT_MODE_ORDER}
+              inputIdPrefix="pmode"
               onSelectMode={handleSelectMode}
             />
           </div>
@@ -942,18 +878,18 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
         <Column
           header={t('priceCalculator.products.costPrice')}
           body={costTemplate}
-          style={{ width: '9rem' }}
+          style={{ width: '5rem' }}
           headerClassName="p-align-right"
         />
         <Column
           header={t('priceCalculator.products.margin')}
           body={marginTemplate}
-          style={{ width: '10rem' }}
+          style={{ width: '7rem' }}
         />
         <Column
           header={t('priceCalculator.products.salePrice')}
           body={saleTemplate}
-          style={{ width: '7rem' }}
+          style={{ width: '5rem' }}
           headerClassName="p-align-right"
         />
         <Column body={deleteTemplate} style={{ width: '3rem' }} />

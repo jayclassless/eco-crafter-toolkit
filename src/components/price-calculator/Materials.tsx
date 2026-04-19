@@ -1,16 +1,14 @@
-import { Button } from 'primereact/button'
 import { Checkbox } from 'primereact/checkbox'
 import { Column } from 'primereact/column'
 import { DataTable } from 'primereact/datatable'
-import { OverlayPanel } from 'primereact/overlaypanel'
-import { RadioButton } from 'primereact/radiobutton'
-import { memo, useCallback, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Store } from 'tinybase'
 
 import { DebouncedSearchInput } from '@/components/common/DebouncedSearchInput'
 import { EcoIcon } from '@/components/common/EcoIcon'
 import { PriceField } from '@/components/common/PriceField'
+import { PriceModeButton } from '@/components/common/PriceModeButton'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { usePriceManagement } from '@/hooks/use-price-management'
 import { usePriceCell, type PriceSignal } from '@/hooks/use-prices-signal'
@@ -24,75 +22,7 @@ interface Props {
   priceSignal: PriceSignal
 }
 
-const MODE_ICON: Record<PriceMode, string> = {
-  manual: 'pi pi-pencil',
-  min: 'pi pi-sort-amount-down',
-  max: 'pi pi-sort-amount-up',
-  avg: 'pi pi-calculator',
-  mirror: 'pi pi-link',
-}
-
 const MODE_ORDER: PriceMode[] = ['manual', 'min', 'max', 'avg', 'mirror']
-
-interface ModeIconButtonProps {
-  itemOrTagId: string
-  userPriceId: string
-  buildStore: Store
-  onSelectMode: (itemOrTagId: string, mode: PriceMode, userPriceId: string) => void
-}
-
-// Subscribes to its own `priceMode` cell so mode edits on one tag only
-// re-render that tag's button — the DataTable and view-model are untouched.
-const ModeIconButton = memo(function ModeIconButton({
-  itemOrTagId,
-  userPriceId,
-  buildStore,
-  onSelectMode,
-}: ModeIconButtonProps) {
-  const { t } = useTranslation()
-  const op = useRef<OverlayPanel>(null)
-  const stored = useCellValue<string>(buildStore, 'userPrices', userPriceId, 'priceMode')
-  const mode: PriceMode = ((stored ?? 'min') as PriceMode) || 'min'
-
-  return (
-    <>
-      <Button
-        icon={MODE_ICON[mode]}
-        text
-        size="small"
-        aria-label={t('priceCalculator.materials.priceMode.label')}
-        tooltip={t('priceCalculator.materials.priceMode.modeTooltip', {
-          mode: t(`priceCalculator.materials.priceMode.${mode}`),
-        })}
-        tooltipOptions={{ position: 'top' }}
-        onClick={(e) => op.current?.toggle(e)}
-      />
-      <OverlayPanel ref={op}>
-        <div className="flex flex-column gap-2">
-          {MODE_ORDER.map((m) => {
-            const inputId = `mode-${userPriceId || itemOrTagId}-${m}`
-            return (
-              <div key={m} className="flex align-items-center gap-2">
-                <RadioButton
-                  inputId={inputId}
-                  checked={mode === m}
-                  onChange={() => {
-                    onSelectMode(itemOrTagId, m, userPriceId)
-                    op.current?.hide()
-                  }}
-                />
-                <label htmlFor={inputId} className="text-sm cursor-pointer">
-                  <i className={`${MODE_ICON[m]} mr-2`} />
-                  {t(`priceCalculator.materials.priceMode.${m}`)}
-                </label>
-              </div>
-            )
-          })}
-        </div>
-      </OverlayPanel>
-    </>
-  )
-})
 
 interface ManualPriceCellProps {
   itemOrTagId: string
@@ -142,7 +72,7 @@ const ComputedPriceCell = memo(function ComputedPriceCell({
         style={{
           opacity: 0.75,
           width: '5.5rem',
-          padding: '0.75rem',
+          padding: '0.75rem 0',
           border: '1px solid transparent',
           boxSizing: 'border-box',
           fontSize: '1rem',
@@ -194,10 +124,12 @@ const TagPriceCell = memo(function TagPriceCell({
       ) : (
         <ComputedPriceCell itemOrTagId={itemOrTagId} signal={signal} />
       )}
-      <ModeIconButton
-        itemOrTagId={itemOrTagId}
+      <PriceModeButton
+        entityId={itemOrTagId}
         userPriceId={userPriceId}
         buildStore={buildStore}
+        modes={MODE_ORDER}
+        inputIdPrefix="mode"
         onSelectMode={onSelectMode}
       />
     </div>
