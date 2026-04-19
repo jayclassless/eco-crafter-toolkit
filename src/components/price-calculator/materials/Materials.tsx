@@ -1,195 +1,27 @@
-import { Checkbox } from 'primereact/checkbox'
 import { Column } from 'primereact/column'
 import { DataTable } from 'primereact/datatable'
 import { memo, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Store } from 'tinybase'
 
 import { DebouncedSearchInput } from '@/components/common/DebouncedSearchInput'
 import { EcoIcon } from '@/components/common/EcoIcon'
-import { PriceField } from '@/components/common/PriceField'
-import { PriceModeButton } from '@/components/common/PriceModeButton'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { usePriceManagement } from '@/hooks/use-price-management'
-import { usePriceCell, type PriceSignal } from '@/hooks/use-prices-signal'
-import { useCellValue, useStoreRevision, useTableRowIdsRevision } from '@/hooks/use-store-revision'
+import { type PriceSignal } from '@/hooks/use-prices-signal'
+import { useStoreRevision, useTableRowIdsRevision } from '@/hooks/use-store-revision'
 import { useStores } from '@/stores/providers'
 import type { PriceMode } from '@/types/solver'
+
+import { ComputedPriceCell } from './ComputedPriceCell'
+import { ManualPriceCell } from './ManualPriceCell'
+import { MirrorCheckbox } from './MirrorCheckbox'
+import { TagPriceCell } from './TagPriceCell'
+import type { Material, MaterialGroup } from './types'
 
 interface Props {
   buildId: string
   datasetId: string
   priceSignal: PriceSignal
-}
-
-const MODE_ORDER: PriceMode[] = ['manual', 'min', 'max', 'avg', 'mirror']
-
-interface ManualPriceCellProps {
-  itemOrTagId: string
-  userPriceId: string
-  buildStore: Store
-  onChange: (itemOrTagId: string, userPriceId: string, value: number | null) => void
-}
-
-// The price cell subscribes directly to its own `userPrices` row cell, so an
-// edit to one price only re-renders the one InputNumber — the DataTable, the
-// view-model, and every other row are untouched. Memoized so unchanged cells
-// also bail out when the parent re-renders for unrelated reasons (e.g.
-// filtering).
-const ManualPriceCell = memo(function ManualPriceCell({
-  itemOrTagId,
-  userPriceId,
-  buildStore,
-  onChange,
-}: ManualPriceCellProps) {
-  const price = useCellValue<number>(buildStore, 'userPrices', userPriceId, 'price')
-  // An unset price row collapses to null so the InputNumber shows the
-  // placeholder rather than "0".
-  const value = price && price > 0 ? price : null
-  return <PriceField value={value} onChange={(v) => onChange(itemOrTagId, userPriceId, v)} />
-})
-
-interface ComputedPriceCellProps {
-  itemOrTagId: string
-  signal: PriceSignal
-  showIcon?: boolean
-}
-
-const ComputedPriceCell = memo(function ComputedPriceCell({
-  itemOrTagId,
-  signal,
-  showIcon = false,
-}: ComputedPriceCellProps) {
-  const { t } = useTranslation()
-  const value = usePriceCell(signal, itemOrTagId, 'costPrice')
-  // Match PrimeReact .p-inputtext box model (0.75rem padding, 1px border,
-  // 1rem font-size) so produced-item rows are the same height as rows with
-  // an editable PriceField input.
-  return (
-    <div className="flex align-items-center gap-1">
-      <div
-        className="text-right"
-        style={{
-          opacity: 0.75,
-          width: '5.5rem',
-          padding: '0.75rem 0',
-          border: '1px solid transparent',
-          boxSizing: 'border-box',
-          fontSize: '1rem',
-          lineHeight: 1.2,
-        }}
-      >
-        {value != null
-          ? value.toFixed(2)
-          : t('priceCalculator.materials.priceMode.noComputedPrice')}
-      </div>
-      {showIcon && <i className="pi pi-calculator text-xs text-color-secondary" />}
-    </div>
-  )
-})
-
-interface TagPriceCellProps {
-  itemOrTagId: string
-  userPriceId: string
-  buildStore: Store
-  signal: PriceSignal
-  onPriceChange: (itemOrTagId: string, userPriceId: string, value: number | null) => void
-  onSelectMode: (itemOrTagId: string, mode: PriceMode, userPriceId: string) => void
-}
-
-// Subscribes to the tag's `priceMode` cell so switching mode re-renders only
-// this cell — not the DataTable or the view-model.
-const TagPriceCell = memo(function TagPriceCell({
-  itemOrTagId,
-  userPriceId,
-  buildStore,
-  signal,
-  onPriceChange,
-  onSelectMode,
-}: TagPriceCellProps) {
-  const stored = useCellValue<string>(buildStore, 'userPrices', userPriceId, 'priceMode')
-  const mode: PriceMode = ((stored ?? 'min') as PriceMode) || 'min'
-
-  return (
-    <div className="flex align-items-center justify-content-end gap-1">
-      {mode === 'manual' ? (
-        <div style={{ width: '5.5rem' }}>
-          <ManualPriceCell
-            itemOrTagId={itemOrTagId}
-            userPriceId={userPriceId}
-            buildStore={buildStore}
-            onChange={onPriceChange}
-          />
-        </div>
-      ) : (
-        <ComputedPriceCell itemOrTagId={itemOrTagId} signal={signal} />
-      )}
-      <PriceModeButton
-        entityId={itemOrTagId}
-        userPriceId={userPriceId}
-        buildStore={buildStore}
-        modes={MODE_ORDER}
-        inputIdPrefix="mode"
-        onSelectMode={onSelectMode}
-      />
-    </div>
-  )
-})
-
-interface MirrorCheckboxProps {
-  parentTagId: string
-  parentUserPriceId: string
-  childItemId: string
-  buildStore: Store
-  onSelect: (parentTagId: string, childItemId: string, parentUserPriceId: string) => void
-}
-
-// Shown on child rows when the parent tag's mode is 'mirror'. Subscribes to
-// the parent tag's `priceMode` and `primaryItemId` so changes on either
-// re-render only this checkbox.
-const MirrorCheckbox = memo(function MirrorCheckbox({
-  parentTagId,
-  parentUserPriceId,
-  childItemId,
-  buildStore,
-  onSelect,
-}: MirrorCheckboxProps) {
-  const storedMode = useCellValue<string>(buildStore, 'userPrices', parentUserPriceId, 'priceMode')
-  const mode: PriceMode = ((storedMode ?? 'min') as PriceMode) || 'min'
-  const primary = useCellValue<string>(buildStore, 'userPrices', parentUserPriceId, 'primaryItemId')
-
-  if (mode !== 'mirror') return null
-  return (
-    <Checkbox
-      checked={primary === childItemId}
-      onChange={() => onSelect(parentTagId, childItemId, parentUserPriceId)}
-    />
-  )
-})
-
-interface Material {
-  // Unique row key. For children, namespaced by parent tag so the same item
-  // appearing under multiple tags gets distinct DataTable keys.
-  rowKey: string
-  itemOrTagId: string
-  name: string
-  rawName: string
-  isTag: boolean
-  userPriceId: string
-  isOverride: boolean
-  isChild: boolean
-  parentTagId: string
-  parentUserPriceId: string
-  // True when this item is produced by one of the build's recipes (primary
-  // or secondary product). Such items get their price from the solver, so
-  // the materials list shows the computed cost instead of an editable
-  // price field.
-  isProduced: boolean
-}
-
-interface MaterialGroup {
-  parent: Material
-  children: Material[]
 }
 
 // Tables this panel's view-model depends on. Typing into the local search

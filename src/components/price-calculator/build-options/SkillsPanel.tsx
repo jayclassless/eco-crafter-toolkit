@@ -2,12 +2,9 @@ import { type AutoCompleteCompleteEvent } from 'primereact/autocomplete'
 import { Button } from 'primereact/button'
 import { Column } from 'primereact/column'
 import { DataTable } from 'primereact/datatable'
-import { InputNumber, type InputNumberValueChangeEvent } from 'primereact/inputnumber'
 import { Panel } from 'primereact/panel'
-import { Tooltip } from 'primereact/tooltip'
-import { memo, useCallback, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Store } from 'tinybase'
 
 import { EcoIcon } from '@/components/common/EcoIcon'
 import {
@@ -16,8 +13,12 @@ import {
 } from '@/components/common/GroupedAutoComplete'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useSkillManagement } from '@/hooks/use-skill-management'
-import { useCellValue, useTableRowIdsRevision } from '@/hooks/use-store-revision'
+import { useTableRowIdsRevision } from '@/hooks/use-store-revision'
 import { useStores } from '@/stores/providers'
+
+import { SkillLevelCell } from './SkillLevelCell'
+import type { TalentRow, UserSkillRow } from './skills-types'
+import { TalentsCell } from './TalentsCell'
 
 // userSkills/userTalents row-id changes rebuild the view-model (skill added/
 // removed). Cell edits — level changes, talent enabled toggles — are NOT in
@@ -38,173 +39,6 @@ interface SkillOption {
 }
 
 type SkillGroup = GroupedAutoCompleteGroup<SkillOption>
-
-interface TalentRow {
-  id: string
-  userTalentId: string
-  name: string
-  talentGroupName: string
-  level: number
-  isLevelable: boolean
-  maxTalentLevel: number
-}
-
-interface UserSkillRow {
-  id: string
-  skillId: string
-  name: string
-  rawName: string
-  maxLevel: number
-  talents: TalentRow[]
-}
-
-// Subscribes to its own userSkills.level cell so typing in the InputNumber
-// re-renders only this one component — no DataTable rebuild. Memoized on
-// userSkillId so unrelated parent re-renders also skip.
-const SkillLevelCell = memo(function SkillLevelCell({
-  buildStore,
-  userSkillId,
-  maxLevel,
-  onChange,
-}: {
-  buildStore: Store
-  userSkillId: string
-  maxLevel: number
-  onChange: (userSkillId: string, level: number) => void
-}) {
-  const level = useCellValue<number>(buildStore, 'userSkills', userSkillId, 'level') ?? 1
-  return (
-    <InputNumber
-      value={level}
-      onValueChange={(e: InputNumberValueChangeEvent) => onChange(userSkillId, e.value ?? 1)}
-      min={1}
-      max={maxLevel}
-      showButtons
-      size={1}
-    />
-  )
-})
-
-// Subscribes to the userSkill's level (for filtering) and renders a chip
-// per available talent. Each chip subscribes to its own userTalents row via
-// `TalentChip`. View-model is stable across level/enabled edits.
-const TalentsCell = memo(function TalentsCell({
-  buildStore,
-  userSkillId,
-  talents,
-  onToggle,
-  onSetLevel,
-}: {
-  buildStore: Store
-  userSkillId: string
-  talents: TalentRow[]
-  onToggle: (talentId: string, userTalentId: string, enable: boolean) => void
-  onSetLevel: (talentId: string, userTalentId: string, level: number) => void
-}) {
-  const level = useCellValue<number>(buildStore, 'userSkills', userSkillId, 'level') ?? 1
-  const available = useMemo(() => talents.filter((t) => t.level <= level), [talents, level])
-  if (available.length === 0) return null
-  return (
-    <div className="flex gap-1">
-      {available.map((talent) => (
-        <TalentChip
-          key={talent.id}
-          buildStore={buildStore}
-          talent={talent}
-          onToggle={onToggle}
-          onSetLevel={onSetLevel}
-        />
-      ))}
-    </div>
-  )
-})
-
-// Subscribes to its own userTalents.enabled cell so toggling one talent only
-// re-renders this single chip.
-const TalentChip = memo(function TalentChip({
-  buildStore,
-  talent,
-  onToggle,
-  onSetLevel,
-}: {
-  buildStore: Store
-  talent: TalentRow
-  onToggle: (talentId: string, userTalentId: string, enable: boolean) => void
-  onSetLevel: (talentId: string, userTalentId: string, level: number) => void
-}) {
-  const enabled =
-    useCellValue<boolean>(buildStore, 'userTalents', talent.userTalentId, 'enabled') ?? false
-  const talentLevel =
-    useCellValue<number>(buildStore, 'userTalents', talent.userTalentId, 'talentLevel') ?? 0
-  const tooltipClass = `talent-tooltip-${talent.id.replace(/[^a-zA-Z0-9]/g, '')}`
-
-  const isLevelable = talent.isLevelable
-  const active = isLevelable ? talentLevel > 0 : enabled
-  const tooltipContent = isLevelable
-    ? `${talent.name} (level ${talentLevel}/${talent.maxTalentLevel})\n\n(click to increase, shift/right-click to decrease)`
-    : talent.name
-
-  const handleClick = (e: ReactMouseEvent) => {
-    if (isLevelable) {
-      if (e.shiftKey) {
-        onSetLevel(talent.id, talent.userTalentId, Math.max(0, talentLevel - 1))
-      } else {
-        // Wrap to 0 after max so the chip can be turned off via clicks alone.
-        const next = talentLevel >= talent.maxTalentLevel ? 0 : talentLevel + 1
-        onSetLevel(talent.id, talent.userTalentId, next)
-      }
-    } else {
-      onToggle(talent.id, talent.userTalentId, !enabled)
-    }
-  }
-
-  const handleContextMenu = (e: ReactMouseEvent) => {
-    if (!isLevelable) return
-    e.preventDefault()
-    onSetLevel(talent.id, talent.userTalentId, Math.max(0, talentLevel - 1))
-  }
-
-  return (
-    <div
-      className={tooltipClass}
-      onClick={handleClick}
-      onContextMenu={handleContextMenu}
-      style={{
-        position: 'relative',
-        cursor: 'pointer',
-        opacity: active ? 1 : 0.3,
-        transition: 'opacity 0.15s',
-      }}
-    >
-      <EcoIcon name={talent.talentGroupName} size={24} />
-      {isLevelable && talentLevel > 0 && (
-        <span
-          style={{
-            position: 'absolute',
-            bottom: -2,
-            right: -2,
-            background: 'var(--primary-color)',
-            color: 'var(--primary-color-text)',
-            borderRadius: '999px',
-            fontSize: '0.6rem',
-            lineHeight: 1,
-            padding: '2px 4px',
-            fontWeight: 600,
-            pointerEvents: 'none',
-          }}
-        >
-          {talentLevel}
-        </span>
-      )}
-      <Tooltip
-        target={`.${tooltipClass}`}
-        content={tooltipContent}
-        position="top"
-        style={{ whiteSpace: 'pre-line' }}
-      />
-    </div>
-  )
-})
 
 export function SkillsPanel({ buildId, datasetId }: Props) {
   const { t } = useTranslation()

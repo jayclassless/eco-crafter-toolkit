@@ -9,10 +9,10 @@ import { usePriceSignal } from '@/hooks/use-prices-signal'
 import { useSolverSnapshot } from '@/hooks/use-solver-snapshot'
 import { useStores } from '@/stores/providers'
 
+import { ConfigPanel } from './build-options/ConfigPanel'
 import { BuildSelector } from './BuildSelector'
-import { ConfigPanel } from './ConfigPanel'
-import { Materials } from './Materials'
-import { Products } from './Products'
+import { Materials } from './materials/Materials'
+import { Products } from './products/Products'
 
 export function PriceCalculator() {
   const { gameDataStore, buildStore, uiStore } = useStores()

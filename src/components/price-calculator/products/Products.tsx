@@ -1,34 +1,38 @@
 import { Button } from 'primereact/button'
-import { Checkbox } from 'primereact/checkbox'
 import { Column } from 'primereact/column'
 import { DataTable } from 'primereact/datatable'
-import { OverlayPanel } from 'primereact/overlaypanel'
-import { memo, useCallback, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Store } from 'tinybase'
 
 import { DebouncedSearchInput } from '@/components/common/DebouncedSearchInput'
 import { EcoIcon } from '@/components/common/EcoIcon'
 import { PriceModeButton } from '@/components/common/PriceModeButton'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { usePriceManagement } from '@/hooks/use-price-management'
-import { usePriceCell, useRecipePriceCell, type PriceSignal } from '@/hooks/use-prices-signal'
+import { type PriceSignal } from '@/hooks/use-prices-signal'
 import {
   buildMarginOptions,
   buildProductGroups,
   findDefaultMarginId,
   type Product,
-  type ProductParent,
 } from '@/hooks/use-products'
 import { useRecipeManagement } from '@/hooks/use-recipe-management'
 import { useSettings } from '@/hooks/use-settings'
-import { useCellValue, useStoreRevision } from '@/hooks/use-store-revision'
+import { useStoreRevision } from '@/hooks/use-store-revision'
 import { generateId } from '@/lib/ids'
 import { useStores } from '@/stores/providers'
 import type { PriceMode } from '@/types/solver'
 
 import { AddRecipeDialog } from './AddRecipeDialog'
+import { ItemCostCell } from './ItemCostCell'
+import { ItemSaleCell } from './ItemSaleCell'
+import { MarginCell } from './MarginCell'
+import { MirrorChildCheckbox } from './MirrorChildCheckbox'
+import { ProductParentName } from './ProductParentName'
+import { RecipeCostCell } from './RecipeCostCell'
 import { RecipeDialog } from './RecipeDialog'
+import { RecipeFilterButton } from './RecipeFilterButton'
+import type { Row } from './types'
 
 // Heavy tables that feed `buildProductGroups` + margin lookups. A change to
 // any of these invalidates the group/margin view-model, which indexes the
@@ -61,326 +65,6 @@ interface Props {
   datasetId: string
   priceSignal: PriceSignal
 }
-
-// Item-keyed price cell — used for flat (single-recipe) rows and the
-// aggregated parent price.
-const ItemCostCell = memo(function ItemCostCell({
-  signal,
-  itemId,
-}: {
-  signal: PriceSignal
-  itemId: string
-}) {
-  const value = usePriceCell(signal, itemId, 'costPrice')
-  return <span className="text-right block">{value != null ? value.toFixed(2) : '-'}</span>
-})
-
-const ItemSaleCell = memo(function ItemSaleCell({
-  signal,
-  itemId,
-}: {
-  signal: PriceSignal
-  itemId: string
-}) {
-  const value = usePriceCell(signal, itemId, 'salePrice')
-  return <span className="text-right block">{value != null ? value.toFixed(2) : '-'}</span>
-})
-
-// Recipe-keyed price cell — used for child rows under a multi-recipe group
-// so each child shows its own producer's cost.
-const RecipeCostCell = memo(function RecipeCostCell({
-  signal,
-  recipeId,
-}: {
-  signal: PriceSignal
-  recipeId: string
-}) {
-  const value = useRecipePriceCell(signal, recipeId, 'costPrice')
-  return <span className="text-right block">{value != null ? value.toFixed(2) : '-'}</span>
-})
-
-interface MarginOption {
-  id: string
-  name: string
-}
-
-interface MarginCellProps {
-  value: string
-  rowId: string
-  options: MarginOption[]
-  onChange: (rowId: string, marginId: string) => void
-}
-
-// Native <select> is ~100× cheaper to mount/unmount than PrimeReact Dropdown.
-const MarginCell = memo(function MarginCell({ value, rowId, options, onChange }: MarginCellProps) {
-  return (
-    <select
-      className="p-inputtext p-inputtext-sm w-full"
-      value={value || ''}
-      onChange={(e) => onChange(rowId, e.target.value)}
-    >
-      <option value=""></option>
-      {options.map((o) => (
-        <option key={o.id} value={o.id}>
-          {o.name}
-        </option>
-      ))}
-    </select>
-  )
-})
-
-interface ProductParentNameProps {
-  parent: ProductParent
-  userPriceId: string
-  buildStore: Store
-  signal: PriceSignal
-  onOpenRecipe: (recipeId: string) => void
-}
-
-// Parent name cell. In avg mode — or when no price has resolved yet — the
-// name is plain text (no single producer to route to). Otherwise it's a link
-// that opens the winning recipe's dialog, with the winner read from the
-// signal's recipeId snapshot.
-const ProductParentName = memo(function ProductParentName({
-  parent,
-  userPriceId,
-  buildStore,
-  signal,
-  onOpenRecipe,
-}: ProductParentNameProps) {
-  const stored = useCellValue<string>(buildStore, 'userPrices', userPriceId, 'priceMode')
-  const mode: PriceMode = ((stored ?? 'min') as PriceMode) || 'min'
-  const cost = usePriceCell(signal, parent.primaryProductId, 'costPrice')
-
-  const icon = parent.primaryProductRawName ? (
-    <EcoIcon name={parent.primaryProductRawName} size={20} />
-  ) : null
-
-  if (mode === 'avg' || cost === null) {
-    return (
-      <div className="flex align-items-center gap-2">
-        {icon}
-        <span className="font-bold text-left">{parent.primaryProductName}</span>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex align-items-center gap-2">
-      {icon}
-      <Button
-        label={parent.primaryProductName}
-        link
-        className="p-0 font-bold"
-        pt={{ label: { style: { textAlign: 'left' } } }}
-        onClick={() => {
-          const winner = signal.getRecipeIdFor(parent.primaryProductId)
-          if (winner) onOpenRecipe(winner)
-        }}
-      />
-    </div>
-  )
-})
-
-interface MirrorChildCheckboxProps {
-  parentProductId: string
-  parentUserPriceId: string
-  childRecipeId: string
-  buildStore: Store
-  onSelect: (parentProductId: string, childRecipeId: string, parentUserPriceId: string) => void
-}
-
-const MirrorChildCheckbox = memo(function MirrorChildCheckbox({
-  parentProductId,
-  parentUserPriceId,
-  childRecipeId,
-  buildStore,
-  onSelect,
-}: MirrorChildCheckboxProps) {
-  const storedMode = useCellValue<string>(buildStore, 'userPrices', parentUserPriceId, 'priceMode')
-  const mode: PriceMode = ((storedMode ?? 'min') as PriceMode) || 'min'
-  const primary = useCellValue<string>(buildStore, 'userPrices', parentUserPriceId, 'primaryItemId')
-
-  if (mode !== 'mirror') return null
-  return (
-    <Checkbox
-      checked={primary === childRecipeId}
-      onChange={() => onSelect(parentProductId, childRecipeId, parentUserPriceId)}
-    />
-  )
-})
-
-interface RecipeFilterButtonProps {
-  skillOptions: { id: string; name: string }[]
-  hiddenSkills: Set<string>
-  showUnskilled: boolean
-  onToggleSkill: (id: string) => void
-  onToggleUnskilled: () => void
-  onSetAllSkills: (hideAll: boolean) => void
-  craftingTableOptions: { id: string; name: string }[]
-  hiddenCraftingTables: Set<string>
-  onToggleCraftingTable: (id: string) => void
-  onSetAllCraftingTables: (hideAll: boolean) => void
-  onlyLevelAccessible: boolean
-  onToggleOnlyLevelAccessible: () => void
-}
-
-const RecipeFilterButton = memo(function RecipeFilterButton({
-  skillOptions,
-  hiddenSkills,
-  showUnskilled,
-  onToggleSkill,
-  onToggleUnskilled,
-  onSetAllSkills,
-  craftingTableOptions,
-  hiddenCraftingTables,
-  onToggleCraftingTable,
-  onSetAllCraftingTables,
-  onlyLevelAccessible,
-  onToggleOnlyLevelAccessible,
-}: RecipeFilterButtonProps) {
-  const { t } = useTranslation()
-  const op = useRef<OverlayPanel>(null)
-  const isAnyHidden =
-    hiddenSkills.size > 0 || !showUnskilled || hiddenCraftingTables.size > 0 || onlyLevelAccessible
-  return (
-    <>
-      <Button
-        icon={isAnyHidden ? 'pi pi-filter-fill' : 'pi pi-filter'}
-        text={!isAnyHidden}
-        size="small"
-        aria-label={t('priceCalculator.products.recipeFilter.label')}
-        tooltip={t('priceCalculator.products.recipeFilter.tooltip')}
-        tooltipOptions={{ position: 'bottom' }}
-        onClick={(e) => op.current?.toggle(e)}
-      />
-      <OverlayPanel ref={op}>
-        <div
-          className="flex flex-column gap-3"
-          style={{ minWidth: '22rem' }}
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <div className="flex gap-4">
-            <div className="flex flex-column gap-2 flex-1">
-              <div className="font-semibold text-sm">
-                {t('priceCalculator.products.recipeFilter.skillSection')}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  label={t('priceCalculator.products.recipeFilter.all')}
-                  size="small"
-                  text
-                  onClick={() => onSetAllSkills(false)}
-                />
-                <Button
-                  label={t('priceCalculator.products.recipeFilter.none')}
-                  size="small"
-                  text
-                  onClick={() => onSetAllSkills(true)}
-                />
-              </div>
-              {skillOptions.map((opt) => {
-                const inputId = `skill-filter-${opt.id}`
-                return (
-                  <div key={opt.id} className="flex align-items-center gap-2">
-                    <Checkbox
-                      inputId={inputId}
-                      checked={!hiddenSkills.has(opt.id)}
-                      onChange={() => onToggleSkill(opt.id)}
-                    />
-                    <label htmlFor={inputId} className="text-sm cursor-pointer">
-                      {opt.name}
-                    </label>
-                  </div>
-                )
-              })}
-              <div className="flex align-items-center gap-2">
-                <Checkbox
-                  inputId="skill-filter-unskilled"
-                  checked={showUnskilled}
-                  onChange={onToggleUnskilled}
-                />
-                <label htmlFor="skill-filter-unskilled" className="text-sm cursor-pointer">
-                  {t('priceCalculator.products.recipeFilter.unskilled')}
-                </label>
-              </div>
-            </div>
-            <div className="flex flex-column gap-2 flex-1">
-              <div className="font-semibold text-sm">
-                {t('priceCalculator.products.recipeFilter.craftingTableSection')}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  label={t('priceCalculator.products.recipeFilter.all')}
-                  size="small"
-                  text
-                  onClick={() => onSetAllCraftingTables(false)}
-                />
-                <Button
-                  label={t('priceCalculator.products.recipeFilter.none')}
-                  size="small"
-                  text
-                  onClick={() => onSetAllCraftingTables(true)}
-                />
-              </div>
-              {craftingTableOptions.map((opt) => {
-                const inputId = `crafting-table-filter-${opt.id}`
-                return (
-                  <div key={opt.id} className="flex align-items-center gap-2">
-                    <Checkbox
-                      inputId={inputId}
-                      checked={!hiddenCraftingTables.has(opt.id)}
-                      onChange={() => onToggleCraftingTable(opt.id)}
-                    />
-                    <label htmlFor={inputId} className="text-sm cursor-pointer">
-                      {opt.name}
-                    </label>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-          <div className="flex align-items-center gap-2 border-top-1 surface-border pt-2">
-            <Checkbox
-              inputId="recipe-filter-only-level-accessible"
-              checked={onlyLevelAccessible}
-              onChange={onToggleOnlyLevelAccessible}
-            />
-            <label htmlFor="recipe-filter-only-level-accessible" className="text-sm cursor-pointer">
-              {t('priceCalculator.products.onlyLevelAccessible')}
-            </label>
-          </div>
-        </div>
-      </OverlayPanel>
-    </>
-  )
-})
-
-// --- row flattening ---
-
-interface ParentRow {
-  kind: 'parent'
-  rowKey: string
-  parent: ProductParent
-  /** Child count — kept for potential future use (count badge etc.). */
-  childCount: number
-}
-
-interface ChildRow {
-  kind: 'child'
-  rowKey: string
-  product: Product
-  parent: ProductParent
-}
-
-interface FlatRow {
-  kind: 'flat'
-  rowKey: string
-  product: Product
-}
-
-type Row = ParentRow | ChildRow | FlatRow
 
 function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
   const { t } = useTranslation()

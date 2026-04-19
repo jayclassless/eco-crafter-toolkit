@@ -64,7 +64,10 @@ Types for the solver contract live in `src/types/solver.ts`; game-data types in 
 
 ### Components
 
-- `src/components/price-calculator/` — the main UI (ConfigPanel, Materials, Products, RecipeDialog, etc.)
+- `src/components/price-calculator/` — the main UI. `PriceCalculator.tsx` and `BuildSelector.tsx` (top bar) sit at the root; the three main columns are split into subdirectories:
+  - `products/` — Products column (including `RecipeDialog`, `AddRecipeDialog`, and all cell components)
+  - `materials/` — Materials column
+  - `build-options/` — left column (`ConfigPanel` + `SkillsPanel`, `CraftingTablesPanel`, `OptionsPanel` and their cells)
 - `src/components/dataset/` — first-run dataset picker and switcher
 - `src/components/import/` — custom dataset import
 - `src/components/settings/` — sidebar, theme (PrimeReact), purge-data dialog
@@ -78,6 +81,7 @@ Strings come from `src/i18n/messages/`. Game entity names are localized _in the 
 
 ## Conventions
 
+- **One React component per module.** A file defines exactly one component. The `memo(Impl)` wrapper pattern (`function FooImpl(...) {} export const Foo = memo(FooImpl)`) counts as one component and is allowed — the `Impl` is not a separate component, just the unwrapped implementation. Shared types used by multiple components in a column go in a sibling `types.ts` (or a more specific name like `skills-types.ts` when a column has more than one type cluster).
 - React 19, function components, hooks only. PrimeReact + PrimeFlex for UI.
 - oxfmt: single quotes, no semicolons, 2-space indent, ES5 trailing commas, sorted imports.
 - Tests: vitest + @testing-library/react + jsdom + `fake-indexeddb` (see `src/test-setup.ts`). Coverage excludes `src/types/*` and `__tests__/**`.
