@@ -87,6 +87,7 @@ export function PriceCalculator() {
       'userRecipes',
       'userRecipeMargins',
       'userProductMargins',
+      'userProductShares',
       'userMargins',
       'userPrices',
       'userSettings',
@@ -124,6 +125,7 @@ export function PriceCalculator() {
   useEffect(() => {
     priceSignal.set(result?.prices ?? {})
     priceSignal.setRecipe(result?.recipePrices ?? {})
+    priceSignal.setRecipeCosts(result?.recipeCosts ?? {})
   }, [result, priceSignal])
 
   if (!activeDatasetId || !activeBuildId) return null

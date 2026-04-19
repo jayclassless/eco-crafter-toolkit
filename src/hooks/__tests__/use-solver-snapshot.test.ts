@@ -356,8 +356,10 @@ describe('buildSolverSnapshot', () => {
     expect(r.ingredients).toHaveLength(1)
     expect(r.ingredients[0].modifiers).toHaveLength(1)
     expect(r.products).toHaveLength(2)
-    expect(r.products[0].share).toBeCloseTo(0.5)
-    expect(r.products[1].share).toBeCloseTo(0.5)
+    // Default without userProductShares: primary (first non-reintegrated by
+    // index) gets 100%, others 0%.
+    expect(r.products[0].share).toBeCloseTo(1)
+    expect(r.products[1].share).toBeCloseTo(0)
     expect(r.craftMinutesModifiers).toHaveLength(1)
     expect(r.laborModifiers).toHaveLength(1)
   })
@@ -922,5 +924,142 @@ describe('buildSolverSnapshot', () => {
     })
     const snap = buildSolverSnapshot(game, build, BUILD, DS)!
     expect(snap.recipes).toHaveLength(0)
+  })
+
+  describe('multi-product share allocation', () => {
+    const setupMultiProductRecipe = (opts: {
+      productIds: string[]
+      ingredientId?: string
+      reintegratedProductId?: string
+    }) => {
+      setupSettings()
+      game.setRow('recipes', 'r1', {
+        id: 'r1',
+        datasetId: DS,
+        name: 'R',
+        familyName: 'F',
+        requiredSkillLevel: 0,
+        isBlueprint: false,
+        isDefault: true,
+        craftingTableId: 'ct1',
+        baseCraftTime: 1,
+        baseLaborCost: 1,
+      })
+      if (opts.ingredientId) {
+        game.setRow('recipeElements', 're-ing', {
+          id: 're-ing',
+          datasetId: DS,
+          recipeId: 'r1',
+          itemOrTagId: opts.ingredientId,
+          baseQuantity: -1,
+          isProduct: false,
+          index: 0,
+        })
+      }
+      opts.productIds.forEach((pid, i) => {
+        game.setRow('recipeElements', `re-p${i}`, {
+          id: `re-p${i}`,
+          datasetId: DS,
+          recipeId: 'r1',
+          itemOrTagId: pid,
+          baseQuantity: 1,
+          isProduct: true,
+          index: i,
+        })
+      })
+      build.setRow('userRecipes', 'ur1', {
+        id: 'ur1',
+        buildId: BUILD,
+        recipeId: 'r1',
+        roundFactor: 0,
+      })
+    }
+
+    it('marks a product whose item is also an ingredient as reintegrated with share=0', () => {
+      setupMultiProductRecipe({
+        productIds: ['primary', 'scrap'],
+        ingredientId: 'scrap',
+      })
+      const snap = buildSolverSnapshot(game, build, BUILD, DS)!
+      const r = snap.recipes[0]
+      expect(r.products).toHaveLength(2)
+      const primary = r.products.find((p) => p.itemOrTagId === 'primary')!
+      const scrap = r.products.find((p) => p.itemOrTagId === 'scrap')!
+      expect(primary.isReintegrated).toBe(false)
+      expect(primary.share).toBeCloseTo(1)
+      expect(scrap.isReintegrated).toBe(true)
+      expect(scrap.share).toBe(0)
+    })
+
+    it('without userProductShares rows, primary (first non-reintegrated by index) = 1 and others = 0', () => {
+      setupMultiProductRecipe({ productIds: ['a', 'b', 'c'] })
+      const snap = buildSolverSnapshot(game, build, BUILD, DS)!
+      const r = snap.recipes[0]
+      expect(r.products).toHaveLength(3)
+      expect(r.products[0].share).toBeCloseTo(1)
+      expect(r.products[1].share).toBe(0)
+      expect(r.products[2].share).toBe(0)
+    })
+
+    it('when a reintegrated product sits at index 0, primary is the next non-reintegrated product', () => {
+      setupMultiProductRecipe({
+        productIds: ['scrap', 'ingot'],
+        ingredientId: 'scrap',
+      })
+      const snap = buildSolverSnapshot(game, build, BUILD, DS)!
+      const r = snap.recipes[0]
+      const ingot = r.products.find((p) => p.itemOrTagId === 'ingot')!
+      const scrap = r.products.find((p) => p.itemOrTagId === 'scrap')!
+      expect(ingot.share).toBeCloseTo(1)
+      expect(scrap.isReintegrated).toBe(true)
+      expect(scrap.share).toBe(0)
+    })
+
+    it('honors userProductShares rows (stored as 0–100, emitted as 0–1)', () => {
+      setupMultiProductRecipe({ productIds: ['a', 'b'] })
+      build.setRow('userProductShares', 'ups1', {
+        id: 'ups1',
+        buildId: BUILD,
+        userRecipeId: 'ur1',
+        productItemOrTagId: 'a',
+        sharePercent: 30,
+      })
+      build.setRow('userProductShares', 'ups2', {
+        id: 'ups2',
+        buildId: BUILD,
+        userRecipeId: 'ur1',
+        productItemOrTagId: 'b',
+        sharePercent: 70,
+      })
+      const snap = buildSolverSnapshot(game, build, BUILD, DS)!
+      const r = snap.recipes[0]
+      const a = r.products.find((p) => p.itemOrTagId === 'a')!
+      const b = r.products.find((p) => p.itemOrTagId === 'b')!
+      expect(a.share).toBeCloseTo(0.3)
+      expect(b.share).toBeCloseTo(0.7)
+    })
+
+    it('ignores userProductShares rows from other builds or other userRecipes', () => {
+      setupMultiProductRecipe({ productIds: ['a', 'b'] })
+      build.setRow('userProductShares', 'ups-foreign-build', {
+        id: 'ups-foreign-build',
+        buildId: 'other-build',
+        userRecipeId: 'ur1',
+        productItemOrTagId: 'a',
+        sharePercent: 50,
+      })
+      build.setRow('userProductShares', 'ups-foreign-ur', {
+        id: 'ups-foreign-ur',
+        buildId: BUILD,
+        userRecipeId: 'ur-other',
+        productItemOrTagId: 'a',
+        sharePercent: 50,
+      })
+      const snap = buildSolverSnapshot(game, build, BUILD, DS)!
+      const r = snap.recipes[0]
+      // No valid rows for this userRecipeId → default (primary=1, rest=0)
+      expect(r.products[0].share).toBeCloseTo(1)
+      expect(r.products[1].share).toBe(0)
+    })
   })
 })

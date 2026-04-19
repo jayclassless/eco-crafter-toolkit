@@ -75,8 +75,27 @@ export interface SolverOutput {
    * product group, and by RecipeDialog to show the specific recipe's price for
    * each of its products (instead of the aggregated group price). */
   recipePrices: Record<string, { costPrice: number; salePrice: number }>
+  /** Per-recipe fixed-cost breakdown (craft time + labor), keyed by recipeId.
+   * RecipeDialog reads this to render the "Additional Costs" section with
+   * values that match the solver exactly. */
+  recipeCosts: Record<string, RecipeCostBreakdown>
   elementPrices: Record<string, SolverElementPrice>
   errors: SolverError[]
+}
+
+export interface RecipeCostBreakdown {
+  /** Effective craft time in minutes (after speed modifiers). */
+  craftTime: number
+  /** craftTime × costPerMinute (the table's $/min rate). */
+  craftTimeCost: number
+  /** Effective labor in calories (after labor-reduce modifiers). */
+  laborAmount: number
+  /** laborAmount × calorieCost / 1000. */
+  laborCost: number
+  /** Pass-through of the table's $/min rate so the UI can display it. */
+  costPerMinute: number
+  /** Pass-through of settings.calorieCost ($/1000 cal). */
+  calorieCost: number
 }
 
 export interface SolverPrice {

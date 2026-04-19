@@ -279,4 +279,140 @@ describe('createRecipeManagement', () => {
       expect(rowsForBuild(buildStore, 'userCraftingTables')).toHaveLength(0)
     })
   })
+
+  describe('setProductShare', () => {
+    const setupMultiProduct = (productIds: string[], ingredientId?: string) => {
+      const recipeId = 'recipe-multi'
+      setupRecipe(recipeId, 'ct-workbench')
+      if (ingredientId) {
+        gameDataStore.setRow('recipeElements', 're-ing', {
+          id: 're-ing',
+          datasetId: DATASET_ID,
+          recipeId,
+          itemOrTagId: ingredientId,
+          baseQuantity: -1,
+          isProduct: false,
+          index: 0,
+        })
+      }
+      productIds.forEach((pid, i) => {
+        gameDataStore.setRow('recipeElements', `re-p${i}`, {
+          id: `re-p${i}`,
+          datasetId: DATASET_ID,
+          recipeId,
+          itemOrTagId: pid,
+          baseQuantity: 1,
+          isProduct: true,
+          index: i,
+        })
+      })
+      return mgmt().addRecipe(recipeId)
+    }
+
+    const sharesFor = (userRecipeId: string): Record<string, number> => {
+      const out: Record<string, number> = {}
+      for (const id of buildStore.getRowIds('userProductShares')) {
+        const r = buildStore.getRow('userProductShares', id)
+        if (r.buildId !== BUILD_ID) continue
+        if (r.userRecipeId !== userRecipeId) continue
+        out[r.productItemOrTagId as string] = r.sharePercent as number
+      }
+      return out
+    }
+
+    it('bootstraps defaults (primary=100, others=0) on first edit and redistributes', () => {
+      const ur = setupMultiProduct(['a', 'b'])
+      // Initial edit: set b to 40 — should bootstrap defaults then redistribute
+      // the remainder across A (the only "other"), sending A to 60.
+      mgmt().setProductShare(ur, 'b', 40)
+      expect(sharesFor(ur)).toEqual({ a: 60, b: 40 })
+    })
+
+    it('three products with defaults 100/0/0, setting A to 50 splits remainder equally', () => {
+      const ur = setupMultiProduct(['a', 'b', 'c'])
+      mgmt().setProductShare(ur, 'a', 50)
+      // Others started at 0/0 → equal split: 25/25
+      expect(sharesFor(ur)).toEqual({ a: 50, b: 25, c: 25 })
+    })
+
+    it('preserves other-share ratios when redistributing', () => {
+      const ur = setupMultiProduct(['a', 'b', 'c'])
+      // Seed 60/30/10 so the ratio between B and C is 3:1.
+      ;[
+        ['a', 60],
+        ['b', 30],
+        ['c', 10],
+      ].forEach(([pid, pct], i) => {
+        buildStore.setRow('userProductShares', `seed-${i}`, {
+          id: `seed-${i}`,
+          buildId: BUILD_ID,
+          userRecipeId: ur,
+          productItemOrTagId: pid as string,
+          sharePercent: pct as number,
+        })
+      })
+      mgmt().setProductShare(ur, 'a', 20)
+      // remainder = 80; B:C = 3:1 → 60/20
+      expect(sharesFor(ur)).toEqual({ a: 20, b: 60, c: 20 })
+    })
+
+    it('clamps the entered value into [0, 100]', () => {
+      const ur = setupMultiProduct(['a', 'b'])
+      mgmt().setProductShare(ur, 'a', 150)
+      expect(sharesFor(ur)).toEqual({ a: 100, b: 0 })
+      mgmt().setProductShare(ur, 'a', -20)
+      expect(sharesFor(ur)).toEqual({ a: 0, b: 100 })
+    })
+
+    it('ensures the stored set always sums to 100 by absorbing rounding drift', () => {
+      const ur = setupMultiProduct(['a', 'b', 'c'])
+      // Seed 33/33/34.
+      ;[
+        ['a', 33],
+        ['b', 33],
+        ['c', 34],
+      ].forEach(([pid, pct], i) => {
+        buildStore.setRow('userProductShares', `seed-${i}`, {
+          id: `seed-${i}`,
+          buildId: BUILD_ID,
+          userRecipeId: ur,
+          productItemOrTagId: pid as string,
+          sharePercent: pct as number,
+        })
+      })
+      mgmt().setProductShare(ur, 'a', 50)
+      const shares = sharesFor(ur)
+      expect(shares.a).toBe(50)
+      expect(shares.b + shares.c).toBe(50)
+    })
+
+    it('skips reintegrated products when computing shares', () => {
+      const ur = setupMultiProduct(['ingot', 'scrap'], 'scrap')
+      // scrap is also an ingredient, so it's reintegrated — shouldn't appear
+      // in userProductShares.
+      mgmt().setProductShare(ur, 'ingot', 100)
+      // Single non-reintegrated product → no-op (it's always 100%)
+      expect(sharesFor(ur)).toEqual({})
+    })
+
+    it('is a no-op for a recipe with one non-reintegrated product', () => {
+      const ur = setupMultiProduct(['only'])
+      mgmt().setProductShare(ur, 'only', 50)
+      expect(sharesFor(ur)).toEqual({})
+    })
+
+    it('is a no-op when the product is not part of the recipe', () => {
+      const ur = setupMultiProduct(['a', 'b'])
+      mgmt().setProductShare(ur, 'zzz', 40)
+      expect(sharesFor(ur)).toEqual({})
+    })
+
+    it('removeRecipe also clears userProductShares for the recipe', () => {
+      const ur = setupMultiProduct(['a', 'b'])
+      mgmt().setProductShare(ur, 'b', 40)
+      expect(Object.keys(sharesFor(ur))).toHaveLength(2)
+      mgmt().removeRecipe(ur)
+      expect(sharesFor(ur)).toEqual({})
+    })
+  })
 })

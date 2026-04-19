@@ -218,6 +218,22 @@ export function buildSolverSnapshot(
     productMargins[upm.itemOrTagId as string] = upm.userMarginId as string
   }
 
+  // userProductShares keyed by userRecipeId → Map<productItemOrTagId, sharePercent>.
+  // Absence of a userRecipeId key means "no user override — use the default split
+  // (primary product = 1.0, others = 0)".
+  const userProductSharesByUserRecipeId = new Map<string, Map<string, number>>()
+  for (const upsId of buildStore.getRowIds('userProductShares')) {
+    const ups = buildStore.getRow('userProductShares', upsId)
+    if (ups.buildId !== buildId) continue
+    const urId = ups.userRecipeId as string
+    let inner = userProductSharesByUserRecipeId.get(urId)
+    if (!inner) {
+      inner = new Map()
+      userProductSharesByUserRecipeId.set(urId, inner)
+    }
+    inner.set(ups.productItemOrTagId as string, ups.sharePercent as number)
+  }
+
   // tagItems (game-data side — filter by datasetId once)
   const tagItems: Record<string, string[]> = {}
   for (const rowId of gameDataStore.getRowIds('tagItems')) {
@@ -325,25 +341,31 @@ export function buildSolverSnapshot(
       }
     }
 
-    // Elements (O(k_elements) via index)
+    // Elements (O(k_elements) via index). We also collect ingredient item/tag
+    // IDs so products whose item is also consumed by this recipe (e.g. a
+    // returned tool, reclaimed scrap) can be flagged isReintegrated and have
+    // their value subtracted from the recipe's total cost in solver.ts.
     const ingredients: SolverRecipe['ingredients'] = []
     const products: SolverRecipe['products'] = []
+    const ingredientItemIds = new Set<string>()
 
     const elems = elementsByRecipeId.get(recipeId)
     if (elems) {
       for (const { id: reId, row: re } of elems) {
         const elemMods = getModifiers('elementQuantity', reId)
+        const itemOrTagId = re.itemOrTagId as string
         if (re.isProduct) {
           products.push({
-            itemOrTagId: re.itemOrTagId as string,
+            itemOrTagId,
             baseQuantity: re.baseQuantity as number,
-            share: 1,
+            share: 0,
             isReintegrated: false,
             modifiers: elemMods,
           })
         } else {
+          ingredientItemIds.add(itemOrTagId)
           ingredients.push({
-            itemOrTagId: re.itemOrTagId as string,
+            itemOrTagId,
             baseQuantity: re.baseQuantity as number,
             modifiers: elemMods,
           })
@@ -351,12 +373,31 @@ export function buildSolverSnapshot(
       }
     }
 
-    // Distribute shares equally if multiple products
-    const nonReintegrated = products.filter((p) => !p.isReintegrated)
-    if (nonReintegrated.length > 1) {
-      const share = 1 / nonReintegrated.length
-      for (const p of nonReintegrated) {
-        p.share = share
+    // Mark products whose item is also an ingredient as reintegrated; the
+    // solver subtracts their cost from the recipe total (see solver.ts:246).
+    for (const prod of products) {
+      if (ingredientItemIds.has(prod.itemOrTagId)) {
+        prod.isReintegrated = true
+      }
+    }
+
+    // Apply shares. Non-reintegrated products get either user-assigned
+    // percentages (userProductShares rows, stored 0–100) or the default of
+    // primary=1.0 (first non-reintegrated by recipeElement index) / others=0.
+    // Reintegrated products always carry share=0 — they aren't in the priced
+    // output at all, just deducted from cost.
+    const userShares = userProductSharesByUserRecipeId.get(urId)
+    let primaryAssigned = false
+    for (const prod of products) {
+      if (prod.isReintegrated) continue
+      if (userShares) {
+        const pct = userShares.get(prod.itemOrTagId) ?? 0
+        prod.share = pct / 100
+      } else if (!primaryAssigned) {
+        prod.share = 1
+        primaryAssigned = true
+      } else {
+        prod.share = 0
       }
     }
 

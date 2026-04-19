@@ -1,5 +1,6 @@
 import type {
   PriceMode,
+  RecipeCostBreakdown,
   SolverInput,
   SolverOutput,
   SolverRecipe,
@@ -24,6 +25,7 @@ interface PreparedProduct {
 interface PreparedRecipe {
   recipe: SolverRecipe
   fixedCost: number
+  costBreakdown: RecipeCostBreakdown
   ingredients: PreparedElement[]
   reintegrated: PreparedElement[]
   products: PreparedProduct[]
@@ -62,12 +64,14 @@ export function solve(input: SolverInput): SolverOutput {
   const producingSkills: Record<string, string | undefined> = {}
   const candidates: Record<string, Candidate[]> = {}
   const recipePrices: Record<string, { costPrice: number; salePrice: number }> = {}
+  const recipeCosts: Record<string, RecipeCostBreakdown> = {}
   const errors: SolverError[] = []
 
   // ---- Precompute per-recipe, price-independent data ----
   const prepared: PreparedRecipe[] = Array.from<PreparedRecipe>({ length: recipes.length })
   for (let i = 0; i < recipes.length; i++) {
     prepared[i] = prepareRecipe(recipes[i], settings.calorieCost)
+    recipeCosts[recipes[i].id] = prepared[i].costBreakdown
   }
 
   // ---- Iterative resolution over a shrinking unresolved list ----
@@ -204,7 +208,7 @@ export function solve(input: SolverInput): SolverOutput {
     }
   }
 
-  return { prices: outputPrices, recipePrices, elementPrices: {}, errors }
+  return { prices: outputPrices, recipePrices, recipeCosts, elementPrices: {}, errors }
 }
 
 function prepareRecipe(recipe: SolverRecipe, calorieCost: number): PreparedRecipe {
@@ -225,9 +229,19 @@ function prepareRecipe(recipe: SolverRecipe, calorieCost: number): PreparedRecip
 
   const laborMultiplier = resolveModifiers(recipe.laborModifiers, ctx)
   const craftMultiplier = resolveModifiers(recipe.craftMinutesModifiers, craftCtx)
-  const fixedCost =
-    (recipe.baseLaborCost * laborMultiplier * calorieCost) / 1000 +
-    recipe.baseCraftTime * craftMultiplier * recipe.costPerMinute
+  const craftTime = recipe.baseCraftTime * craftMultiplier
+  const laborAmount = recipe.baseLaborCost * laborMultiplier
+  const craftTimeCost = craftTime * recipe.costPerMinute
+  const laborCost = (laborAmount * calorieCost) / 1000
+  const fixedCost = laborCost + craftTimeCost
+  const costBreakdown: RecipeCostBreakdown = {
+    craftTime,
+    craftTimeCost,
+    laborAmount,
+    laborCost,
+    costPerMinute: recipe.costPerMinute,
+    calorieCost,
+  }
 
   const ingredients: PreparedElement[] = Array.from<PreparedElement>({
     length: recipe.ingredients.length,
@@ -263,7 +277,7 @@ function prepareRecipe(recipe: SolverRecipe, calorieCost: number): PreparedRecip
     }
   }
 
-  return { recipe, fixedCost, ingredients, reintegrated, products }
+  return { recipe, fixedCost, costBreakdown, ingredients, reintegrated, products }
 }
 
 /**

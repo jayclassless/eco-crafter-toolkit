@@ -65,6 +65,13 @@ export function createBuildStore() {
       itemOrTagId: { type: 'string' },
       userMarginId: { type: 'string' },
     },
+    userProductShares: {
+      id: { type: 'string' },
+      buildId: { type: 'string' },
+      userRecipeId: { type: 'string' },
+      productItemOrTagId: { type: 'string' },
+      sharePercent: { type: 'number', default: 0 },
+    },
     userSettings: {
       id: { type: 'string' },
       buildId: { type: 'string' },

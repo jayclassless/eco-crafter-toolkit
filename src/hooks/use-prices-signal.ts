@@ -1,4 +1,6 @@
-import { useMemo, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+
+import type { RecipeCostBreakdown } from '@/types/solver'
 
 export interface PriceEntry {
   costPrice: number
@@ -13,6 +15,7 @@ export interface PriceEntry {
 }
 
 export type PricesMap = Record<string, PriceEntry>
+export type RecipeCostsMap = Record<string, RecipeCostBreakdown>
 
 /**
  * External store holding the latest computed prices. Cells subscribe through
@@ -47,6 +50,16 @@ export interface PriceSignal {
   getRecipeIdFor(itemId: string): string
   /** Return the full item-keyed prices map (snapshot, not a copy). */
   getAll(): PricesMap
+  /** Replace the per-recipe cost breakdown map and notify listeners whose breakdown changed. */
+  setRecipeCosts(costs: RecipeCostsMap): void
+  /** Subscribe to any field change within a recipe's cost breakdown. */
+  subscribeRecipeCost(recipeId: string, listener: () => void): () => void
+  /** Snapshot read for a recipe's cost breakdown. Returns a stable reference when unchanged. */
+  getRecipeCost(recipeId: string): RecipeCostBreakdown | null
+  /** Subscribe to any solver update across all namespaces. Useful for dialogs
+   * that need to re-render whenever prices change without subscribing to each
+   * cell individually. */
+  subscribeAny(listener: () => void): () => void
 }
 
 function notifyChangedCells(
@@ -89,28 +102,77 @@ function addListener(
   }
 }
 
+function breakdownEqual(
+  a: RecipeCostBreakdown | undefined,
+  b: RecipeCostBreakdown | undefined
+): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  return (
+    a.craftTime === b.craftTime &&
+    a.craftTimeCost === b.craftTimeCost &&
+    a.laborAmount === b.laborAmount &&
+    a.laborCost === b.laborCost &&
+    a.costPerMinute === b.costPerMinute &&
+    a.calorieCost === b.calorieCost
+  )
+}
+
 function createPriceSignal(): PriceSignal {
   let itemPrices: PricesMap = {}
   let recipePrices: PricesMap = {}
+  let recipeCosts: RecipeCostsMap = {}
   const itemListeners = new Map<string, Set<() => void>>()
   const recipeListeners = new Map<string, Set<() => void>>()
+  const recipeCostListeners = new Map<string, Set<() => void>>()
+  const anyListeners = new Set<() => void>()
+
+  const notifyAny = () => {
+    for (const listener of anyListeners) listener()
+  }
 
   return {
     set(prices) {
       const prev = itemPrices
       itemPrices = prices
       notifyChangedCells(itemListeners, prev, prices)
+      notifyAny()
     },
     setRecipe(prices) {
       const prev = recipePrices
       recipePrices = prices
       notifyChangedCells(recipeListeners, prev, prices)
+      notifyAny()
+    },
+    setRecipeCosts(costs) {
+      const prev = recipeCosts
+      recipeCosts = costs
+      for (const [recipeId, set] of recipeCostListeners) {
+        if (!breakdownEqual(prev[recipeId], costs[recipeId])) {
+          for (const listener of set) listener()
+        }
+      }
+      notifyAny()
     },
     subscribe(itemId, field, listener) {
       return addListener(itemListeners, itemId, field, listener)
     },
     subscribeRecipe(recipeId, field, listener) {
       return addListener(recipeListeners, recipeId, field, listener)
+    },
+    subscribeRecipeCost(recipeId, listener) {
+      let set = recipeCostListeners.get(recipeId)
+      if (!set) {
+        set = new Set()
+        recipeCostListeners.set(recipeId, set)
+      }
+      set.add(listener)
+      return () => {
+        const s = recipeCostListeners.get(recipeId)
+        if (!s) return
+        s.delete(listener)
+        if (s.size === 0) recipeCostListeners.delete(recipeId)
+      }
     },
     get(itemId, field) {
       const entry = itemPrices[itemId]
@@ -120,12 +182,21 @@ function createPriceSignal(): PriceSignal {
       const entry = recipePrices[recipeId]
       return entry ? entry[field] : null
     },
+    getRecipeCost(recipeId) {
+      return recipeCosts[recipeId] ?? null
+    },
     getRecipeIdFor(itemId) {
       const entry = itemPrices[itemId]
       return entry?.recipeId ?? ''
     },
     getAll() {
       return itemPrices
+    },
+    subscribeAny(listener) {
+      anyListeners.add(listener)
+      return () => {
+        anyListeners.delete(listener)
+      }
     },
   }
 }
@@ -189,6 +260,44 @@ export function useRecipePriceCell(
       getSnapshot: () => signal.getRecipe(recipeId, field),
     }
   }, [signal, recipeId, field])
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
+/**
+ * Force a component to re-render whenever the solver pushes a new result into
+ * the signal. Intended for dialogs / panels that do inline reads of multiple
+ * signal namespaces and don't want to wire a subscription per cell.
+ */
+export function usePriceSignalRevision(signal: PriceSignal): number {
+  const [, setRev] = useState(0)
+  useEffect(() => {
+    return signal.subscribeAny(() => setRev((r) => r + 1))
+  }, [signal])
+  return 0
+}
+
+/**
+ * Subscribe to a recipe's cost breakdown (craft time / labor cost). The
+ * returned reference is stable between solver runs when the values haven't
+ * changed, so React bails out of re-rendering.
+ */
+export function useRecipeCostCell(
+  signal: PriceSignal,
+  recipeId: string | null | undefined
+): RecipeCostBreakdown | null {
+  const { subscribe, getSnapshot } = useMemo(() => {
+    if (!recipeId) {
+      return {
+        subscribe: () => () => {},
+        getSnapshot: () => null as RecipeCostBreakdown | null,
+      }
+    }
+    return {
+      subscribe: (listener: () => void) => signal.subscribeRecipeCost(recipeId, listener),
+      getSnapshot: () => signal.getRecipeCost(recipeId),
+    }
+  }, [signal, recipeId])
 
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
