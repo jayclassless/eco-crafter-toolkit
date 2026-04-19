@@ -6,7 +6,9 @@ import { InputNumber } from 'primereact/inputnumber'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { EcoIcon } from '@/components/common/EcoIcon'
+import { CraftingTableIcon } from '@/components/common/CraftingTableIcon'
+import { ItemIcon } from '@/components/common/ItemIcon'
+import { SkillIcon } from '@/components/common/SkillIcon'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import {
   type PriceSignal,
@@ -289,7 +291,7 @@ export function RecipeDialog({
 
   const nameTemplate = (row: ElementRow) => (
     <div className="flex align-items-center gap-2">
-      {row.rawName && <EcoIcon name={row.rawName} size={20} />}
+      {row.rawName && <ItemIcon item={{ name: row.rawName }} />}
       <span>{row.name}</span>
     </div>
   )
@@ -297,7 +299,7 @@ export function RecipeDialog({
   const ingredientNameTemplate = (row: ElementRow) =>
     onOpenMaterial ? (
       <div className="flex align-items-center gap-2">
-        {row.rawName && <EcoIcon name={row.rawName} size={20} />}
+        {row.rawName && <ItemIcon item={{ name: row.rawName }} />}
         <Button
           label={row.name}
           link
@@ -373,16 +375,16 @@ export function RecipeDialog({
 
   const headerNode = (
     <div className="flex align-items-center gap-2">
-      {headerRawName && <EcoIcon name={headerRawName} size={48} />}
+      {headerRawName && <ItemIcon item={{ name: headerRawName }} size={48} />}
       <span className="mr-3">{recipeName}</span>
       {skillRawName && (
         <span title={`${t('priceCalculator.recipe.skill')}: ${skillName}`}>
-          <EcoIcon name={skillRawName} size={20} />
+          <SkillIcon skill={{ name: skillRawName }} />
         </span>
       )}
       {tableRawName && (
         <span title={`${t('priceCalculator.recipe.craftingTable')}: ${tableName}`}>
-          <EcoIcon name={tableRawName} size={20} />
+          <CraftingTableIcon table={{ name: tableRawName }} />
         </span>
       )}
     </div>

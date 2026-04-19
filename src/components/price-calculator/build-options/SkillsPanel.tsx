@@ -6,11 +6,11 @@ import { Panel } from 'primereact/panel'
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { EcoIcon } from '@/components/common/EcoIcon'
 import {
   GroupedAutoComplete,
   type GroupedAutoCompleteGroup,
 } from '@/components/common/GroupedAutoComplete'
+import { SkillIcon } from '@/components/common/SkillIcon'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useSkillManagement } from '@/hooks/use-skill-management'
 import { useTableRowIdsRevision } from '@/hooks/use-store-revision'
@@ -183,7 +183,7 @@ export function SkillsPanel({ buildId, datasetId }: Props) {
   const nameTemplate = useCallback(
     (row: UserSkillRow) => (
       <div className="flex align-items-center gap-2">
-        <EcoIcon name={row.rawName} size={20} />
+        <SkillIcon skill={{ name: row.rawName }} />
         <span>{row.name}</span>
       </div>
     ),

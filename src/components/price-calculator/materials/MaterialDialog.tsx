@@ -6,7 +6,9 @@ import { TabPanel, TabView } from 'primereact/tabview'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { EcoIcon } from '@/components/common/EcoIcon'
+import { ItemIcon } from '@/components/common/ItemIcon'
+import { RecipeIcon } from '@/components/common/RecipeIcon'
+import { SkillIcon } from '@/components/common/SkillIcon'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useStoreRevision } from '@/hooks/use-store-revision'
 import { useStores } from '@/stores/providers'
@@ -225,7 +227,7 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
 
   const headerNode = (
     <div className="flex align-items-center gap-2">
-      {itemRawName && <EcoIcon name={itemRawName} size={48} />}
+      {itemRawName && <ItemIcon item={{ name: itemRawName }} size={48} />}
       <span className="mr-2">{itemName}</span>
       {isTag && <i className="pi pi-tag text-sm" />}
     </div>
@@ -235,7 +237,7 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
     if (!row.skillId) return <span className="text-color-secondary">—</span>
     return (
       <div className="flex align-items-center gap-2">
-        {row.skillRawName && <EcoIcon name={row.skillRawName} size={20} />}
+        {row.skillRawName && <SkillIcon skill={{ name: row.skillRawName }} />}
         <span>{row.skillName}</span>
       </div>
     )
@@ -244,7 +246,7 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
   const usedInRecipeTemplate = (row: RecipeUsage) => (
     <div className="flex align-items-center gap-2">
       {row.recipePrimaryProductRawName && (
-        <EcoIcon name={row.recipePrimaryProductRawName} size={20} />
+        <RecipeIcon primaryProduct={{ name: row.recipePrimaryProductRawName }} />
       )}
       <Button
         label={row.recipeName}
@@ -268,7 +270,7 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
   const producedByRecipeTemplate = (row: ProducedByRow) => (
     <div className="flex align-items-center gap-2">
       {row.recipePrimaryProductRawName && (
-        <EcoIcon name={row.recipePrimaryProductRawName} size={20} />
+        <RecipeIcon primaryProduct={{ name: row.recipePrimaryProductRawName }} />
       )}
       <Button
         label={row.recipeName}

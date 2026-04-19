@@ -5,7 +5,7 @@ import { memo, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DebouncedSearchInput } from '@/components/common/DebouncedSearchInput'
-import { EcoIcon } from '@/components/common/EcoIcon'
+import { ItemIcon } from '@/components/common/ItemIcon'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { usePriceManagement } from '@/hooks/use-price-management'
 import { type PriceSignal } from '@/hooks/use-prices-signal'
@@ -265,7 +265,7 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
         className="flex align-items-center gap-2"
         style={row.isChild ? { paddingLeft: '1.5rem' } : undefined}
       >
-        {row.rawName && <EcoIcon name={row.rawName} size={20} />}
+        {row.rawName && <ItemIcon item={{ name: row.rawName }} />}
         <Button
           label={row.name}
           link

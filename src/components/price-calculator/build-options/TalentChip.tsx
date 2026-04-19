@@ -2,7 +2,7 @@ import { Tooltip } from 'primereact/tooltip'
 import { memo, type MouseEvent as ReactMouseEvent } from 'react'
 import type { Store } from 'tinybase'
 
-import { EcoIcon } from '@/components/common/EcoIcon'
+import { TalentIcon } from '@/components/common/TalentIcon'
 import { useCellValue } from '@/hooks/use-store-revision'
 
 import type { TalentRow } from './skills-types'
@@ -66,7 +66,7 @@ export const TalentChip = memo(function TalentChip({
         transition: 'opacity 0.15s',
       }}
     >
-      <EcoIcon name={talent.talentGroupName} size={24} />
+      <TalentIcon talent={talent} size={24} />
       {isLevelable && talentLevel > 0 && (
         <span
           style={{

@@ -2,7 +2,7 @@ import { Button } from 'primereact/button'
 import { memo } from 'react'
 import type { Store } from 'tinybase'
 
-import { EcoIcon } from '@/components/common/EcoIcon'
+import { ItemIcon } from '@/components/common/ItemIcon'
 import { usePriceCell, type PriceSignal } from '@/hooks/use-prices-signal'
 import type { ProductParent } from '@/hooks/use-products'
 import { useCellValue } from '@/hooks/use-store-revision'
@@ -32,7 +32,7 @@ export const ProductParentName = memo(function ProductParentName({
   const cost = usePriceCell(signal, parent.primaryProductId, 'costPrice')
 
   const icon = parent.primaryProductRawName ? (
-    <EcoIcon name={parent.primaryProductRawName} size={20} />
+    <ItemIcon item={{ name: parent.primaryProductRawName }} />
   ) : null
 
   if (mode === 'avg' || cost === null) {

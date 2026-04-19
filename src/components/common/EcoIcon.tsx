@@ -2,6 +2,7 @@ interface Props {
   name: string
   size?: number
   className?: string
+  alt?: string
 }
 
 const CATEGORY_SUFFIXES: [string, string][] = [
@@ -19,6 +20,6 @@ function getIconPath(name: string): string {
   return `/assets/eco-icons/misc/${name}.png`
 }
 
-export function EcoIcon({ name, size = 24, className }: Props) {
-  return <img src={getIconPath(name)} alt="" width={size} height={size} className={className} />
+export function EcoIcon({ name, size = 24, className, alt = '' }: Props) {
+  return <img src={getIconPath(name)} alt={alt} width={size} height={size} className={className} />
 }

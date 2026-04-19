@@ -7,12 +7,13 @@ import { Panel } from 'primereact/panel'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { EcoIcon } from '@/components/common/EcoIcon'
+import { CraftingTableIcon } from '@/components/common/CraftingTableIcon'
 import {
   GroupedAutoComplete,
   type GroupedAutoCompleteGroup,
 } from '@/components/common/GroupedAutoComplete'
 import { NumericField } from '@/components/common/NumericField'
+import { PluginModuleIcon } from '@/components/common/PluginModuleIcon'
 import { useCraftingTableManagement } from '@/hooks/use-crafting-table-management'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useStoreRevision } from '@/hooks/use-store-revision'
@@ -194,7 +195,7 @@ export function CraftingTablesPanel({ buildId, datasetId }: Props) {
     const o = opt as PluginModuleOption
     return (
       <div className="flex align-items-center gap-2">
-        <EcoIcon name={o.rawName} size={20} />
+        <PluginModuleIcon module={{ name: o.rawName }} />
         <span>{o.name}</span>
       </div>
     )
@@ -205,7 +206,7 @@ export function CraftingTablesPanel({ buildId, datasetId }: Props) {
     if (!o) return <span>{t('common.none')}</span>
     return (
       <div className="flex align-items-center" style={{ paddingLeft: '0.25rem' }}>
-        <EcoIcon name={o.rawName} size={20} />
+        <PluginModuleIcon module={{ name: o.rawName }} />
       </div>
     )
   }
@@ -265,7 +266,7 @@ export function CraftingTablesPanel({ buildId, datasetId }: Props) {
             header={t('priceCalculator.config.craftingTables')}
             body={(row: UserTableRow) => (
               <div className="flex align-items-center gap-2">
-                <EcoIcon name={row.rawName} size={20} />
+                <CraftingTableIcon table={{ name: row.rawName }} />
                 <span>{row.name}</span>
               </div>
             )}

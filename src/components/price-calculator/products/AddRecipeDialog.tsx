@@ -5,7 +5,7 @@ import { SelectButton, type SelectButtonChangeEvent } from 'primereact/selectbut
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { EcoIcon } from '@/components/common/EcoIcon'
+import { RecipeIcon } from '@/components/common/RecipeIcon'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { buildRecipeProductItemIds, getRecipePrimaryProductRawName } from '@/hooks/use-products'
 import { useRecipeManagement } from '@/hooks/use-recipe-management'
@@ -145,7 +145,7 @@ export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingR
   const itemTemplate = useCallback(
     (item: RecipeOption) => (
       <div className="flex align-items-center gap-2">
-        {item.rawName && <EcoIcon name={item.rawName} size={20} />}
+        {item.rawName && <RecipeIcon primaryProduct={{ name: item.rawName }} />}
         <span>{item.name}</span>
       </div>
     ),

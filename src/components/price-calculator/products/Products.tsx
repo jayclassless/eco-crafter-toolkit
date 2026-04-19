@@ -5,8 +5,8 @@ import { memo, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { DebouncedSearchInput } from '@/components/common/DebouncedSearchInput'
-import { EcoIcon } from '@/components/common/EcoIcon'
 import { PriceModeButton } from '@/components/common/PriceModeButton'
+import { RecipeIcon } from '@/components/common/RecipeIcon'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { usePriceManagement } from '@/hooks/use-price-management'
 import { type PriceSignal } from '@/hooks/use-prices-signal'
@@ -378,7 +378,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
         return (
           <div className="flex align-items-center gap-2" style={{ paddingLeft: '1.5rem' }}>
             {p.recipePrimaryProductRawName && (
-              <EcoIcon name={p.recipePrimaryProductRawName} size={20} />
+              <RecipeIcon primaryProduct={{ name: p.recipePrimaryProductRawName }} />
             )}
             <Button
               label={p.recipeName}
@@ -394,7 +394,9 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       const p = row.product
       return (
         <div className="flex align-items-center gap-2">
-          {p.primaryProductRawName && <EcoIcon name={p.primaryProductRawName} size={20} />}
+          {p.primaryProductRawName && (
+            <RecipeIcon primaryProduct={{ name: p.primaryProductRawName }} />
+          )}
           <Button
             label={p.recipeName}
             link
