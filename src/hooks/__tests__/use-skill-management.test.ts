@@ -295,22 +295,22 @@ describe('createSkillManagement', () => {
       // Add a collapsed-group entry that should be cleaned
       buildStore.setRow('hiddenSkills', 'csg1', {
         buildId: BUILD_ID,
-        skillName: 'Mining',
+        skillId: 'skill-mining',
       })
       // And entries that must NOT be cleaned (different build / different skill)
       buildStore.setRow('hiddenSkills', 'csg-other-build', {
         buildId: 'other-build',
-        skillName: 'Mining',
+        skillId: 'skill-mining',
       })
       buildStore.setRow('hiddenSkills', 'csg-other-skill', {
         buildId: BUILD_ID,
-        skillName: 'Logging',
+        skillId: 'skill-logging',
       })
     })
 
     it('removes the userSkill, its recipes, recipe-margin links, and talents', () => {
       const userSkillId = rowsForBuild(buildStore, 'userSkills')[0].id
-      mgmt().removeSkill(userSkillId, 'skill-mining', 'Mining')
+      mgmt().removeSkill(userSkillId, 'skill-mining')
 
       expect(rowsForBuild(buildStore, 'userSkills')).toHaveLength(0)
       expect(rowsForBuild(buildStore, 'userRecipes')).toHaveLength(0)
@@ -356,7 +356,7 @@ describe('createSkillManagement', () => {
         enabled: true,
       })
 
-      mgmt().removeSkill(userSkillId, 'skill-mining', 'Mining')
+      mgmt().removeSkill(userSkillId, 'skill-mining')
 
       expect(buildStore.getRow('userTalents', 'ut-foreign').buildId).toBe('other-build')
       expect(buildStore.getRow('userRecipes', 'ur-foreign').buildId).toBe('other-build')
@@ -366,7 +366,7 @@ describe('createSkillManagement', () => {
 
     it('removes the matching hidden-skill entry but leaves others', () => {
       const userSkillId = rowsForBuild(buildStore, 'userSkills')[0].id
-      mgmt().removeSkill(userSkillId, 'skill-mining', 'Mining')
+      mgmt().removeSkill(userSkillId, 'skill-mining')
       const remainingIds = buildStore.getRowIds('hiddenSkills').sort()
       expect(remainingIds).toEqual(['csg-other-build', 'csg-other-skill'])
     })

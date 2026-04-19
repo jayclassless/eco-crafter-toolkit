@@ -78,16 +78,31 @@ export function PriceCalculator() {
   useEffect(() => {
     if (!activeBuildId) return
 
-    // Listen for any build store change and retrigger
-    const listenerId = buildStore.addTablesListener(() => {
-      triggerSolver()
-    })
+    // Only re-run the solver on tables it actually reads. Filter-only tables
+    // (`hiddenSkills`, `hiddenCraftingTables`) purely affect which Products
+    // rows are shown and are intentionally excluded — a listener on them
+    // would pay a full snapshot+worker roundtrip (~500ms) on every filter
+    // checkbox toggle for no change in result.
+    const SOLVER_TABLES = [
+      'userRecipes',
+      'userRecipeMargins',
+      'userProductMargins',
+      'userMargins',
+      'userPrices',
+      'userSettings',
+      'userSkills',
+      'userTalents',
+      'userCraftingTables',
+    ]
+    const listenerIds = SOLVER_TABLES.map((t) =>
+      buildStore.addTableListener(t, () => triggerSolver())
+    )
 
     // Initial calculation
     triggerSolver()
 
     return () => {
-      buildStore.delListener(listenerId)
+      for (const id of listenerIds) buildStore.delListener(id)
     }
   }, [activeBuildId, buildStore, triggerSolver])
 

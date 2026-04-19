@@ -342,9 +342,8 @@ export function SkillsPanel({ buildId, datasetId }: Props) {
   )
   const removeSkillFn = skillMgmt.removeSkill
   const handleRemoveSkill = useCallback(
-    (userSkillId: string, skillId: string) =>
-      removeSkillFn(userSkillId, skillId, getName('skill', skillId)),
-    [removeSkillFn, getName]
+    (userSkillId: string, skillId: string) => removeSkillFn(userSkillId, skillId),
+    [removeSkillFn]
   )
 
   const nameTemplate = useCallback(

@@ -30,15 +30,25 @@ import type { PriceMode } from '@/types/solver'
 import { AddRecipeDialog } from './AddRecipeDialog'
 import { RecipeDialog } from './RecipeDialog'
 
-const BUILD_TABLES = [
+// Heavy tables that feed `buildProductGroups` + margin lookups. A change to
+// any of these invalidates the group/margin view-model, which indexes the
+// game-data store's `recipeElements` end-to-end (~300ms on a full dataset).
+const GROUPS_BUILD_TABLES = [
   'userRecipes',
   'userRecipeMargins',
   'userProductMargins',
   'userMargins',
+  'userPrices',
+] as const
+
+// Filter-state tables. These don't affect the group view-model — only which
+// rows get shown — so they're tracked on a separate revision counter so a
+// filter toggle doesn't rebuild groups.
+const FILTER_BUILD_TABLES = [
   'userSettings',
   'userSkills',
-  'userPrices',
   'hiddenSkills',
+  'hiddenCraftingTables',
 ] as const
 
 // Product mode picker omits 'manual' — users override product prices from
@@ -267,76 +277,145 @@ const MirrorChildCheckbox = memo(function MirrorChildCheckbox({
   )
 })
 
-interface SkillFilterButtonProps {
-  skillNames: string[]
-  hidden: Set<string>
+interface RecipeFilterButtonProps {
+  skillOptions: { id: string; name: string }[]
+  hiddenSkills: Set<string>
   showUnskilled: boolean
-  onToggle: (name: string) => void
+  onToggleSkill: (id: string) => void
   onToggleUnskilled: () => void
-  onSetAll: (hideAll: boolean) => void
+  onSetAllSkills: (hideAll: boolean) => void
+  craftingTableOptions: { id: string; name: string }[]
+  hiddenCraftingTables: Set<string>
+  onToggleCraftingTable: (id: string) => void
+  onSetAllCraftingTables: (hideAll: boolean) => void
+  onlyLevelAccessible: boolean
+  onToggleOnlyLevelAccessible: () => void
 }
 
-const SkillFilterButton = memo(function SkillFilterButton({
-  skillNames,
-  hidden,
+const RecipeFilterButton = memo(function RecipeFilterButton({
+  skillOptions,
+  hiddenSkills,
   showUnskilled,
-  onToggle,
+  onToggleSkill,
   onToggleUnskilled,
-  onSetAll,
-}: SkillFilterButtonProps) {
+  onSetAllSkills,
+  craftingTableOptions,
+  hiddenCraftingTables,
+  onToggleCraftingTable,
+  onSetAllCraftingTables,
+  onlyLevelAccessible,
+  onToggleOnlyLevelAccessible,
+}: RecipeFilterButtonProps) {
   const { t } = useTranslation()
   const op = useRef<OverlayPanel>(null)
-  const isAnyHidden = hidden.size > 0 || !showUnskilled
+  const isAnyHidden =
+    hiddenSkills.size > 0 || !showUnskilled || hiddenCraftingTables.size > 0 || onlyLevelAccessible
   return (
     <>
       <Button
         icon={isAnyHidden ? 'pi pi-filter-fill' : 'pi pi-filter'}
         text={!isAnyHidden}
         size="small"
-        aria-label={t('priceCalculator.products.skillFilter.label')}
-        tooltip={t('priceCalculator.products.skillFilter.tooltip')}
+        aria-label={t('priceCalculator.products.recipeFilter.label')}
+        tooltip={t('priceCalculator.products.recipeFilter.tooltip')}
         tooltipOptions={{ position: 'bottom' }}
         onClick={(e) => op.current?.toggle(e)}
       />
       <OverlayPanel ref={op}>
-        <div className="flex flex-column gap-2" style={{ minWidth: '14rem' }}>
-          <div className="flex gap-2">
-            <Button
-              label={t('priceCalculator.products.skillFilter.all')}
-              size="small"
-              text
-              onClick={() => onSetAll(false)}
-            />
-            <Button
-              label={t('priceCalculator.products.skillFilter.none')}
-              size="small"
-              text
-              onClick={() => onSetAll(true)}
-            />
-          </div>
-          {skillNames.map((name) => {
-            const inputId = `skill-filter-${name}`
-            return (
-              <div key={name} className="flex align-items-center gap-2">
-                <Checkbox
-                  inputId={inputId}
-                  checked={!hidden.has(name)}
-                  onChange={() => onToggle(name)}
+        <div
+          className="flex flex-column gap-3"
+          style={{ minWidth: '22rem' }}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="flex gap-4">
+            <div className="flex flex-column gap-2 flex-1">
+              <div className="font-semibold text-sm">
+                {t('priceCalculator.products.recipeFilter.skillSection')}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  label={t('priceCalculator.products.recipeFilter.all')}
+                  size="small"
+                  text
+                  onClick={() => onSetAllSkills(false)}
                 />
-                <label htmlFor={inputId} className="text-sm cursor-pointer">
-                  {name}
+                <Button
+                  label={t('priceCalculator.products.recipeFilter.none')}
+                  size="small"
+                  text
+                  onClick={() => onSetAllSkills(true)}
+                />
+              </div>
+              {skillOptions.map((opt) => {
+                const inputId = `skill-filter-${opt.id}`
+                return (
+                  <div key={opt.id} className="flex align-items-center gap-2">
+                    <Checkbox
+                      inputId={inputId}
+                      checked={!hiddenSkills.has(opt.id)}
+                      onChange={() => onToggleSkill(opt.id)}
+                    />
+                    <label htmlFor={inputId} className="text-sm cursor-pointer">
+                      {opt.name}
+                    </label>
+                  </div>
+                )
+              })}
+              <div className="flex align-items-center gap-2">
+                <Checkbox
+                  inputId="skill-filter-unskilled"
+                  checked={showUnskilled}
+                  onChange={onToggleUnskilled}
+                />
+                <label htmlFor="skill-filter-unskilled" className="text-sm cursor-pointer">
+                  {t('priceCalculator.products.recipeFilter.unskilled')}
                 </label>
               </div>
-            )
-          })}
-          <div className="flex align-items-center gap-2">
+            </div>
+            <div className="flex flex-column gap-2 flex-1">
+              <div className="font-semibold text-sm">
+                {t('priceCalculator.products.recipeFilter.craftingTableSection')}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  label={t('priceCalculator.products.recipeFilter.all')}
+                  size="small"
+                  text
+                  onClick={() => onSetAllCraftingTables(false)}
+                />
+                <Button
+                  label={t('priceCalculator.products.recipeFilter.none')}
+                  size="small"
+                  text
+                  onClick={() => onSetAllCraftingTables(true)}
+                />
+              </div>
+              {craftingTableOptions.map((opt) => {
+                const inputId = `crafting-table-filter-${opt.id}`
+                return (
+                  <div key={opt.id} className="flex align-items-center gap-2">
+                    <Checkbox
+                      inputId={inputId}
+                      checked={!hiddenCraftingTables.has(opt.id)}
+                      onChange={() => onToggleCraftingTable(opt.id)}
+                    />
+                    <label htmlFor={inputId} className="text-sm cursor-pointer">
+                      {opt.name}
+                    </label>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+          <div className="flex align-items-center gap-2 border-top-1 surface-border pt-2">
             <Checkbox
-              inputId="skill-filter-unskilled"
-              checked={showUnskilled}
-              onChange={onToggleUnskilled}
+              inputId="recipe-filter-only-level-accessible"
+              checked={onlyLevelAccessible}
+              onChange={onToggleOnlyLevelAccessible}
             />
-            <label htmlFor="skill-filter-unskilled" className="text-sm cursor-pointer">
-              {t('priceCalculator.products.skillFilter.unskilled')}
+            <label htmlFor="recipe-filter-only-level-accessible" className="text-sm cursor-pointer">
+              {t('priceCalculator.products.onlyLevelAccessible')}
             </label>
           </div>
         </div>
@@ -378,16 +457,25 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
   const priceMgmt = usePriceManagement(buildId)
   const settingsMgmt = useSettings(buildId)
 
-  const buildRev = useStoreRevision(buildStore, BUILD_TABLES)
+  const groupsRev = useStoreRevision(buildStore, GROUPS_BUILD_TABLES)
+  const filterRev = useStoreRevision(buildStore, FILTER_BUILD_TABLES)
+
+  const { groups, margins, defaultMarginId } = useMemo(
+    () => ({
+      groups: buildProductGroups(buildStore, gameDataStore, buildId, getName),
+      margins: buildMarginOptions(buildStore, buildId),
+      defaultMarginId: findDefaultMarginId(buildStore, buildId),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [buildStore, gameDataStore, buildId, getName, groupsRev]
+  )
 
   const {
-    groups,
-    margins,
-    defaultMarginId,
     showUnskilledRecipes,
     onlyLevelAccessible,
     userSkillLevels,
     hiddenSkills,
+    hiddenCraftingTables,
   } = useMemo(() => {
     let showUnskilled = true
     let levelOnly = false
@@ -408,19 +496,23 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
     for (const rowId of buildStore.getRowIds('hiddenSkills')) {
       const row = buildStore.getRow('hiddenSkills', rowId)
       if (row.buildId !== buildId) continue
-      hidden.add(row.skillName as string)
+      hidden.add(row.skillId as string)
+    }
+    const hiddenTables = new Set<string>()
+    for (const rowId of buildStore.getRowIds('hiddenCraftingTables')) {
+      const row = buildStore.getRow('hiddenCraftingTables', rowId)
+      if (row.buildId !== buildId) continue
+      hiddenTables.add(row.craftingTableId as string)
     }
     return {
-      groups: buildProductGroups(buildStore, gameDataStore, buildId, getName),
-      margins: buildMarginOptions(buildStore, buildId),
-      defaultMarginId: findDefaultMarginId(buildStore, buildId),
       showUnskilledRecipes: showUnskilled,
       onlyLevelAccessible: levelOnly,
       userSkillLevels: skillLevels,
       hiddenSkills: hidden,
+      hiddenCraftingTables: hiddenTables,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildStore, gameDataStore, buildId, getName, buildRev])
+  }, [buildStore, buildId, filterRev])
 
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [addDialogVisible, setAddDialogVisible] = useState(false)
@@ -434,13 +526,24 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
     return s
   }, [groups])
 
-  // All skill names in the build (stable set for the filter overlay).
-  // Empty names (unskilled recipes) are governed by the Unskilled checkbox instead.
-  const allSkillNames = useMemo(() => {
-    const s = new Set<string>()
-    for (const g of groups) for (const c of g.children) if (c.skillName) s.add(c.skillName)
-    return [...s].sort((a, b) => a.localeCompare(b))
-  }, [groups])
+  // All skill IDs in the build (stable set for the filter overlay).
+  // Empty IDs (unskilled recipes) are governed by the Unskilled checkbox instead.
+  const skillOptions = useMemo(() => {
+    const ids = new Set<string>()
+    for (const g of groups) for (const c of g.children) if (c.skillId) ids.add(c.skillId)
+    const opts = [...ids].map((id) => ({ id, name: getName('skill', id) || id }))
+    opts.sort((a, b) => a.name.localeCompare(b.name))
+    return opts
+  }, [groups, getName])
+
+  const craftingTableOptions = useMemo(() => {
+    const ids = new Set<string>()
+    for (const g of groups)
+      for (const c of g.children) if (c.craftingTableId) ids.add(c.craftingTableId)
+    const opts = [...ids].map((id) => ({ id, name: getName('craftingTable', id) || id }))
+    opts.sort((a, b) => a.name.localeCompare(b.name))
+    return opts
+  }, [groups, getName])
 
   const childVisible = useCallback(
     (c: Product): boolean => {
@@ -449,10 +552,11 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
         const level = userSkillLevels.get(c.skillId) ?? 0
         if (c.requiredSkillLevel > level) return false
       }
-      if (hiddenSkills.has(c.skillName)) return false
+      if (hiddenSkills.has(c.skillId)) return false
+      if (hiddenCraftingTables.has(c.craftingTableId)) return false
       return true
     },
-    [showUnskilledRecipes, onlyLevelAccessible, userSkillLevels, hiddenSkills]
+    [showUnskilledRecipes, onlyLevelAccessible, userSkillLevels, hiddenSkills, hiddenCraftingTables]
   )
 
   const rows = useMemo<Row[]>(() => {
@@ -530,11 +634,11 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
   )
 
   const handleToggleSkill = useCallback(
-    (name: string) => {
+    (skillId: string) => {
       let existingId: string | null = null
       for (const rowId of buildStore.getRowIds('hiddenSkills')) {
         const row = buildStore.getRow('hiddenSkills', rowId)
-        if (row.buildId === buildId && row.skillName === name) {
+        if (row.buildId === buildId && row.skillId === skillId) {
           existingId = rowId
           break
         }
@@ -543,7 +647,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
         buildStore.delRow('hiddenSkills', existingId)
       } else {
         const id = generateId()
-        buildStore.setRow('hiddenSkills', id, { buildId, skillName: name })
+        buildStore.setRow('hiddenSkills', id, { buildId, skillId })
       }
     },
     [buildId, buildStore]
@@ -557,20 +661,61 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
           if (row.buildId === buildId) buildStore.delRow('hiddenSkills', rowId)
         }
         if (hideAll) {
-          for (const name of allSkillNames) {
+          for (const opt of skillOptions) {
             const id = generateId()
-            buildStore.setRow('hiddenSkills', id, { buildId, skillName: name })
+            buildStore.setRow('hiddenSkills', id, { buildId, skillId: opt.id })
           }
         }
       })
       settingsMgmt.setSetting('showUnskilledRecipes', !hideAll)
     },
-    [allSkillNames, buildId, buildStore, settingsMgmt]
+    [skillOptions, buildId, buildStore, settingsMgmt]
   )
 
   const handleToggleUnskilled = useCallback(
     () => settingsMgmt.setSetting('showUnskilledRecipes', !showUnskilledRecipes),
     [settingsMgmt, showUnskilledRecipes]
+  )
+
+  const handleToggleCraftingTable = useCallback(
+    (id: string) => {
+      let existingId: string | null = null
+      for (const rowId of buildStore.getRowIds('hiddenCraftingTables')) {
+        const row = buildStore.getRow('hiddenCraftingTables', rowId)
+        if (row.buildId === buildId && row.craftingTableId === id) {
+          existingId = rowId
+          break
+        }
+      }
+      if (existingId) {
+        buildStore.delRow('hiddenCraftingTables', existingId)
+      } else {
+        const rowId = generateId()
+        buildStore.setRow('hiddenCraftingTables', rowId, { buildId, craftingTableId: id })
+      }
+    },
+    [buildId, buildStore]
+  )
+
+  const handleSetAllCraftingTables = useCallback(
+    (hideAll: boolean) => {
+      buildStore.transaction(() => {
+        for (const rowId of buildStore.getRowIds('hiddenCraftingTables')) {
+          const row = buildStore.getRow('hiddenCraftingTables', rowId)
+          if (row.buildId === buildId) buildStore.delRow('hiddenCraftingTables', rowId)
+        }
+        if (hideAll) {
+          for (const opt of craftingTableOptions) {
+            const rowId = generateId()
+            buildStore.setRow('hiddenCraftingTables', rowId, {
+              buildId,
+              craftingTableId: opt.id,
+            })
+          }
+        }
+      })
+    },
+    [buildId, buildStore, craftingTableOptions]
   )
 
   const nameTemplate = useCallback(
@@ -721,23 +866,21 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
           placeholder={t('priceCalculator.products.search')}
           className="flex-1"
         />
-        <SkillFilterButton
-          skillNames={allSkillNames}
-          hidden={hiddenSkills}
+        <RecipeFilterButton
+          skillOptions={skillOptions}
+          hiddenSkills={hiddenSkills}
           showUnskilled={showUnskilledRecipes}
-          onToggle={handleToggleSkill}
+          onToggleSkill={handleToggleSkill}
           onToggleUnskilled={handleToggleUnskilled}
-          onSetAll={handleSetAllSkills}
-        />
-        <Button
-          icon="pi pi-lock"
-          text={!onlyLevelAccessible}
-          size="small"
-          aria-label={t('priceCalculator.products.onlyLevelAccessible')}
-          aria-pressed={onlyLevelAccessible}
-          tooltip={t('priceCalculator.products.onlyLevelAccessible')}
-          tooltipOptions={{ position: 'bottom' }}
-          onClick={() => settingsMgmt.setSetting('onlyLevelAccessible', !onlyLevelAccessible)}
+          onSetAllSkills={handleSetAllSkills}
+          craftingTableOptions={craftingTableOptions}
+          hiddenCraftingTables={hiddenCraftingTables}
+          onToggleCraftingTable={handleToggleCraftingTable}
+          onSetAllCraftingTables={handleSetAllCraftingTables}
+          onlyLevelAccessible={onlyLevelAccessible}
+          onToggleOnlyLevelAccessible={() =>
+            settingsMgmt.setSetting('onlyLevelAccessible', !onlyLevelAccessible)
+          }
         />
         <Button
           icon="pi pi-plus"

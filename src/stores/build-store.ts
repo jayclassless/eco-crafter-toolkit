@@ -84,7 +84,11 @@ export function createBuildStore() {
     },
     hiddenSkills: {
       buildId: { type: 'string' },
-      skillName: { type: 'string' },
+      skillId: { type: 'string' },
+    },
+    hiddenCraftingTables: {
+      buildId: { type: 'string' },
+      craftingTableId: { type: 'string' },
     },
   })
 

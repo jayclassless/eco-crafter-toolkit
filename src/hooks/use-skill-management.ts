@@ -8,7 +8,7 @@ import { ensureUserCraftingTable } from './use-crafting-table-management'
 
 export interface UseSkillManagement {
   addSkill: (skillId: string) => void
-  removeSkill: (userSkillId: string, skillId: string, skillName: string) => void
+  removeSkill: (userSkillId: string, skillId: string) => void
   setSkillLevel: (userSkillId: string, level: number) => void
   toggleTalent: (talentId: string, userTalentId: string, enabled: boolean) => void
   setTalentLevel: (talentId: string, userTalentId: string, level: number) => void
@@ -79,11 +79,11 @@ export function createSkillManagement(
     })
   }
 
-  const removeSkill = (userSkillId: string, skillId: string, skillName: string) => {
+  const removeSkill = (userSkillId: string, skillId: string) => {
     buildStore.transaction(() => {
       for (const rowId of buildStore.getRowIds('hiddenSkills')) {
         const row = buildStore.getRow('hiddenSkills', rowId)
-        if (row.buildId === buildId && row.skillName === skillName) {
+        if (row.buildId === buildId && row.skillId === skillId) {
           buildStore.delRow('hiddenSkills', rowId)
         }
       }

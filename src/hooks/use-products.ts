@@ -11,6 +11,7 @@ export interface Product {
   skillId: string
   skillName: string
   skillRawName: string
+  craftingTableId: string
   requiredSkillLevel: number
   /** Raw name of this entry's specific product (for the row icon when this
    * entry stands on its own). */
@@ -156,6 +157,7 @@ export function buildProducts(
     const skillName = skillId ? getName('skill', skillId) : ''
     const skillRow = skillId ? gameDataStore.getRow('skills', skillId) : null
     const skillRawName = skillRow ? (skillRow.name as string) : ''
+    const craftingTableId = (recipe.craftingTableId as string) ?? ''
     const requiredSkillLevel = (recipe.requiredSkillLevel as number) ?? 0
     const recipeName = getName('recipe', recipeId)
 
@@ -182,6 +184,7 @@ export function buildProducts(
         skillId,
         skillName,
         skillRawName,
+        craftingTableId,
         requiredSkillLevel,
         primaryProductRawName: productRow ? (productRow.name as string) : '',
         recipePrimaryProductRawName,

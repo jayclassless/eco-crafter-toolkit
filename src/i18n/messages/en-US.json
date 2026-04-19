@@ -104,11 +104,13 @@
       "product": "Product",
       "emptyMessage": "Add recipes or loosen your filters to see products",
       "onlyLevelAccessible": "Only show level-accessible recipes",
-      "skillFilter": {
-        "label": "Filter by skill",
-        "tooltip": "Filter visible skills",
+      "recipeFilter": {
+        "label": "Filter recipes",
+        "tooltip": "Filter visible recipes",
         "all": "All",
         "none": "None",
+        "skillSection": "Skill",
+        "craftingTableSection": "Crafting Table",
         "unskilled": "Unskilled"
       }
     },
