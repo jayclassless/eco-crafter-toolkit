@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Price calculator and planning tools for the game Eco" />
+    <meta property="og:title" content="Eco Crafter Toolkit" />
+    <meta
+      property="og:description"
+      content="Price calculator and planning tools for the game Eco"
+    />
+    <meta
+      property="og:image"
+      content="https://eco-toolkit.classless.net/icons/favicon-256x256.png"
+    />
+    <meta property="og:image:width" content="256" />
+    <meta property="og:image:height" content="256" />
+    <meta property="og:url" content="https://eco-toolkit.classless.net" />
+    <meta property="og:type" content="website" />
+    <title>Eco Crafter Toolkit</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <script>
+      // Pick a light/dark background for the loading screen before any
+      // React or theme CSS has had a chance to load. The real theme
+      // (from IndexedDB) takes over once ThemeProvider runs.
+      ;(function () {
+        try {
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+          document.documentElement.dataset.initialScheme = prefersDark ? 'dark' : 'light'
+        } catch (e) {
+          document.documentElement.dataset.initialScheme = 'dark'
+        }
+      })()
+    </script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+      }
+      #app-loader,
+      #app-loader * {
+        box-sizing: border-box;
+      }
+      #app-loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        font-size: 16px;
+        line-height: 1.2;
+        z-index: 2147483647;
+        opacity: 1;
+        transition: opacity 150ms ease-out;
+      }
+      #app-loader.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      html[data-initial-scheme='dark'] #app-loader {
+        background: #1e1e2e;
+        color: #cdd6f4;
+      }
+      html[data-initial-scheme='light'] #app-loader {
+        background: #f5f5f7;
+        color: #1e1e2e;
+      }
+      #app-loader .app-loader-banner {
+        position: relative;
+        max-width: min(95vw, 1920px);
+        width: 100%;
+      }
+      #app-loader .app-loader-banner img {
+        display: block;
+        width: 100%;
+        height: auto;
+        max-height: 100vh;
+        object-fit: contain;
+      }
+      #app-loader .app-loader-overlay {
+        position: absolute;
+        top: 6%;
+        right: 4%;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 1rem;
+        color: #11141a;
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+      }
+      #app-loader .app-loader-title {
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        font-size: clamp(28px, 4vw, 48px);
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: 0.01em;
+      }
+      #app-loader .app-loader-spinner {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: 4px solid currentColor;
+        border-top-color: transparent;
+        opacity: 0.9;
+        animation: app-loader-spin 800ms linear infinite;
+        margin-left: 12px;
+      }
+      @keyframes app-loader-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #app-loader .app-loader-spinner {
+          animation-duration: 2400ms;
+        }
+        #app-loader {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="app-loader" role="status" aria-live="polite">
+      <div class="app-loader-banner">
+        <img src="/eco_hero_banner.jpg" alt="" aria-hidden="true" />
+        <div class="app-loader-overlay">
+          <div class="app-loader-title">Eco Crafter Toolkit</div>
+          <div class="app-loader-spinner" aria-hidden="true"></div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

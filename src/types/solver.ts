@@ -1,0 +1,99 @@
+export type PriceMode = 'manual' | 'min' | 'max' | 'avg' | 'mirror'
+
+export interface SolverInput {
+  recipes: SolverRecipe[]
+  prices: Record<string, number>
+  overrides: Record<string, number>
+  settings: {
+    marginType: 'markup' | 'grossMargin'
+    calorieCost: number
+    applyMarginBetweenSkills: boolean
+  }
+  margins: Record<string, { name: string; percent: number }>
+  recipeMargins: Record<string, string>
+  /** Per-product margin override (wins over recipeMargins when present). */
+  productMargins: Record<string, string>
+  tagItems: Record<string, string[]>
+  primaryTagItems: Record<string, string>
+  /** Recipe chosen by the user when a multi-recipe product is in `mirror` mode. */
+  primaryRecipeIds: Record<string, string>
+  priceModes: Record<string, PriceMode>
+}
+
+export interface SolverRecipe {
+  id: string
+  skillId?: string
+  skillLevel: number
+  laborReducePercent: number[]
+  activeTalents: SolverTalent[]
+  pluginModule: SolverPluginModule | null
+  speedPluginModule: SolverPluginModule | null
+  baseCraftTime: number
+  baseLaborCost: number
+  costPerMinute: number
+  roundFactor: number
+  ingredients: SolverElement[]
+  products: SolverProduct[]
+  craftMinutesModifiers: SolverModifier[]
+  laborModifiers: SolverModifier[]
+}
+
+export interface SolverTalent {
+  name: string
+  value: number
+}
+
+export interface SolverPluginModule {
+  percent: number
+  skillPercent?: number
+  skillId?: string
+}
+
+export interface SolverElement {
+  itemOrTagId: string
+  baseQuantity: number
+  modifiers: SolverModifier[]
+}
+
+export interface SolverProduct {
+  itemOrTagId: string
+  baseQuantity: number
+  share: number
+  isReintegrated: boolean
+  modifiers: SolverModifier[]
+}
+
+export interface SolverModifier {
+  dynamicType: 'Skill' | 'Talent' | 'Module'
+  refName: string
+}
+
+export interface SolverOutput {
+  prices: Record<string, SolverPrice>
+  /** Per-recipe-per-product cost and sale price, keyed `${recipeId}::${productId}`.
+   * Used by the UI to show each child recipe's own price under a multi-recipe
+   * product group, and by RecipeDialog to show the specific recipe's price for
+   * each of its products (instead of the aggregated group price). */
+  recipePrices: Record<string, { costPrice: number; salePrice: number }>
+  elementPrices: Record<string, SolverElementPrice>
+  errors: SolverError[]
+}
+
+export interface SolverPrice {
+  costPrice: number
+  salePrice: number
+  recipeId: string
+}
+
+export interface SolverElementPrice {
+  recipeId: string
+  itemOrTagId: string
+  unitPrice: number
+  totalPrice: number
+  isMarginPrice: boolean
+}
+
+export interface SolverError {
+  recipeId: string
+  message: string
+}
