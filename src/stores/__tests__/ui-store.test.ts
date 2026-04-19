@@ -27,7 +27,7 @@ describe('createUIStore', () => {
       detailedTagsView: false,
       detailedRecipesView: false,
       marginDisplayMode: 'name',
-      themeMode: 'auto',
+      themeMode: 'dark',
       themeColor: 'blue',
       uiScale: 14,
     })

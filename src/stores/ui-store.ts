@@ -13,7 +13,7 @@ export function createUIStore() {
       detailedTagsView: { type: 'boolean', default: false },
       detailedRecipesView: { type: 'boolean', default: false },
       marginDisplayMode: { type: 'string', default: 'name' },
-      themeMode: { type: 'string', default: 'auto' },
+      themeMode: { type: 'string', default: 'dark' },
       themeColor: { type: 'string', default: 'blue' },
       uiScale: { type: 'number', default: 14 },
     },
