@@ -218,10 +218,20 @@ interface RawBonus {
   itemTags: string[]
 }
 
+interface RawVariant {
+  className: string
+  displayName: string
+  ingredients: ElementJson[]
+  products: ElementJson[]
+  tableType: string
+  parentClassName: string
+}
+
 const skills: RawSkill[] = []
 const items = new Map<string, RawItem>()
 const tagDefs: RawTagDef[] = []
 const recipes: RecipeJson[] = []
+const variants: RawVariant[] = []
 const talentGroups: RawTalentGroup[] = []
 const talents: RawTalent[] = []
 const bonusesByTalentName = new Map<string, RawBonus[]>()
@@ -471,6 +481,67 @@ function parseTagDefinitionsFile(src: string) {
   }
 }
 
+// ---- Shared Init-block parsers (used by both RecipeFamily parents and
+// AddTagProduct variants; the two call sites differ only in whether Init is
+// invoked on a local `recipe` var or on `this`) ------------------------------
+
+function parseIngredientsFromBody(body: string): ElementJson[] {
+  const block =
+    /ingredients:\s*new\s+List<IngredientElement>\s*\{([\s\S]*?)\}\s*,/.exec(body)?.[1] ?? ''
+  const out: ElementJson[] = []
+  const re1 =
+    /new\s+IngredientElement\(\s*typeof\((\w+)\)\s*,\s*([0-9.\-+f]+)(?:\s*,\s*(?:typeof\((\w+)\)|true|false))?(?:\s*,\s*typeof\((\w+)\))?\s*\)/g
+  let mm: RegExpExecArray | null
+  while ((mm = re1.exec(block))) {
+    const itemName = mm[1]
+    const qty = parseFloatLit(mm[2])
+    const mods: ModifierJson[] = []
+    if (mm[3]) mods.push(classifyModifier(mm[3], 'ingredient'))
+    if (mm[4]) mods.push(classifyModifier(mm[4], 'ingredient'))
+    ensureItem(itemName)
+    out.push({ ItemOrTag: itemName, Quantity: { BaseValue: qty, Modifiers: mods } })
+  }
+  const re2 =
+    /new\s+IngredientElement\(\s*"([^"]+)"\s*,\s*([0-9.\-+f]+)(?:\s*,\s*(?:typeof\((\w+)\)|true|false))?(?:\s*,\s*typeof\((\w+)\))?\s*\)/g
+  while ((mm = re2.exec(block))) {
+    const tag = mm[1]
+    const qty = parseFloatLit(mm[2])
+    const mods: ModifierJson[] = []
+    if (mm[3]) mods.push(classifyModifier(mm[3], 'ingredient'))
+    if (mm[4]) mods.push(classifyModifier(mm[4], 'ingredient'))
+    out.push({ ItemOrTag: tag, Quantity: { BaseValue: qty, Modifiers: mods } })
+  }
+  return out
+}
+
+function parseProductsFromBody(body: string): ElementJson[] {
+  const block =
+    /items:\s*new\s+List<CraftingElement>\s*\{([\s\S]*?)\}\s*\)\s*;/.exec(body)?.[1] ?? ''
+  const out: ElementJson[] = []
+  const re = /new\s+CraftingElement<(\w+)>\(([^)]*)\)/g
+  let mm: RegExpExecArray | null
+  while ((mm = re.exec(block))) {
+    const itemName = mm[1]
+    const argList = mm[2].trim()
+    let qty = 1
+    const mods: ModifierJson[] = []
+    if (argList) {
+      const parts = argList.split(',').map((s) => s.trim())
+      for (const p of parts) {
+        const tt = /typeof\((\w+)\)/.exec(p)
+        if (tt) mods.push(classifyModifier(tt[1], 'ingredient'))
+        else {
+          const n = parseFloatLit(p)
+          if (!Number.isNaN(n)) qty = n
+        }
+      }
+    }
+    ensureItem(itemName)
+    out.push({ ItemOrTag: itemName, Quantity: { BaseValue: qty, Modifiers: mods } })
+  }
+  return out
+}
+
 // ---- Item + Recipe parsing (run on every AutoGen .cs) -----------------------
 
 function parseItemAndRecipeFile(src: string) {
@@ -599,63 +670,8 @@ function parseItemAndRecipeFile(src: string) {
       /recipe\.Init\(\s*name:\s*"([^"]+)"/.exec(body)?.[1] ?? className.replace(/Recipe$/, '')
     const displayName = /displayName:\s*Localizer\.DoStr\("([^"]+)"\)/.exec(body)?.[1] ?? recipeName
 
-    // Ingredients block
-    const ingBlock =
-      /ingredients:\s*new\s+List<IngredientElement>\s*\{([\s\S]*?)\}\s*,/.exec(body)?.[1] ?? ''
-    const ingredients: ElementJson[] = []
-    {
-      const re1 =
-        /new\s+IngredientElement\(\s*typeof\((\w+)\)\s*,\s*([0-9.\-+f]+)(?:\s*,\s*(?:typeof\((\w+)\)|true|false))?(?:\s*,\s*typeof\((\w+)\))?\s*\)/g
-      let mm: RegExpExecArray | null
-      while ((mm = re1.exec(ingBlock))) {
-        const itemName = mm[1]
-        const qty = parseFloatLit(mm[2])
-        const mods: ModifierJson[] = []
-        if (mm[3]) mods.push(classifyModifier(mm[3], 'ingredient'))
-        if (mm[4]) mods.push(classifyModifier(mm[4], 'ingredient'))
-        ensureItem(itemName)
-        ingredients.push({ ItemOrTag: itemName, Quantity: { BaseValue: qty, Modifiers: mods } })
-      }
-      const re2 =
-        /new\s+IngredientElement\(\s*"([^"]+)"\s*,\s*([0-9.\-+f]+)(?:\s*,\s*(?:typeof\((\w+)\)|true|false))?(?:\s*,\s*typeof\((\w+)\))?\s*\)/g
-      while ((mm = re2.exec(ingBlock))) {
-        const tag = mm[1]
-        const qty = parseFloatLit(mm[2])
-        const mods: ModifierJson[] = []
-        if (mm[3]) mods.push(classifyModifier(mm[3], 'ingredient'))
-        if (mm[4]) mods.push(classifyModifier(mm[4], 'ingredient'))
-        ingredients.push({ ItemOrTag: tag, Quantity: { BaseValue: qty, Modifiers: mods } })
-      }
-    }
-
-    // Products
-    const prodBlock =
-      /items:\s*new\s+List<CraftingElement>\s*\{([\s\S]*?)\}\s*\)\s*;/.exec(body)?.[1] ?? ''
-    const products: ElementJson[] = []
-    {
-      const re = /new\s+CraftingElement<(\w+)>\(([^)]*)\)/g
-      let mm: RegExpExecArray | null
-      while ((mm = re.exec(prodBlock))) {
-        const itemName = mm[1]
-        const argList = mm[2].trim()
-        let qty = 1
-        const mods: ModifierJson[] = []
-        if (argList) {
-          // First arg may be a number, or typeof(Skill), then number...
-          const parts = argList.split(',').map((s) => s.trim())
-          for (const p of parts) {
-            const tt = /typeof\((\w+)\)/.exec(p)
-            if (tt) mods.push(classifyModifier(tt[1], 'ingredient'))
-            else {
-              const n = parseFloatLit(p)
-              if (!Number.isNaN(n)) qty = n
-            }
-          }
-        }
-        ensureItem(itemName)
-        products.push({ ItemOrTag: itemName, Quantity: { BaseValue: qty, Modifiers: mods } })
-      }
-    }
+    const ingredients = parseIngredientsFromBody(body)
+    const products = parseProductsFromBody(body)
 
     // Labor
     let labor: DynamicValueJson = { BaseValue: 0, Modifiers: [] }
@@ -709,6 +725,87 @@ function parseItemAndRecipeFile(src: string) {
       CraftingTable: craftingTable,
       Ingredients: ingredients,
       Products: products,
+    })
+  }
+}
+
+// ---- AddTagProduct variant parsing ------------------------------------------
+//
+// A variant is a `class <X>Recipe : Recipe` (not RecipeFamily) whose
+// constructor calls `CraftingComponent.AddTagProduct(table, typeof(Parent), this)`.
+// It overrides ingredients/products of its parent RecipeFamily (typically
+// narrowing a tag ingredient like "Wood" to a concrete tag like "Hardwood"
+// and producing a concrete product item) and inherits labor, craft-time,
+// skill requirements, etc. from the parent. Variants live throughout the
+// AutoGen tree — Recipe/, Block/, Item/, WorldObject/ — so we run this parser
+// on every file and let the AddTagProduct call be the filter.
+function parseRecipeVariantFile(src: string) {
+  const classRe = /public\s+partial\s+class\s+(\w+Recipe)\s*:\s*Recipe\b/g
+  let m: RegExpExecArray | null
+  while ((m = classRe.exec(src))) {
+    const className = m[1]
+    const start = src.indexOf('{', classRe.lastIndex)
+    if (start < 0) continue
+    const body = src.slice(start, start + 10000)
+
+    const atp = /CraftingComponent\.AddTagProduct\(\s*typeof\((\w+)\)\s*,\s*typeof\((\w+)\)/.exec(
+      body
+    )
+    if (!atp) continue
+    const tableType = atp[1]
+    const parentClassName = atp[2]
+
+    const fallbackName = className.replace(/Recipe$/, '')
+    const displayName =
+      /displayName:\s*Localizer\.DoStr\("([^"]+)"\)/.exec(body)?.[1] ?? fallbackName
+    const ingredients = parseIngredientsFromBody(body)
+    const products = parseProductsFromBody(body)
+
+    variants.push({
+      className,
+      displayName,
+      ingredients,
+      products,
+      tableType,
+      parentClassName,
+    })
+  }
+}
+
+function cloneDynamic(dv: DynamicValueJson): DynamicValueJson {
+  return { BaseValue: dv.BaseValue, Modifiers: dv.Modifiers.map((md) => ({ ...md })) }
+}
+
+// Resolve collected variants against their parent recipes and emit them as
+// sibling RecipeJson entries. Must run after all parents have been parsed.
+function emitVariantRecipes() {
+  const parentByClass = new Map(recipes.map((rec) => [rec.Name, rec]))
+  for (const v of variants) {
+    const parent = parentByClass.get(v.parentClassName)
+    if (!parent) {
+      console.warn(
+        `[extract] variant ${v.className} references unknown parent ${v.parentClassName}; skipping`
+      )
+      continue
+    }
+    const craftingTable = v.tableType.replace(/Object$/, 'Item')
+    if (craftingTable) {
+      const tableItem = ensureItem(craftingTable)
+      tableItem.isCraftingTable = true
+    }
+    recipes.push({
+      Name: v.className,
+      LocalizedName: enLocalized(v.displayName),
+      FamilyName: parent.FamilyName,
+      CraftMinutes: cloneDynamic(parent.CraftMinutes),
+      RequiredSkill: parent.RequiredSkill,
+      RequiredSkillLevel: parent.RequiredSkillLevel,
+      IsBlueprint: parent.IsBlueprint,
+      IsDefault: parent.IsDefault,
+      Labor: cloneDynamic(parent.Labor),
+      CraftingTable: craftingTable,
+      Ingredients: v.ingredients,
+      Products: v.products,
     })
   }
 }
@@ -901,6 +998,15 @@ async function main() {
     if (file.includes(`${path.sep}Tech${path.sep}`)) parseSkillFile(src)
     if (file.includes(`${path.sep}Benefit${path.sep}`)) parseTalentFile(src)
     parseItemAndRecipeFile(src)
+    // Variants are `class <X>Recipe : Recipe` with AddTagProduct(...). They
+    // can live in any AutoGen subtree (Recipe/, Block/, Item/, WorldObject/);
+    // the AddTagProduct call is the actual signal, and `: Recipe\b` excludes
+    // `: RecipeFamily` because there's no word boundary before "Family".
+    parseRecipeVariantFile(src)
+  }
+  emitVariantRecipes()
+  if (variants.length > 0) {
+    console.log(`[extract] emitted ${variants.length} recipe variants via AddTagProduct`)
   }
 
   // Pass 1b: v13 bonus system lives outside AutoGen in __core__/Benefits.
@@ -1216,10 +1322,13 @@ async function main() {
     })
   }
 
-  // 3f) Recipes: localize the names
+  // 3f) Recipes: localize the names. Parents set LocalizedName['en-US'] to the
+  // same string as FamilyName (e.g. "Boards"); variants set it to their own
+  // display name (e.g. "Hardwood Boards"). Using LocalizedName as the Crowdin
+  // lookup key works for both — FamilyName alone would mis-localize variants.
   const recipeJsons: RecipeJson[] = recipes.map((r) => ({
     ...r,
-    LocalizedName: mergeLocalized(r.FamilyName, crowdin),
+    LocalizedName: mergeLocalized(r.LocalizedName['en-US'] ?? r.FamilyName, crowdin),
   }))
 
   const dataset: DatasetJson = {
