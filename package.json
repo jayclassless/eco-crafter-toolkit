@@ -26,7 +26,7 @@
     "react-i18next": "^17.0.4",
     "rxjs": "^7.8.2",
     "tinybase": "^8.2.0",
-    "uuid": "^13.0.0"
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@crowdin/crowdin-api-client": "^1.55.1",
@@ -49,5 +49,10 @@
     "vitest": "^4.1.4",
     "yargs": "^18.0.0"
   },
-  "packageManager": "pnpm@10.32.1"
+  "packageManager": "pnpm@10.32.1",
+  "pnpm": {
+    "overrides": {
+      "axios": "1.15.1"
+    }
+  }
 }
