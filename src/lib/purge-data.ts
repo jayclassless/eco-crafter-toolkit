@@ -47,6 +47,7 @@ const DATASET_SCOPED_TABLES = [
   'recipes',
   'recipeElements',
   'modifiers',
+  'recipeUnlocks',
 ] as const
 
 /**

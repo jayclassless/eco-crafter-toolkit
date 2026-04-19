@@ -107,6 +107,12 @@ export function createGameDataStore() {
       dynamicType: { type: 'string' },
       refName: { type: 'string' },
     },
+    recipeUnlocks: {
+      id: { type: 'string' },
+      datasetId: { type: 'string' },
+      recipeId: { type: 'string' },
+      talentId: { type: 'string' },
+    },
   })
 
   return store

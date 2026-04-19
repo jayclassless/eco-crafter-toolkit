@@ -112,6 +112,13 @@ export interface Modifier {
   refName: string
 }
 
+export interface RecipeUnlock {
+  id: string
+  datasetId: string
+  recipeId: string
+  talentId: string
+}
+
 export interface LocalizedName {
   id: string
   entityType: string

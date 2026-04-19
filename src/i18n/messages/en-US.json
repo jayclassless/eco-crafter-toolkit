@@ -103,7 +103,7 @@
       "margin": "Margin",
       "product": "Product",
       "emptyMessage": "Add recipes or loosen your filters to see products",
-      "onlyLevelAccessible": "Only show level-accessible recipes",
+      "onlyLevelAccessible": "Only show level/talent-accessible recipes",
       "recipeFilter": {
         "label": "Filter recipes",
         "tooltip": "Filter visible recipes",

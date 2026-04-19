@@ -47,6 +47,7 @@ const GROUPS_BUILD_TABLES = [
 const FILTER_BUILD_TABLES = [
   'userSettings',
   'userSkills',
+  'userTalents',
   'hiddenSkills',
   'hiddenCraftingTables',
 ] as const
@@ -474,6 +475,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
     showUnskilledRecipes,
     onlyLevelAccessible,
     userSkillLevels,
+    activeTalentIds,
     hiddenSkills,
     hiddenCraftingTables,
   } = useMemo(() => {
@@ -492,6 +494,14 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       if (row.buildId !== buildId) continue
       skillLevels.set(row.skillId as string, row.level as number)
     }
+    // Unlock talents are always non-levelable (BonusEffectOverride), so the
+    // `enabled` flag alone is the activation signal.
+    const activeTalents = new Set<string>()
+    for (const rowId of buildStore.getRowIds('userTalents')) {
+      const row = buildStore.getRow('userTalents', rowId)
+      if (row.buildId !== buildId) continue
+      if (row.enabled) activeTalents.add(row.talentId as string)
+    }
     const hidden = new Set<string>()
     for (const rowId of buildStore.getRowIds('hiddenSkills')) {
       const row = buildStore.getRow('hiddenSkills', rowId)
@@ -508,6 +518,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       showUnskilledRecipes: showUnskilled,
       onlyLevelAccessible: levelOnly,
       userSkillLevels: skillLevels,
+      activeTalentIds: activeTalents,
       hiddenSkills: hidden,
       hiddenCraftingTables: hiddenTables,
     }
@@ -551,12 +562,25 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       if (onlyLevelAccessible && c.skillId) {
         const level = userSkillLevels.get(c.skillId) ?? 0
         if (c.requiredSkillLevel > level) return false
+        if (
+          c.unlockingTalentIds.length > 0 &&
+          !c.unlockingTalentIds.some((id) => activeTalentIds.has(id))
+        ) {
+          return false
+        }
       }
       if (hiddenSkills.has(c.skillId)) return false
       if (hiddenCraftingTables.has(c.craftingTableId)) return false
       return true
     },
-    [showUnskilledRecipes, onlyLevelAccessible, userSkillLevels, hiddenSkills, hiddenCraftingTables]
+    [
+      showUnskilledRecipes,
+      onlyLevelAccessible,
+      userSkillLevels,
+      activeTalentIds,
+      hiddenSkills,
+      hiddenCraftingTables,
+    ]
   )
 
   const rows = useMemo<Row[]>(() => {

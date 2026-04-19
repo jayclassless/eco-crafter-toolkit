@@ -237,6 +237,40 @@ describe('buildProducts', () => {
     expect(it0.userMarginId).toBe('')
   })
 
+  it('populates unlockingTalentIds from recipeUnlocks rows', () => {
+    gameDataStore.setRow('recipeUnlocks', 'ru1', {
+      id: 'ru1',
+      datasetId: 'ds1',
+      recipeId: 'recipe-iron',
+      talentId: 'talent-unlock-a',
+    })
+    gameDataStore.setRow('recipeUnlocks', 'ru2', {
+      id: 'ru2',
+      datasetId: 'ds1',
+      recipeId: 'recipe-iron',
+      talentId: 'talent-unlock-b',
+    })
+    buildStore.setRow('userRecipes', 'ur1', {
+      id: 'ur1',
+      buildId: BUILD_ID,
+      recipeId: 'recipe-iron',
+      roundFactor: 0,
+    })
+    const [it0] = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    expect([...it0.unlockingTalentIds].sort()).toEqual(['talent-unlock-a', 'talent-unlock-b'])
+  })
+
+  it('leaves unlockingTalentIds empty for recipes without Unlock bonuses', () => {
+    buildStore.setRow('userRecipes', 'ur1', {
+      id: 'ur1',
+      buildId: BUILD_ID,
+      recipeId: 'recipe-iron',
+      roundFactor: 0,
+    })
+    const [it0] = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    expect(it0.unlockingTalentIds).toEqual([])
+  })
+
   it('sorts by skillName then recipeName', () => {
     // Add a second skill + recipe
     gameDataStore.setRow('skills', 'skill-aaa', {

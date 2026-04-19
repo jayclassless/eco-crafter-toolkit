@@ -11,6 +11,7 @@ import type {
   Recipe,
   RecipeElement,
   Modifier,
+  RecipeUnlock,
   LocalizedName,
 } from '@/types/game-data'
 
@@ -98,6 +99,7 @@ export interface ParsedDataset {
   recipes: Recipe[]
   recipeElements: RecipeElement[]
   modifiers: Modifier[]
+  recipeUnlocks: RecipeUnlock[]
   localizedNames: LocalizedName[]
 }
 
@@ -113,11 +115,17 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
   const recipes: Recipe[] = []
   const recipeElements: RecipeElement[] = []
   const modifiers: Modifier[] = []
+  const recipeUnlocks: RecipeUnlock[] = []
   const localizedNames: LocalizedName[] = []
 
   const skillIdByName = new Map<string, string>()
   const itemIdByName = new Map<string, string>()
   const craftingTableIdByName = new Map<string, string>()
+  const recipeIdByName = new Map<string, string>()
+
+  // Recipes aren't parsed until after talents, so Unlock bonuses get stashed
+  // here and resolved to recipe ids once recipeIdByName is populated.
+  const pendingUnlocks: { talentId: string; recipeNames: string[] }[] = []
 
   // Parse skills and talents
   for (const s of data.Skills) {
@@ -173,6 +181,9 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
           cap: b.Cap ?? 0,
           lowerIsBetter: b.LowerIsBetter ?? true,
         })
+        if (b.Action === 'Unlock' && b.Scope?.Recipes && b.Scope.Recipes.length > 0) {
+          pendingUnlocks.push({ talentId, recipeNames: b.Scope.Recipes })
+        }
       }
     }
   }
@@ -245,6 +256,8 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
     const recipeId = generateId()
     const skillId = skillIdByName.get(r.RequiredSkill)
     const ctId = craftingTableIdByName.get(r.CraftingTable) ?? ''
+
+    recipeIdByName.set(r.Name, recipeId)
 
     recipes.push({
       id: recipeId,
@@ -333,6 +346,22 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
     }
   }
 
+  // Resolve deferred Unlock bonuses now that recipe ids exist. Unresolved
+  // names (e.g. scopes pointing to mod recipes that didn't ship in this
+  // dataset) are silently dropped.
+  for (const pu of pendingUnlocks) {
+    for (const recipeName of pu.recipeNames) {
+      const recipeId = recipeIdByName.get(recipeName)
+      if (!recipeId) continue
+      recipeUnlocks.push({
+        id: generateId(),
+        datasetId,
+        recipeId,
+        talentId: pu.talentId,
+      })
+    }
+  }
+
   return {
     skills,
     talents,
@@ -345,6 +374,7 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
     recipes,
     recipeElements,
     modifiers,
+    recipeUnlocks,
     localizedNames,
   }
 }

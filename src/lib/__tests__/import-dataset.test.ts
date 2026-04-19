@@ -168,6 +168,34 @@ describe('parseDataset', () => {
     expect(result.talentBonuses).toHaveLength(0)
   })
 
+  it('emits recipeUnlocks rows from Unlock-action bonuses, dropping unresolved recipe names', () => {
+    const data = makeMinimalDataset()
+    data.Skills[0].Talents.push({
+      Name: 'UnlockTalent',
+      LocalizedName: { 'en-US': 'Unlock' },
+      TalentGroupName: 'UnlockGroup',
+      Value: 0,
+      Level: 6,
+      Bonuses: [
+        {
+          Action: 'Unlock',
+          EffectType: 'Override',
+          Value: 1,
+          Scope: { Recipes: ['PlankRecipe', 'GhostRecipe'] },
+        },
+      ],
+    })
+    const result = parseDataset(data, 'test-dataset')
+    const plankId = result.recipes.find((r) => r.name === 'PlankRecipe')!.id
+    const unlockTalent = result.talents.find((t) => t.name === 'UnlockTalent')!
+    expect(result.recipeUnlocks).toHaveLength(1)
+    expect(result.recipeUnlocks[0]).toMatchObject({
+      datasetId: 'test-dataset',
+      recipeId: plankId,
+      talentId: unlockTalent.id,
+    })
+  })
+
   it('ingests v13 Bonuses, computes isLevelable/maxTalentLevel, and writes bonus rows', () => {
     const data = makeMinimalDataset()
     data.Skills[0].Talents.push({

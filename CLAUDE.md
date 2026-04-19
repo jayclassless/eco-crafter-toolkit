@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Requirements
 
-- Changes to the project are not complete unless it has been formatted and the typecheck, linting, and tests are successful.
+- Changes to the project are not complete unless it has been checked for quality. This involves running the following `pnpm` scripts in this order: `typecheck`, `lint`, `format`, `test:coverage`. All must be successful. Resolve issues that they surface.
 - When implementing features and changes, keep in mind the following order of priorities:
   1. Correctness: It is absolutely critical that the data and mathematics presented to the user is correct. Flaws in calculations are not acceptable.
   2. Performance: Aim to make the UI as responsive and quick as possible for the users.

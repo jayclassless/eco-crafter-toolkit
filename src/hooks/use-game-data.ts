@@ -78,6 +78,9 @@ export function createGameDataOps(gameDataStore: Store) {
     for (const mod of parsed.modifiers) {
       gameDataStore.setRow('modifiers', mod.id, { ...mod, datasetId })
     }
+    for (const ru of parsed.recipeUnlocks) {
+      gameDataStore.setRow('recipeUnlocks', ru.id, { ...ru, datasetId })
+    }
 
     await saveLocalizedNames(datasetId, parsed.localizedNames)
 
@@ -97,6 +100,7 @@ export function createGameDataOps(gameDataStore: Store) {
       'recipes',
       'recipeElements',
       'modifiers',
+      'recipeUnlocks',
     ] as const
 
     for (const table of tables) {

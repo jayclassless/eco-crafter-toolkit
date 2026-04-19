@@ -20,6 +20,7 @@ const emptyParsed = (): ParsedDataset => ({
   recipes: [],
   recipeElements: [],
   modifiers: [],
+  recipeUnlocks: [],
   localizedNames: [],
 })
 

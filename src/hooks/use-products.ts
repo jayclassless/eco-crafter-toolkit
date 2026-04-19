@@ -24,6 +24,10 @@ export interface Product {
   primaryProductId: string
   primaryProductName: string
   userMarginId: string
+  /** Talent ids that unlock this recipe. Empty when the recipe isn't
+   * talent-gated (i.e. the v13+ `RequiresTalentUnlock` flag is off, or the
+   * dataset has no matching Unlock-action talent bonus). */
+  unlockingTalentIds: string[]
 }
 
 export interface ProductParent {
@@ -103,6 +107,26 @@ export function getRecipePrimaryProductRawName(
 }
 
 /**
+ * Single-pass index from recipe ID to the talent ids that unlock it. Only
+ * populated for datasets that carry Unlock-action talent bonuses (v13+); the
+ * map is empty for older versions.
+ */
+export function buildRecipeUnlockingTalents(gameDataStore: Store): Map<string, string[]> {
+  const map = new Map<string, string[]>()
+  for (const id of gameDataStore.getRowIds('recipeUnlocks')) {
+    const row = gameDataStore.getRow('recipeUnlocks', id)
+    const recipeId = row.recipeId as string
+    let list = map.get(recipeId)
+    if (!list) {
+      list = []
+      map.set(recipeId, list)
+    }
+    list.push(row.talentId as string)
+  }
+  return map
+}
+
+/**
  * Single-pass index from recipe ID to the set of its ingredient item/tag IDs.
  * Used to exclude "reintegrated" products — items that are both produced and
  * consumed by the same recipe shouldn't appear as user-facing products.
@@ -134,6 +158,7 @@ export function buildProducts(
   // O(N_elements).
   const productsByRecipeId = buildRecipeProductItemIds(gameDataStore)
   const ingredientsByRecipeId = buildRecipeIngredientItemIds(gameDataStore)
+  const unlockingTalentsByRecipeId = buildRecipeUnlockingTalents(gameDataStore)
 
   // Index userRecipeMargins by userRecipeId once (build-scoped).
   const marginByUserRecipeId = new Map<string, string>()
@@ -164,6 +189,7 @@ export function buildProducts(
     const productItemIds = productsByRecipeId.get(recipeId) ?? []
     const ingredientIds = ingredientsByRecipeId.get(recipeId)
     const userMarginId = marginByUserRecipeId.get(urId) ?? ''
+    const unlockingTalentIds = unlockingTalentsByRecipeId.get(recipeId) ?? []
 
     const recipePrimaryProductRawName = getRecipePrimaryProductRawName(
       gameDataStore,
@@ -192,6 +218,7 @@ export function buildProducts(
         primaryProductId: productId,
         primaryProductName: getName('item', productId),
         userMarginId,
+        unlockingTalentIds,
       })
     }
   }
