@@ -23,6 +23,7 @@ import { generateId } from '@/lib/ids'
 import { useStores } from '@/stores/providers'
 import type { PriceMode } from '@/types/solver'
 
+import { MaterialDialog } from '../materials/MaterialDialog'
 import { AddRecipeDialog } from './AddRecipeDialog'
 import { ItemCostCell } from './ItemCostCell'
 import { ItemSaleCell } from './ItemSaleCell'
@@ -144,6 +145,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [addDialogVisible, setAddDialogVisible] = useState(false)
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null)
+  const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>(null)
 
   // Every child's recipeId (flat children included) — used to prevent
   // duplicate adds in AddRecipeDialog.
@@ -549,6 +551,20 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
         datasetId={datasetId}
         priceSignal={priceSignal}
         onHide={() => setSelectedRecipeId(null)}
+        onOpenMaterial={(id) => {
+          setSelectedRecipeId(null)
+          setSelectedMaterialId(id)
+        }}
+      />
+      <MaterialDialog
+        itemId={selectedMaterialId}
+        buildId={buildId}
+        datasetId={datasetId}
+        onHide={() => setSelectedMaterialId(null)}
+        onOpenRecipe={(id) => {
+          setSelectedMaterialId(null)
+          setSelectedRecipeId(id)
+        }}
       />
       <DataTable
         value={rows}

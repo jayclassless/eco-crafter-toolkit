@@ -1,3 +1,4 @@
+import { Button } from 'primereact/button'
 import { Column } from 'primereact/column'
 import { DataTable } from 'primereact/datatable'
 import { memo, useCallback, useMemo, useState } from 'react'
@@ -12,8 +13,10 @@ import { useStoreRevision, useTableRowIdsRevision } from '@/hooks/use-store-revi
 import { useStores } from '@/stores/providers'
 import type { PriceMode } from '@/types/solver'
 
+import { RecipeDialog } from '../products/RecipeDialog'
 import { ComputedPriceCell } from './ComputedPriceCell'
 import { ManualPriceCell } from './ManualPriceCell'
+import { MaterialDialog } from './MaterialDialog'
 import { MirrorCheckbox } from './MirrorCheckbox'
 import { TagPriceCell } from './TagPriceCell'
 import type { Material, MaterialGroup } from './types'
@@ -43,6 +46,8 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
   const { getName } = useLocalizedName(datasetId)
   const priceMgmt = usePriceManagement(buildId)
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
+  const [recipeDialogId, setRecipeDialogId] = useState<string | null>(null)
 
   const buildRev = useStoreRevision(buildStore, BUILD_TABLES)
   const userPricesRowIdsRev = useTableRowIdsRevision(buildStore, USER_PRICES_TABLE)
@@ -261,7 +266,13 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
         style={row.isChild ? { paddingLeft: '1.5rem' } : undefined}
       >
         {row.rawName && <EcoIcon name={row.rawName} size={20} />}
-        <span>{row.name}</span>
+        <Button
+          label={row.name}
+          link
+          className="p-0"
+          pt={{ label: { style: { textAlign: 'left' } } }}
+          onClick={() => setSelectedItemId(row.itemOrTagId)}
+        />
         {row.isTag && <i className="pi pi-tag text-xs" />}
       </div>
     ),
@@ -344,6 +355,27 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
           className="flex-1"
         />
       </div>
+      <MaterialDialog
+        itemId={selectedItemId}
+        buildId={buildId}
+        datasetId={datasetId}
+        onHide={() => setSelectedItemId(null)}
+        onOpenRecipe={(id) => {
+          setSelectedItemId(null)
+          setRecipeDialogId(id)
+        }}
+      />
+      <RecipeDialog
+        recipeId={recipeDialogId}
+        buildId={buildId}
+        datasetId={datasetId}
+        priceSignal={priceSignal}
+        onHide={() => setRecipeDialogId(null)}
+        onOpenMaterial={(id) => {
+          setRecipeDialogId(null)
+          setSelectedItemId(id)
+        }}
+      />
       <DataTable
         value={rows}
         dataKey="rowKey"

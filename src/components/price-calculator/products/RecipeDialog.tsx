@@ -1,3 +1,4 @@
+import { Button } from 'primereact/button'
 import { Column } from 'primereact/column'
 import { DataTable } from 'primereact/datatable'
 import { Dialog } from 'primereact/dialog'
@@ -22,6 +23,7 @@ interface Props {
   datasetId: string
   priceSignal: PriceSignal
   onHide: () => void
+  onOpenMaterial?: (itemOrTagId: string) => void
 }
 
 interface ElementRow {
@@ -46,7 +48,14 @@ interface AdditionalCostRow {
   totalPrice: number
 }
 
-export function RecipeDialog({ recipeId, buildId, datasetId, priceSignal, onHide }: Props) {
+export function RecipeDialog({
+  recipeId,
+  buildId,
+  datasetId,
+  priceSignal,
+  onHide,
+  onOpenMaterial,
+}: Props) {
   const { t } = useTranslation()
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
@@ -285,6 +294,22 @@ export function RecipeDialog({ recipeId, buildId, datasetId, priceSignal, onHide
     </div>
   )
 
+  const ingredientNameTemplate = (row: ElementRow) =>
+    onOpenMaterial ? (
+      <div className="flex align-items-center gap-2">
+        {row.rawName && <EcoIcon name={row.rawName} size={20} />}
+        <Button
+          label={row.name}
+          link
+          className="p-0"
+          pt={{ label: { style: { textAlign: 'left' } } }}
+          onClick={() => onOpenMaterial(row.itemOrTagId)}
+        />
+      </div>
+    ) : (
+      nameTemplate(row)
+    )
+
   const priceTemplate = (row: ElementRow) => (
     <span className="text-right block">
       {row.unitPrice != null ? row.unitPrice.toFixed(2) : '-'}
@@ -383,7 +408,7 @@ export function RecipeDialog({ recipeId, buildId, datasetId, priceSignal, onHide
             />
             <Column
               header={t('priceCalculator.recipe.item')}
-              body={nameTemplate}
+              body={ingredientNameTemplate}
               footer={subtotalLabelFooter}
             />
             <Column
@@ -443,7 +468,7 @@ export function RecipeDialog({ recipeId, buildId, datasetId, priceSignal, onHide
                 />
                 <Column
                   header={t('priceCalculator.recipe.item')}
-                  body={nameTemplate}
+                  body={ingredientNameTemplate}
                   footer={subtotalLabelFooter}
                 />
                 <Column

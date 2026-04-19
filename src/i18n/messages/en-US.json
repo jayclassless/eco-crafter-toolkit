@@ -126,6 +126,16 @@
       "cancel": "Cancel",
       "add": "Add"
     },
+    "material": {
+      "tabUsedIn": "Used in Recipes",
+      "tabProducedBy": "Produced by Recipes",
+      "skill": "Skill",
+      "recipe": "Recipe",
+      "quantity": "Qty",
+      "viaTag": "via {tag}",
+      "usedInEmpty": "No recipes in this build use this item.",
+      "producedByEmpty": "No recipes produce this item."
+    },
     "recipe": {
       "ingredients": "Ingredients",
       "additionalCosts": "Additional Costs",
