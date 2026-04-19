@@ -4,7 +4,12 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createBuildStore } from '@/stores/build-store'
 import { createGameDataStore } from '@/stores/game-data-store'
 
-import { buildProducts, buildMarginOptions } from '../use-products'
+import {
+  buildMarginOptions,
+  buildProducts,
+  buildProductGroups,
+  findDefaultMarginId,
+} from '../use-products'
 
 const BUILD_ID = 'build1'
 const OTHER_BUILD_ID = 'build2'
@@ -334,5 +339,238 @@ describe('buildMarginOptions', () => {
     const options = buildMarginOptions(buildStore, BUILD_ID)
     const ids = options.map((o) => o.id).sort()
     expect(ids).toEqual(['m-default', 'm-prem'])
+  })
+})
+
+describe('findDefaultMarginId', () => {
+  it('returns the default margin id for the requested build', () => {
+    expect(findDefaultMarginId(buildStore, BUILD_ID)).toBe('m-default')
+  })
+
+  it('returns empty string when no default exists', () => {
+    buildStore.delRow('userMargins', 'm-default')
+    expect(findDefaultMarginId(buildStore, BUILD_ID)).toBe('')
+  })
+
+  it('ignores defaults belonging to a different build', () => {
+    buildStore.delRow('userMargins', 'm-default')
+    buildStore.setRow('userMargins', 'm-foreign-default', {
+      id: 'm-foreign-default',
+      buildId: OTHER_BUILD_ID,
+      name: 'ForeignDefault',
+      percent: 5,
+      isDefault: true,
+    })
+    expect(findDefaultMarginId(buildStore, BUILD_ID)).toBe('')
+  })
+})
+
+describe('buildProductGroups', () => {
+  it('returns parent=null single-recipe groups when products do not overlap', () => {
+    // Add a second item and recipe producing it
+    gameDataStore.setRow('items', 'item-copper', {
+      id: 'item-copper',
+      datasetId: 'ds1',
+      name: 'Copper',
+      isTag: false,
+    })
+    gameDataStore.setRow('recipes', 'recipe-copper', {
+      id: 'recipe-copper',
+      datasetId: 'ds1',
+      name: 'CopperRecipe',
+      familyName: 'Copper',
+      skillId: 'skill-mining',
+      requiredSkillLevel: 1,
+      isBlueprint: false,
+      isDefault: true,
+      craftingTableId: 'ct1',
+      baseCraftTime: 1,
+      baseLaborCost: 1,
+    })
+    gameDataStore.setRow('recipeElements', 're-copper', {
+      id: 're-copper',
+      datasetId: 'ds1',
+      recipeId: 'recipe-copper',
+      itemOrTagId: 'item-copper',
+      baseQuantity: 1,
+      isProduct: true,
+      index: 0,
+    })
+    buildStore.setRow('userRecipes', 'ur-iron', {
+      id: 'ur-iron',
+      buildId: BUILD_ID,
+      recipeId: 'recipe-iron',
+      roundFactor: 0,
+    })
+    buildStore.setRow('userRecipes', 'ur-copper', {
+      id: 'ur-copper',
+      buildId: BUILD_ID,
+      recipeId: 'recipe-copper',
+      roundFactor: 0,
+    })
+
+    const groups = buildProductGroups(buildStore, gameDataStore, BUILD_ID, fakeName)
+    expect(groups).toHaveLength(2)
+    for (const g of groups) expect(g.parent).toBeNull()
+    // Sorted alphabetically by primary product name
+    expect(groups[0].children[0].primaryProductRawName).toBe('Copper')
+    expect(groups[1].children[0].primaryProductRawName).toBe('IronOre')
+  })
+
+  it('synthesizes a parent when two recipes share the same primary product', () => {
+    // Second recipe for the same item
+    gameDataStore.setRow('recipes', 'recipe-iron-alt', {
+      id: 'recipe-iron-alt',
+      datasetId: 'ds1',
+      name: 'IronAlt',
+      familyName: 'Iron',
+      skillId: 'skill-mining',
+      requiredSkillLevel: 1,
+      isBlueprint: false,
+      isDefault: false,
+      craftingTableId: 'ct1',
+      baseCraftTime: 1,
+      baseLaborCost: 1,
+    })
+    gameDataStore.setRow('recipeElements', 're-iron-alt', {
+      id: 're-iron-alt',
+      datasetId: 'ds1',
+      recipeId: 'recipe-iron-alt',
+      itemOrTagId: 'item-iron',
+      baseQuantity: 1,
+      isProduct: true,
+      index: 0,
+    })
+    buildStore.setRow('userRecipes', 'ur1', {
+      id: 'ur1',
+      buildId: BUILD_ID,
+      recipeId: 'recipe-iron',
+      roundFactor: 0,
+    })
+    buildStore.setRow('userRecipes', 'ur2', {
+      id: 'ur2',
+      buildId: BUILD_ID,
+      recipeId: 'recipe-iron-alt',
+      roundFactor: 0,
+    })
+    // Wire a userPrices row and a userProductMargins row on the parent product.
+    buildStore.setRow('userPrices', 'up1', {
+      id: 'up1',
+      buildId: BUILD_ID,
+      itemOrTagId: 'item-iron',
+      price: 12,
+    })
+    buildStore.setRow('userProductMargins', 'upm1', {
+      id: 'upm1',
+      buildId: BUILD_ID,
+      itemOrTagId: 'item-iron',
+      userMarginId: 'm-prem',
+    })
+
+    const groups = buildProductGroups(buildStore, gameDataStore, BUILD_ID, fakeName)
+    expect(groups).toHaveLength(1)
+    const group = groups[0]
+    expect(group.parent).not.toBeNull()
+    expect(group.parent?.primaryProductId).toBe('item-iron')
+    expect(group.parent?.userPriceId).toBe('up1')
+    expect(group.parent?.productUserMarginId).toBe('m-prem')
+    expect(group.children).toHaveLength(2)
+    // Children sorted by skill then recipe name
+    expect(group.children[0].recipeId).toBe('recipe-iron')
+    expect(group.children[1].recipeId).toBe('recipe-iron-alt')
+  })
+
+  it('leaves parent.userPriceId empty when no userPrices row exists for the product', () => {
+    gameDataStore.setRow('recipes', 'recipe-iron-alt', {
+      id: 'recipe-iron-alt',
+      datasetId: 'ds1',
+      name: 'IronAlt',
+      familyName: 'Iron',
+      skillId: 'skill-mining',
+      requiredSkillLevel: 1,
+      isBlueprint: false,
+      isDefault: false,
+      craftingTableId: 'ct1',
+      baseCraftTime: 1,
+      baseLaborCost: 1,
+    })
+    gameDataStore.setRow('recipeElements', 're-iron-alt', {
+      id: 're-iron-alt',
+      datasetId: 'ds1',
+      recipeId: 'recipe-iron-alt',
+      itemOrTagId: 'item-iron',
+      baseQuantity: 1,
+      isProduct: true,
+      index: 0,
+    })
+    buildStore.setRow('userRecipes', 'ur1', {
+      id: 'ur1',
+      buildId: BUILD_ID,
+      recipeId: 'recipe-iron',
+      roundFactor: 0,
+    })
+    buildStore.setRow('userRecipes', 'ur2', {
+      id: 'ur2',
+      buildId: BUILD_ID,
+      recipeId: 'recipe-iron-alt',
+      roundFactor: 0,
+    })
+
+    const [group] = buildProductGroups(buildStore, gameDataStore, BUILD_ID, fakeName)
+    expect(group.parent?.userPriceId).toBe('')
+    expect(group.parent?.productUserMarginId).toBe('')
+  })
+
+  it('ignores userPrices and userProductMargins from other builds', () => {
+    gameDataStore.setRow('recipes', 'recipe-iron-alt', {
+      id: 'recipe-iron-alt',
+      datasetId: 'ds1',
+      name: 'IronAlt',
+      familyName: 'Iron',
+      skillId: 'skill-mining',
+      requiredSkillLevel: 1,
+      isBlueprint: false,
+      isDefault: false,
+      craftingTableId: 'ct1',
+      baseCraftTime: 1,
+      baseLaborCost: 1,
+    })
+    gameDataStore.setRow('recipeElements', 're-iron-alt', {
+      id: 're-iron-alt',
+      datasetId: 'ds1',
+      recipeId: 'recipe-iron-alt',
+      itemOrTagId: 'item-iron',
+      baseQuantity: 1,
+      isProduct: true,
+      index: 0,
+    })
+    buildStore.setRow('userRecipes', 'ur1', {
+      id: 'ur1',
+      buildId: BUILD_ID,
+      recipeId: 'recipe-iron',
+      roundFactor: 0,
+    })
+    buildStore.setRow('userRecipes', 'ur2', {
+      id: 'ur2',
+      buildId: BUILD_ID,
+      recipeId: 'recipe-iron-alt',
+      roundFactor: 0,
+    })
+    buildStore.setRow('userPrices', 'up-foreign', {
+      id: 'up-foreign',
+      buildId: OTHER_BUILD_ID,
+      itemOrTagId: 'item-iron',
+      price: 99,
+    })
+    buildStore.setRow('userProductMargins', 'upm-foreign', {
+      id: 'upm-foreign',
+      buildId: OTHER_BUILD_ID,
+      itemOrTagId: 'item-iron',
+      userMarginId: 'm-prem',
+    })
+
+    const [group] = buildProductGroups(buildStore, gameDataStore, BUILD_ID, fakeName)
+    expect(group.parent?.userPriceId).toBe('')
+    expect(group.parent?.productUserMarginId).toBe('')
   })
 })

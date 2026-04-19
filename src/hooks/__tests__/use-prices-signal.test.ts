@@ -4,6 +4,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   usePriceCell,
   usePriceSignal,
+  useRecipePriceCell,
   type PriceSignal,
   type PricesMap,
 } from '../use-prices-signal'
@@ -370,5 +371,138 @@ describe('usePriceCell', () => {
       act(() => signalRef!.set(makePrices({ iron: [11, 15] })))
     }).not.toThrow()
     expect(renderCount).toBe(afterMountRenders)
+  })
+})
+
+describe('signal recipe-keyed API', () => {
+  it('setRecipe + getRecipe round-trip', () => {
+    const { result } = renderHook(() => usePriceSignal())
+    const signal = result.current
+    expect(signal.getRecipe('r1', 'costPrice')).toBeNull()
+    act(() => signal.setRecipe(makePrices({ r1: [3, 8] })))
+    expect(signal.getRecipe('r1', 'costPrice')).toBe(3)
+    expect(signal.getRecipe('r1', 'salePrice')).toBe(8)
+  })
+
+  it('subscribeRecipe only fires on recipe-keyed changes', () => {
+    const { result } = renderHook(() => usePriceSignal())
+    const signal = result.current
+    const listener = vi.fn()
+    signal.subscribeRecipe('r1', 'costPrice', listener)
+
+    // Changing item-keyed prices must not fire recipe-keyed listeners.
+    act(() => signal.set(makePrices({ r1: [3, 8] })))
+    expect(listener).not.toHaveBeenCalled()
+
+    act(() => signal.setRecipe(makePrices({ r1: [3, 8] })))
+    expect(listener).toHaveBeenCalledTimes(1)
+
+    // Same value → no fire.
+    act(() => signal.setRecipe(makePrices({ r1: [3, 9] })))
+    expect(listener).toHaveBeenCalledTimes(1)
+
+    act(() => signal.setRecipe(makePrices({ r1: [4, 9] })))
+    expect(listener).toHaveBeenCalledTimes(2)
+  })
+
+  it('subscribeRecipe returns an unsubscribe that cleans up', () => {
+    const { result } = renderHook(() => usePriceSignal())
+    const signal = result.current
+    const listener = vi.fn()
+    const unsub = signal.subscribeRecipe('r1', 'costPrice', listener)
+    act(() => signal.setRecipe(makePrices({ r1: [3, 8] })))
+    expect(listener).toHaveBeenCalledTimes(1)
+    unsub()
+    act(() => signal.setRecipe(makePrices({ r1: [4, 8] })))
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('signal.getRecipeIdFor', () => {
+  it("returns '' when there is no entry for the item", () => {
+    const { result } = renderHook(() => usePriceSignal())
+    expect(result.current.getRecipeIdFor('iron')).toBe('')
+  })
+
+  it("returns '' when the entry has no recipeId", () => {
+    const { result } = renderHook(() => usePriceSignal())
+    act(() => result.current.set(makePrices({ iron: [1, 2] })))
+    expect(result.current.getRecipeIdFor('iron')).toBe('')
+  })
+
+  it('returns the recipeId attached to the entry', () => {
+    const { result } = renderHook(() => usePriceSignal())
+    act(() =>
+      result.current.set({
+        iron: { costPrice: 1, salePrice: 2, recipeId: 'r-winner' },
+      })
+    )
+    expect(result.current.getRecipeIdFor('iron')).toBe('r-winner')
+  })
+})
+
+describe('signal.getAll', () => {
+  it('returns the current item-keyed prices map snapshot', () => {
+    const { result } = renderHook(() => usePriceSignal())
+    act(() => result.current.set(makePrices({ iron: [1, 2], copper: [3, 4] })))
+    const snapshot = result.current.getAll()
+    expect(snapshot).toEqual({
+      iron: { costPrice: 1, salePrice: 2 },
+      copper: { costPrice: 3, salePrice: 4 },
+    })
+  })
+})
+
+describe('useRecipePriceCell', () => {
+  it('returns null when recipeId is falsy', () => {
+    const { result } = renderHook(() => {
+      const signal = usePriceSignal()
+      return useRecipePriceCell(signal, null, 'costPrice')
+    })
+    expect(result.current).toBeNull()
+  })
+
+  it('returns null when recipeId is the empty string', () => {
+    const { result } = renderHook(() => {
+      const signal = usePriceSignal()
+      return useRecipePriceCell(signal, '', 'salePrice')
+    })
+    expect(result.current).toBeNull()
+  })
+
+  it('reads from the recipe-keyed namespace (not item-keyed)', () => {
+    let signalRef: PriceSignal | null = null
+    const { result } = renderHook(() => {
+      const signal = usePriceSignal()
+      signalRef = signal
+      return useRecipePriceCell(signal, 'r1', 'costPrice')
+    })
+
+    // Item-keyed push must not affect a recipe-keyed subscriber.
+    act(() => signalRef!.set(makePrices({ r1: [10, 20] })))
+    expect(result.current).toBeNull()
+
+    act(() => signalRef!.setRecipe(makePrices({ r1: [3, 8] })))
+    expect(result.current).toBe(3)
+
+    act(() => signalRef!.setRecipe(makePrices({ r1: [4, 8] })))
+    expect(result.current).toBe(4)
+  })
+
+  it('re-subscribes when recipeId changes', () => {
+    let signalRef: PriceSignal | null = null
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string }) => {
+        const signal = usePriceSignal()
+        signalRef = signal
+        return useRecipePriceCell(signal, id, 'costPrice')
+      },
+      { initialProps: { id: 'r1' } }
+    )
+    act(() => signalRef!.setRecipe(makePrices({ r1: [3, 8], r2: [5, 6] })))
+    expect(result.current).toBe(3)
+
+    rerender({ id: 'r2' })
+    expect(result.current).toBe(5)
   })
 })

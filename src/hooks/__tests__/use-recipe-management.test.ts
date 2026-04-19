@@ -160,6 +160,61 @@ describe('createRecipeManagement', () => {
     expect(buildStore.getCell('userRecipes', id, 'roundFactor')).toBe(4)
   })
 
+  describe('setProductMargin', () => {
+    it('creates a userProductMargins row when none exists', () => {
+      mgmt().setProductMargin('item-iron', 'm-other')
+      const rows = rowsForBuild(buildStore, 'userProductMargins')
+      expect(rows).toHaveLength(1)
+      expect(rows[0].itemOrTagId).toBe('item-iron')
+      expect(rows[0].userMarginId).toBe('m-other')
+    })
+
+    it('updates an existing same-build row in place', () => {
+      buildStore.setRow('userProductMargins', 'upm1', {
+        id: 'upm1',
+        buildId: BUILD_ID,
+        itemOrTagId: 'item-iron',
+        userMarginId: 'm-default',
+      })
+      mgmt().setProductMargin('item-iron', 'm-other')
+      expect(buildStore.getCell('userProductMargins', 'upm1', 'userMarginId')).toBe('m-other')
+      expect(rowsForBuild(buildStore, 'userProductMargins')).toHaveLength(1)
+    })
+
+    it('ignores foreign-build rows when locating the existing row', () => {
+      buildStore.setRow('userProductMargins', 'upm-foreign', {
+        id: 'upm-foreign',
+        buildId: 'other-build',
+        itemOrTagId: 'item-iron',
+        userMarginId: 'm-default',
+      })
+      mgmt().setProductMargin('item-iron', 'm-other')
+      // A new row is added for our build; the foreign one is untouched.
+      expect(buildStore.getCell('userProductMargins', 'upm-foreign', 'userMarginId')).toBe(
+        'm-default'
+      )
+      const ours = rowsForBuild(buildStore, 'userProductMargins')
+      expect(ours).toHaveLength(1)
+      expect(ours[0].userMarginId).toBe('m-other')
+    })
+
+    it('deletes the existing row when marginId is empty', () => {
+      buildStore.setRow('userProductMargins', 'upm1', {
+        id: 'upm1',
+        buildId: BUILD_ID,
+        itemOrTagId: 'item-iron',
+        userMarginId: 'm-other',
+      })
+      mgmt().setProductMargin('item-iron', '')
+      expect(rowsForBuild(buildStore, 'userProductMargins')).toHaveLength(0)
+    })
+
+    it('is a no-op when marginId is empty and no existing row exists', () => {
+      mgmt().setProductMargin('item-iron', '')
+      expect(rowsForBuild(buildStore, 'userProductMargins')).toHaveLength(0)
+    })
+  })
+
   describe('addRecipe auto-adds the crafting table', () => {
     it("adds the recipe's crafting table to the build when missing", () => {
       mgmt().addRecipe('recipe-iron')
