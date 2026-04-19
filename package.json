@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "oxlint .",
     "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
     "fullcheck": "pnpm run lint && pnpm run typecheck && pnpm run format && pnpm run test:coverage"
   },
   "dependencies": {
@@ -47,5 +48,6 @@
     "vite": "^8.0.8",
     "vitest": "^4.1.4",
     "yargs": "^18.0.0"
-  }
+  },
+  "packageManager": "pnpm@10.32.1"
 }
