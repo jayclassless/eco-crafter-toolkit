@@ -3,12 +3,15 @@ import { Column } from 'primereact/column'
 import { DataTable } from 'primereact/datatable'
 import { Dialog } from 'primereact/dialog'
 import { InputNumber } from 'primereact/inputnumber'
-import { useCallback } from 'react'
+import { TabPanel, TabView } from 'primereact/tabview'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CraftingTableIcon } from '@/components/common/CraftingTableIcon'
 import { ItemIcon } from '@/components/common/ItemIcon'
 import { SkillIcon } from '@/components/common/SkillIcon'
+import { ProductItemName } from '@/components/price-calculator/products/ProductItemName'
+import { UsedInRecipesTable } from '@/components/price-calculator/UsedInRecipesTable'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import {
   type PriceSignal,
@@ -17,6 +20,7 @@ import {
 } from '@/hooks/use-prices-signal'
 import { useRecipeManagement } from '@/hooks/use-recipe-management'
 import { useStoreRevision } from '@/hooks/use-store-revision'
+import { computeUsedInRecipes, type UsedInRecipe } from '@/lib/used-in-recipes'
 import { useStores } from '@/stores/providers'
 
 interface Props {
@@ -26,6 +30,7 @@ interface Props {
   priceSignal: PriceSignal
   onHide: () => void
   onOpenMaterial?: (itemOrTagId: string) => void
+  onOpenRecipe?: (recipeId: string) => void
 }
 
 interface ElementRow {
@@ -57,6 +62,7 @@ export function RecipeDialog({
   priceSignal,
   onHide,
   onOpenMaterial,
+  onOpenRecipe,
 }: Props) {
   const { t } = useTranslation()
   const { gameDataStore, buildStore } = useStores()
@@ -219,12 +225,97 @@ export function RecipeDialog({
     getItemRawName,
   ])
 
+  const [activeTabIndex, setActiveTabIndex] = useState(0)
+  // Reset to the first tab (Cost Components) whenever the dialog switches to
+  // a new recipe — e.g. clicking a recipe in the Used-in-Recipes list.
+  useEffect(() => {
+    setActiveTabIndex(0)
+  }, [recipeId])
+
   useStoreRevision(buildStore, ['userProductShares'])
+  const buildRecipesRev = useStoreRevision(buildStore, ['userRecipes', 'userPrices'])
   // Re-render whenever the solver pushes a new result, so the inline reads
   // via `priceSignal.get(...)` / `priceSignal.getRecipe(...)` above reflect
   // the new numbers (e.g. when the user edits a share %).
   usePriceSignalRevision(priceSignal)
   const recipeCost = useRecipeCostCell(priceSignal, recipeId)
+
+  // Items that are primary products of any user-selected recipe in this build.
+  // Clicking an ingredient that is one of these opens its winning recipe (via
+  // `ProductItemName`) instead of the generic `MaterialDialog`.
+  const { productItemIds, userPriceIdByItem } = useMemo(() => {
+    const products = new Set<string>()
+    const priceIds = new Map<string, string>()
+    for (const urId of buildStore.getRowIds('userRecipes')) {
+      const ur = buildStore.getRow('userRecipes', urId)
+      if (ur.buildId !== buildId) continue
+      const rId = ur.recipeId as string
+      let firstProductId: string | null = null
+      let firstIndex = Number.POSITIVE_INFINITY
+      for (const reId of gameDataStore.getRowIds('recipeElements')) {
+        const re = gameDataStore.getRow('recipeElements', reId)
+        if (re.recipeId !== rId || !re.isProduct) continue
+        const idx = (re.index as number) ?? 0
+        if (idx < firstIndex) {
+          firstIndex = idx
+          firstProductId = re.itemOrTagId as string
+        }
+      }
+      if (firstProductId) products.add(firstProductId)
+    }
+    for (const upId of buildStore.getRowIds('userPrices')) {
+      const up = buildStore.getRow('userPrices', upId)
+      if (up.buildId !== buildId) continue
+      priceIds.set(up.itemOrTagId as string, upId)
+    }
+    return { productItemIds: products, userPriceIdByItem: priceIds }
+    // buildRecipesRev is the invalidation signal for this memo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buildStore, gameDataStore, buildId, buildRecipesRev])
+
+  const gameRev = useStoreRevision(gameDataStore, [
+    'recipeElements',
+    'recipes',
+    'tagItems',
+    'items',
+  ])
+
+  // Recipes in this build that consume the primary product of the current
+  // recipe. The primary product is the first product (by `index`) that isn't
+  // also an ingredient of this recipe (i.e. not reintegrated). Delegates the
+  // ingredient scan + tag-expansion to the shared helper.
+  const usedInRows = useMemo<UsedInRecipe[]>(
+    () => {
+      if (!recipeId) return []
+
+      const ownProducts: Array<{ itemId: string; index: number }> = []
+      const ownIngredientItemIds = new Set<string>()
+      for (const reId of gameDataStore.getRowIds('recipeElements')) {
+        const re = gameDataStore.getRow('recipeElements', reId)
+        if (re.recipeId !== recipeId) continue
+        const itemId = re.itemOrTagId as string
+        if (re.isProduct) {
+          ownProducts.push({ itemId, index: (re.index as number) ?? 0 })
+        } else {
+          ownIngredientItemIds.add(itemId)
+        }
+      }
+      if (ownProducts.length === 0) return []
+      ownProducts.sort((a, b) => a.index - b.index)
+      const primary = ownProducts.find((p) => !ownIngredientItemIds.has(p.itemId)) ?? ownProducts[0]
+
+      return computeUsedInRecipes(gameDataStore, buildStore, {
+        itemId: primary.itemId,
+        buildId,
+        datasetId,
+        excludeRecipeId: recipeId,
+        getName,
+      })
+    },
+    // gameRev / buildRecipesRev are the invalidation signals for this memo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [recipeId, buildId, datasetId, gameDataStore, buildStore, getName, gameRev, buildRecipesRev]
+  )
 
   if (!recipeId) return null
 
@@ -296,7 +387,7 @@ export function RecipeDialog({
     </div>
   )
 
-  const ingredientNameTemplate = (row: ElementRow) =>
+  const materialOnlyNameTemplate = (row: ElementRow) =>
     onOpenMaterial ? (
       <div className="flex align-items-center gap-2">
         {row.rawName && <ItemIcon item={{ name: row.rawName }} />}
@@ -311,6 +402,23 @@ export function RecipeDialog({
     ) : (
       nameTemplate(row)
     )
+
+  const ingredientNameTemplate = (row: ElementRow) => {
+    if (onOpenRecipe && productItemIds.has(row.itemOrTagId)) {
+      return (
+        <ProductItemName
+          itemId={row.itemOrTagId}
+          displayName={row.name}
+          rawName={row.rawName}
+          userPriceId={userPriceIdByItem.get(row.itemOrTagId) ?? ''}
+          buildStore={buildStore}
+          signal={priceSignal}
+          onOpenRecipe={onOpenRecipe}
+        />
+      )
+    }
+    return materialOnlyNameTemplate(row)
+  }
 
   const priceTemplate = (row: ElementRow) => (
     <span className="text-right block">
@@ -399,70 +507,12 @@ export function RecipeDialog({
       modal
       dismissableMask
     >
-      <div className="grid">
-        <div className="col-6 flex flex-column">
-          <h4 className="mt-0 mb-2">{t('priceCalculator.recipe.ingredients')}</h4>
-          <DataTable value={ingredients} size="small">
-            <Column
-              header={t('priceCalculator.recipe.quantity')}
-              field="quantity"
-              style={{ width: '4rem' }}
-            />
-            <Column
-              header={t('priceCalculator.recipe.item')}
-              body={ingredientNameTemplate}
-              footer={subtotalLabelFooter}
-            />
-            <Column
-              header={t('priceCalculator.recipe.unitPrice')}
-              body={priceTemplate}
-              style={{ width: '6rem' }}
-              headerClassName="p-align-right"
-            />
-            <Column
-              header={t('priceCalculator.recipe.totalCost')}
-              body={totalTemplate}
-              footer={subtotalValueFooter(ingredientsSubtotal)}
-              style={{ width: '6rem' }}
-              headerClassName="p-align-right"
-            />
-          </DataTable>
-
-          {additionalCosts.length > 0 && (
-            <>
-              <h4 className="mt-4 mb-2">{t('priceCalculator.recipe.additionalCosts')}</h4>
-              <DataTable value={additionalCosts} size="small">
-                <Column
-                  header={t('priceCalculator.recipe.quantity')}
-                  body={(row: AdditionalCostRow) => row.quantity}
-                  style={{ width: '6rem' }}
-                />
-                <Column
-                  header={t('priceCalculator.recipe.item')}
-                  body={additionalCostNameTemplate}
-                  footer={subtotalLabelFooter}
-                />
-                <Column
-                  header={t('priceCalculator.recipe.unitPrice')}
-                  body={additionalCostUnitTemplate}
-                  style={{ width: '7rem' }}
-                  headerClassName="p-align-right"
-                />
-                <Column
-                  header={t('priceCalculator.recipe.totalCost')}
-                  body={additionalCostTotalTemplate}
-                  footer={subtotalValueFooter(additionalCostsSubtotal)}
-                  style={{ width: '6rem' }}
-                  headerClassName="p-align-right"
-                />
-              </DataTable>
-            </>
-          )}
-
-          {returnedIngredients.length > 0 && (
-            <>
-              <h4 className="mt-4 mb-2">{t('priceCalculator.recipe.returnedIngredients')}</h4>
-              <DataTable value={returnedIngredients} size="small">
+      <TabView activeIndex={activeTabIndex} onTabChange={(e) => setActiveTabIndex(e.index)}>
+        <TabPanel header={t('priceCalculator.recipe.tabCostComponents')}>
+          <div className="grid">
+            <div className="col-6 flex flex-column">
+              <h4 className="mt-0 mb-2">{t('priceCalculator.recipe.ingredients')}</h4>
+              <DataTable value={ingredients} size="small">
                 <Column
                   header={t('priceCalculator.recipe.quantity')}
                   field="quantity"
@@ -481,51 +531,120 @@ export function RecipeDialog({
                 />
                 <Column
                   header={t('priceCalculator.recipe.totalCost')}
-                  body={deductedTotalTemplate}
-                  footer={subtotalValueFooter(returnedSubtotal, true)}
+                  body={totalTemplate}
+                  footer={subtotalValueFooter(ingredientsSubtotal)}
                   style={{ width: '6rem' }}
                   headerClassName="p-align-right"
                 />
               </DataTable>
-            </>
-          )}
 
-          <div className="mt-auto pt-3">{totalFooter(leftTotal)}</div>
-        </div>
+              {returnedIngredients.length > 0 && (
+                <>
+                  <h4 className="mt-4 mb-2">{t('priceCalculator.recipe.returnedIngredients')}</h4>
+                  <DataTable value={returnedIngredients} size="small">
+                    <Column
+                      header={t('priceCalculator.recipe.quantity')}
+                      field="quantity"
+                      style={{ width: '4rem' }}
+                    />
+                    <Column
+                      header={t('priceCalculator.recipe.item')}
+                      body={materialOnlyNameTemplate}
+                      footer={subtotalLabelFooter}
+                    />
+                    <Column
+                      header={t('priceCalculator.recipe.unitPrice')}
+                      body={priceTemplate}
+                      style={{ width: '6rem' }}
+                      headerClassName="p-align-right"
+                    />
+                    <Column
+                      header={t('priceCalculator.recipe.totalCost')}
+                      body={deductedTotalTemplate}
+                      footer={subtotalValueFooter(returnedSubtotal, true)}
+                      style={{ width: '6rem' }}
+                      headerClassName="p-align-right"
+                    />
+                  </DataTable>
+                </>
+              )}
 
-        <div className="col-6 flex flex-column">
-          <h4 className="mt-0 mb-2">{t('priceCalculator.recipe.products')}</h4>
-          <DataTable value={products} size="small">
-            <Column
-              header={t('priceCalculator.recipe.quantity')}
-              field="quantity"
-              style={{ width: '4rem' }}
-            />
-            <Column header={t('priceCalculator.recipe.item')} body={nameTemplate} />
-            {showShareColumn && (
-              <Column
-                header={t('priceCalculator.recipe.share')}
-                body={shareTemplate}
-                style={{ width: '6rem' }}
-              />
-            )}
-            <Column
-              header={t('priceCalculator.recipe.unitPrice')}
-              body={priceTemplate}
-              style={{ width: '6rem' }}
-              headerClassName="p-align-right"
-            />
-            <Column
-              header={t('priceCalculator.recipe.totalCost')}
-              body={totalTemplate}
-              style={{ width: '6rem' }}
-              headerClassName="p-align-right"
-            />
-          </DataTable>
+              {additionalCosts.length > 0 && (
+                <>
+                  <h4 className="mt-4 mb-2">{t('priceCalculator.recipe.additionalCosts')}</h4>
+                  <DataTable value={additionalCosts} size="small">
+                    <Column
+                      header={t('priceCalculator.recipe.quantity')}
+                      body={(row: AdditionalCostRow) => row.quantity}
+                      style={{ width: '6rem' }}
+                    />
+                    <Column
+                      header={t('priceCalculator.recipe.item')}
+                      body={additionalCostNameTemplate}
+                      footer={subtotalLabelFooter}
+                    />
+                    <Column
+                      header={t('priceCalculator.recipe.unitPrice')}
+                      body={additionalCostUnitTemplate}
+                      style={{ width: '7rem' }}
+                      headerClassName="p-align-right"
+                    />
+                    <Column
+                      header={t('priceCalculator.recipe.totalCost')}
+                      body={additionalCostTotalTemplate}
+                      footer={subtotalValueFooter(additionalCostsSubtotal)}
+                      style={{ width: '6rem' }}
+                      headerClassName="p-align-right"
+                    />
+                  </DataTable>
+                </>
+              )}
 
-          <div className="mt-auto pt-3">{totalFooter(productsTotal)}</div>
-        </div>
-      </div>
+              <div className="mt-auto pt-3">{totalFooter(leftTotal)}</div>
+            </div>
+
+            <div className="col-6 flex flex-column">
+              <h4 className="mt-0 mb-2">{t('priceCalculator.recipe.products')}</h4>
+              <DataTable value={products} size="small">
+                <Column
+                  header={t('priceCalculator.recipe.quantity')}
+                  field="quantity"
+                  style={{ width: '4rem' }}
+                />
+                <Column header={t('priceCalculator.recipe.item')} body={nameTemplate} />
+                {showShareColumn && (
+                  <Column
+                    header={t('priceCalculator.recipe.share')}
+                    body={shareTemplate}
+                    style={{ width: '6rem' }}
+                  />
+                )}
+                <Column
+                  header={t('priceCalculator.recipe.unitPrice')}
+                  body={priceTemplate}
+                  style={{ width: '6rem' }}
+                  headerClassName="p-align-right"
+                />
+                <Column
+                  header={t('priceCalculator.recipe.totalCost')}
+                  body={totalTemplate}
+                  style={{ width: '6rem' }}
+                  headerClassName="p-align-right"
+                />
+              </DataTable>
+
+              <div className="mt-auto pt-3">{totalFooter(productsTotal)}</div>
+            </div>
+          </div>
+        </TabPanel>
+        <TabPanel header={t('priceCalculator.recipe.tabUsedIn')}>
+          <UsedInRecipesTable
+            rows={usedInRows}
+            emptyMessage={t('priceCalculator.recipe.usedInEmpty')}
+            onOpenRecipe={onOpenRecipe ?? (() => {})}
+          />
+        </TabPanel>
+      </TabView>
     </Dialog>
   )
 }

@@ -9,8 +9,10 @@ import { useTranslation } from 'react-i18next'
 import { ItemIcon } from '@/components/common/ItemIcon'
 import { RecipeIcon } from '@/components/common/RecipeIcon'
 import { SkillIcon } from '@/components/common/SkillIcon'
+import { UsedInRecipesTable } from '@/components/price-calculator/UsedInRecipesTable'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useStoreRevision } from '@/hooks/use-store-revision'
+import { computeUsedInRecipes } from '@/lib/used-in-recipes'
 import { useStores } from '@/stores/providers'
 
 interface Props {
@@ -19,18 +21,6 @@ interface Props {
   datasetId: string
   onHide: () => void
   onOpenRecipe: (recipeId: string) => void
-}
-
-interface RecipeUsage {
-  rowKey: string
-  recipeId: string
-  recipeName: string
-  recipePrimaryProductRawName: string
-  skillId: string
-  skillName: string
-  skillRawName: string
-  quantity: number
-  viaTag: { tagId: string; tagName: string; tagRawName: string } | null
 }
 
 interface ProducedByRow {
@@ -64,26 +54,40 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
   const itemRawName = itemRow ? ((itemRow.name as string) ?? '') : ''
   const itemName = itemId ? getName('item', itemId) : ''
 
-  const { usedInRows, producedByRows } = useMemo<{
-    usedInRows: RecipeUsage[]
-    producedByRows: ProducedByRow[]
-  }>(
+  const usedInRows = useMemo(
     () => {
-      if (!itemId || !itemRow) return { usedInRows: [], producedByRows: [] }
+      if (!itemId || !itemRow) return []
+      return computeUsedInRecipes(gameDataStore, buildStore, {
+        itemId,
+        buildId,
+        datasetId,
+        isTag,
+        getName,
+      })
+    },
+    // Revision counters drive recomputation when the underlying tables change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      itemId,
+      itemRow,
+      isTag,
+      buildId,
+      datasetId,
+      gameDataStore,
+      buildStore,
+      getName,
+      gameRev,
+      buildRev,
+    ]
+  )
 
-      // One pass over recipeElements: build a per-recipe index scoped to
-      // this dataset. Both tabs read from this index, so we only walk the
-      // ~60k-row table once per memo.
+  const producedByRows = useMemo<ProducedByRow[]>(
+    () => {
+      if (!itemId || !itemRow || isTag) return []
+
+      // Whole-game scan: for every recipe that produces this item (and
+      // doesn't also consume it — i.e. not reintegrated), record a row.
       const recipeIndex = new Map<string, RecipeIndexEntry>()
-      // Capture ingredient elements for the matchSet lookup separately
-      // (needs baseQuantity, which we don't store in the per-recipe index).
-      const ingredientElements: Array<{
-        reId: string
-        recipeId: string
-        itemOrTagId: string
-        baseQuantity: number
-      }> = []
-
       for (const reId of gameDataStore.getRowIds('recipeElements')) {
         const re = gameDataStore.getRow('recipeElements', reId)
         if (re.datasetId !== datasetId) continue
@@ -101,12 +105,6 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
           })
         } else {
           entry.ingredientItemSet.add(re.itemOrTagId as string)
-          ingredientElements.push({
-            reId,
-            recipeId,
-            itemOrTagId: re.itemOrTagId as string,
-            baseQuantity: re.baseQuantity as number,
-          })
         }
       }
 
@@ -118,109 +116,36 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
         return (gameDataStore.getRow('items', primary.itemOrTagId)?.name as string) ?? ''
       }
 
-      const skillInfoOf = (recipeId: string) => {
-        const recipeRow = gameDataStore.getRow('recipes', recipeId)
-        if (!recipeRow) return null
-        const skillId = (recipeRow.skillId as string) ?? ''
-        const skillRow = skillId ? gameDataStore.getRow('skills', skillId) : null
-        return {
-          recipeName: getName('recipe', recipeId),
-          skillId,
-          skillName: skillId ? getName('skill', skillId) : '',
-          skillRawName: skillRow ? ((skillRow.name as string) ?? '') : '',
-        }
-      }
-
-      // ── Used in Recipes (build-scoped, item + tag matches for items) ──
-      const buildRecipeIds = new Set<string>()
-      for (const urId of buildStore.getRowIds('userRecipes')) {
-        const ur = buildStore.getRow('userRecipes', urId)
-        if (ur.buildId !== buildId) continue
-        buildRecipeIds.add(ur.recipeId as string)
-      }
-
-      const matchSet = new Set<string>([itemId])
-      const tagInfoById = new Map<string, { tagId: string; tagName: string; tagRawName: string }>()
-      if (!isTag) {
-        for (const tiId of gameDataStore.getRowIds('tagItems')) {
-          const ti = gameDataStore.getRow('tagItems', tiId)
-          if (ti.datasetId !== datasetId) continue
-          if (ti.itemId !== itemId) continue
-          const tagId = ti.tagId as string
-          matchSet.add(tagId)
-          if (!tagInfoById.has(tagId)) {
-            const tagItemRow = gameDataStore.getRow('items', tagId)
-            tagInfoById.set(tagId, {
-              tagId,
-              tagName: getName('item', tagId),
-              tagRawName: tagItemRow ? ((tagItemRow.name as string) ?? '') : '',
-            })
-          }
-        }
-      }
-
-      const usedInRows: RecipeUsage[] = []
-      if (buildRecipeIds.size > 0) {
-        for (const ie of ingredientElements) {
-          if (!matchSet.has(ie.itemOrTagId)) continue
-          if (!buildRecipeIds.has(ie.recipeId)) continue
-          const info = skillInfoOf(ie.recipeId)
-          if (!info) continue
-          const viaTag =
-            ie.itemOrTagId !== itemId ? (tagInfoById.get(ie.itemOrTagId) ?? null) : null
-          usedInRows.push({
-            rowKey: ie.reId,
-            recipeId: ie.recipeId,
-            recipeName: info.recipeName,
-            recipePrimaryProductRawName: primaryProductRawNameOf(ie.recipeId),
-            skillId: info.skillId,
-            skillName: info.skillName,
-            skillRawName: info.skillRawName,
-            quantity: Math.abs(ie.baseQuantity),
-            viaTag,
+      const rows: ProducedByRow[] = []
+      for (const [recipeId, entry] of recipeIndex) {
+        if (entry.ingredientItemSet.has(itemId)) continue
+        for (const p of entry.products) {
+          if (p.itemOrTagId !== itemId) continue
+          const recipeRow = gameDataStore.getRow('recipes', recipeId)
+          if (!recipeRow) continue
+          const skillId = (recipeRow.skillId as string) ?? ''
+          const skillRow = skillId ? gameDataStore.getRow('skills', skillId) : null
+          rows.push({
+            rowKey: p.reId,
+            recipeId,
+            recipeName: getName('recipe', recipeId),
+            recipePrimaryProductRawName: primaryProductRawNameOf(recipeId),
+            skillId,
+            skillName: skillId ? getName('skill', skillId) : '',
+            skillRawName: skillRow ? ((skillRow.name as string) ?? '') : '',
           })
         }
-        usedInRows.sort((a, b) => {
-          const s = a.skillName.localeCompare(b.skillName)
-          if (s !== 0) return s
-          return a.recipeName.localeCompare(b.recipeName)
-        })
       }
-
-      // ── Produced by Recipes (whole game, exclude reintegrated) ──
-      const producedByRows: ProducedByRow[] = []
-      if (!isTag) {
-        for (const [recipeId, entry] of recipeIndex) {
-          // Skip recipes that also consume this item — those would be
-          // reintegrated, which the user explicitly excluded.
-          if (entry.ingredientItemSet.has(itemId)) continue
-          for (const p of entry.products) {
-            if (p.itemOrTagId !== itemId) continue
-            const info = skillInfoOf(recipeId)
-            if (!info) continue
-            producedByRows.push({
-              rowKey: p.reId,
-              recipeId,
-              recipeName: info.recipeName,
-              recipePrimaryProductRawName: primaryProductRawNameOf(recipeId),
-              skillId: info.skillId,
-              skillName: info.skillName,
-              skillRawName: info.skillRawName,
-            })
-          }
-        }
-        producedByRows.sort((a, b) => {
-          const s = a.skillName.localeCompare(b.skillName)
-          if (s !== 0) return s
-          return a.recipeName.localeCompare(b.recipeName)
-        })
-      }
-
-      return { usedInRows, producedByRows }
+      rows.sort((a, b) => {
+        const s = a.skillName.localeCompare(b.skillName)
+        if (s !== 0) return s
+        return a.recipeName.localeCompare(b.recipeName)
+      })
+      return rows
     },
-    // Revision counters drive recomputation when the underlying tables change.
+    // Revision counter drives recomputation when the game data changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [itemId, isTag, buildId, datasetId, gameDataStore, buildStore, getName, gameRev, buildRev]
+    [itemId, itemRow, isTag, datasetId, gameDataStore, getName, gameRev]
   )
 
   if (!itemId || !itemRow) return null
@@ -233,7 +158,7 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
     </div>
   )
 
-  const skillTemplate = (row: { skillId: string; skillName: string; skillRawName: string }) => {
+  const producedBySkillTemplate = (row: ProducedByRow) => {
     if (!row.skillId) return <span className="text-color-secondary">—</span>
     return (
       <div className="flex align-items-center gap-2">
@@ -242,30 +167,6 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
       </div>
     )
   }
-
-  const usedInRecipeTemplate = (row: RecipeUsage) => (
-    <div className="flex align-items-center gap-2">
-      {row.recipePrimaryProductRawName && (
-        <RecipeIcon primaryProduct={{ name: row.recipePrimaryProductRawName }} />
-      )}
-      <Button
-        label={row.recipeName}
-        link
-        className="p-0"
-        pt={{ label: { style: { textAlign: 'left' } } }}
-        onClick={() => onOpenRecipe(row.recipeId)}
-      />
-      {row.viaTag && (
-        <span
-          className="ml-2 text-color-secondary text-sm flex align-items-center gap-1"
-          title={t('priceCalculator.material.viaTag', { tag: row.viaTag.tagName })}
-        >
-          <i className="pi pi-tag text-xs" />
-          {row.viaTag.tagName}
-        </span>
-      )}
-    </div>
-  )
 
   const producedByRecipeTemplate = (row: ProducedByRow) => (
     <div className="flex align-items-center gap-2">
@@ -282,10 +183,6 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
     </div>
   )
 
-  const quantityTemplate = (row: RecipeUsage) => (
-    <span className="text-right block">{row.quantity}</span>
-  )
-
   return (
     <Dialog
       header={headerNode}
@@ -297,25 +194,11 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
     >
       <TabView>
         <TabPanel header={t('priceCalculator.material.tabUsedIn')}>
-          <DataTable
-            value={usedInRows}
-            dataKey="rowKey"
-            size="small"
+          <UsedInRecipesTable
+            rows={usedInRows}
             emptyMessage={t('priceCalculator.material.usedInEmpty')}
-          >
-            <Column
-              header={t('priceCalculator.material.skill')}
-              body={skillTemplate}
-              style={{ width: '15rem' }}
-            />
-            <Column header={t('priceCalculator.material.recipe')} body={usedInRecipeTemplate} />
-            <Column
-              header={t('priceCalculator.material.quantity')}
-              body={quantityTemplate}
-              style={{ width: '5rem' }}
-              headerClassName="p-align-right"
-            />
-          </DataTable>
+            onOpenRecipe={onOpenRecipe}
+          />
         </TabPanel>
         {!isTag && (
           <TabPanel header={t('priceCalculator.material.tabProducedBy')}>
@@ -326,12 +209,12 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
               emptyMessage={t('priceCalculator.material.producedByEmpty')}
             >
               <Column
-                header={t('priceCalculator.material.skill')}
-                body={skillTemplate}
+                header={t('priceCalculator.usedInRecipes.skill')}
+                body={producedBySkillTemplate}
                 style={{ width: '15rem' }}
               />
               <Column
-                header={t('priceCalculator.material.recipe')}
+                header={t('priceCalculator.usedInRecipes.recipe')}
                 body={producedByRecipeTemplate}
               />
             </DataTable>

@@ -126,13 +126,15 @@
       "cancel": "Cancel",
       "add": "Add"
     },
-    "material": {
-      "tabUsedIn": "Used in Recipes",
-      "tabProducedBy": "Produced by Recipes",
+    "usedInRecipes": {
       "skill": "Skill",
       "recipe": "Recipe",
       "quantity": "Qty",
-      "viaTag": "via {tag}",
+      "viaTag": "via {tag}"
+    },
+    "material": {
+      "tabUsedIn": "Used in Recipes",
+      "tabProducedBy": "Produced by Recipes",
       "usedInEmpty": "No recipes in this build use this item.",
       "producedByEmpty": "No recipes produce this item."
     },
@@ -159,7 +161,10 @@
         "equal": "Equal",
         "equilibrate": "Equilibrate"
       },
-      "roundFactor": "Round Factor"
+      "roundFactor": "Round Factor",
+      "tabCostComponents": "Cost Components",
+      "tabUsedIn": "Used in Recipes",
+      "usedInEmpty": "No recipes in this build use this recipe's primary product."
     }
   },
   "settings": {
