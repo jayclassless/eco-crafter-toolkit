@@ -27,7 +27,7 @@ import { MaterialDialog } from '../materials/MaterialDialog'
 import { AddRecipeDialog } from './AddRecipeDialog'
 import { ItemCostCell } from './ItemCostCell'
 import { ItemSaleCell } from './ItemSaleCell'
-import { MarginCell } from './MarginCell'
+import { MarginCell, MarginOptionsContext } from './MarginCell'
 import { MirrorChildCheckbox } from './MirrorChildCheckbox'
 import { ProductParentName } from './ProductParentName'
 import { RecipeCostCell } from './RecipeCostCell'
@@ -35,16 +35,20 @@ import { RecipeDialog } from './RecipeDialog'
 import { RecipeFilterButton } from './RecipeFilterButton'
 import type { Row } from './types'
 
-// Heavy tables that feed `buildProductGroups` + margin lookups. A change to
-// any of these invalidates the group/margin view-model, which indexes the
-// game-data store's `recipeElements` end-to-end (~300ms on a full dataset).
+// Heavy tables that feed `buildProductGroups`. A change to any of these
+// invalidates the group view-model, which indexes the game-data store's
+// `recipeElements` end-to-end (~300ms on a full dataset). `userMargins` is
+// deliberately NOT here — it only affects dropdown labels + default-id
+// lookup and is tracked on its own revision below so editing a margin name
+// doesn't trigger the expensive group rebuild.
 const GROUPS_BUILD_TABLES = [
   'userRecipes',
   'userRecipeMargins',
   'userProductMargins',
-  'userMargins',
   'userPrices',
 ] as const
+
+const MARGINS_BUILD_TABLES = ['userMargins'] as const
 
 // Filter-state tables. These don't affect the group view-model — only which
 // rows get shown — so they're tracked on a separate revision counter so a
@@ -76,16 +80,22 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
   const settingsMgmt = useSettings(buildId)
 
   const groupsRev = useStoreRevision(buildStore, GROUPS_BUILD_TABLES)
+  const marginsRev = useStoreRevision(buildStore, MARGINS_BUILD_TABLES)
   const filterRev = useStoreRevision(buildStore, FILTER_BUILD_TABLES)
 
-  const { groups, margins, defaultMarginId } = useMemo(
+  const groups = useMemo(
+    () => buildProductGroups(buildStore, gameDataStore, buildId, getName),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [buildStore, gameDataStore, buildId, getName, groupsRev]
+  )
+
+  const { margins, defaultMarginId } = useMemo(
     () => ({
-      groups: buildProductGroups(buildStore, gameDataStore, buildId, getName),
       margins: buildMarginOptions(buildStore, buildId),
       defaultMarginId: findDefaultMarginId(buildStore, buildId),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [buildStore, gameDataStore, buildId, getName, groupsRev]
+    [buildStore, buildId, marginsRev]
   )
 
   const {
@@ -449,14 +459,23 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
     [priceSignal, buildStore, handleSelectMode, handleSelectPrimary]
   )
 
+  // Options + defaultMarginId flow to MarginCell through context, not props.
+  // Props would be fed via the DataTable Column body template, which isn't
+  // re-invoked when BodyCell's memo bails — so margin-name edits wouldn't
+  // reach the dropdown options. Context updates propagate to consumers
+  // regardless of parent memoization.
+  const marginContextValue = useMemo(
+    () => ({ options: margins, defaultMarginId }),
+    [margins, defaultMarginId]
+  )
+
   const marginTemplate = useCallback(
     (row: Row) => {
       if (row.kind === 'parent') {
         return (
           <MarginCell
-            value={row.parent.productUserMarginId || defaultMarginId}
+            value={row.parent.productUserMarginId}
             rowId={row.parent.primaryProductId}
-            options={margins}
             onChange={handleProductMarginChange}
           />
         )
@@ -466,12 +485,11 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
         <MarginCell
           value={row.product.userMarginId}
           rowId={row.product.userRecipeId}
-          options={margins}
           onChange={handleRecipeMarginChange}
         />
       )
     },
-    [margins, defaultMarginId, handleProductMarginChange, handleRecipeMarginChange]
+    [handleProductMarginChange, handleRecipeMarginChange]
   )
 
   const saleTemplate = useCallback(
@@ -568,34 +586,36 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
           setSelectedRecipeId(id)
         }}
       />
-      <DataTable
-        value={rows}
-        dataKey="rowKey"
-        size="small"
-        scrollable
-        scrollHeight="flex"
-        emptyMessage={t('priceCalculator.products.emptyMessage')}
-      >
-        <Column header={t('priceCalculator.products.product')} body={nameTemplate} />
-        <Column
-          header={t('priceCalculator.products.costPrice')}
-          body={costTemplate}
-          style={{ width: '5rem' }}
-          headerClassName="p-align-right"
-        />
-        <Column
-          header={t('priceCalculator.products.margin')}
-          body={marginTemplate}
-          style={{ width: '7rem' }}
-        />
-        <Column
-          header={t('priceCalculator.products.salePrice')}
-          body={saleTemplate}
-          style={{ width: '5rem' }}
-          headerClassName="p-align-right"
-        />
-        <Column body={deleteTemplate} style={{ width: '3rem' }} />
-      </DataTable>
+      <MarginOptionsContext.Provider value={marginContextValue}>
+        <DataTable
+          value={rows}
+          dataKey="rowKey"
+          size="small"
+          scrollable
+          scrollHeight="flex"
+          emptyMessage={t('priceCalculator.products.emptyMessage')}
+        >
+          <Column header={t('priceCalculator.products.product')} body={nameTemplate} />
+          <Column
+            header={t('priceCalculator.products.costPrice')}
+            body={costTemplate}
+            style={{ width: '5rem' }}
+            headerClassName="p-align-right"
+          />
+          <Column
+            header={t('priceCalculator.products.margin')}
+            body={marginTemplate}
+            style={{ width: '7rem' }}
+          />
+          <Column
+            header={t('priceCalculator.products.salePrice')}
+            body={saleTemplate}
+            style={{ width: '5rem' }}
+            headerClassName="p-align-right"
+          />
+          <Column body={deleteTemplate} style={{ width: '3rem' }} />
+        </DataTable>
+      </MarginOptionsContext.Provider>
     </div>
   )
 }

@@ -88,7 +88,6 @@ export function PriceCalculator() {
       'userRecipeMargins',
       'userProductMargins',
       'userProductShares',
-      'userMargins',
       'userPrices',
       'userSettings',
       'userSkills',
@@ -97,6 +96,14 @@ export function PriceCalculator() {
     ]
     const listenerIds = SOLVER_TABLES.map((t) =>
       buildStore.addTableListener(t, () => triggerSolver())
+    )
+
+    // userMargins is handled granularly: only `percent` affects solver output,
+    // and row adds/removes matter. Name and `isDefault` are display-only for
+    // the solver, so editing a margin name must not trigger a snapshot build.
+    listenerIds.push(buildStore.addRowIdsListener('userMargins', () => triggerSolver()))
+    listenerIds.push(
+      buildStore.addCellListener('userMargins', null, 'percent', () => triggerSolver())
     )
 
     // Initial calculation
