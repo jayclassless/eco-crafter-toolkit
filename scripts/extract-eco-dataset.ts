@@ -518,7 +518,12 @@ function parseProductsFromBody(body: string): ElementJson[] {
   const block =
     /items:\s*new\s+List<CraftingElement>\s*\{([\s\S]*?)\}\s*\)\s*;/.exec(body)?.[1] ?? ''
   const out: ElementJson[] = []
-  const re = /new\s+CraftingElement<(\w+)>\(([^)]*)\)/g
+  // Match arg list while respecting one level of nesting for `typeof(...)`.
+  // A naive `[^)]*` stops at the inner `)` of `typeof(SmeltingSkill)`,
+  // truncating both the skill modifier and the trailing quantity argument
+  // (e.g. `(typeof(SmeltingSkill), 2)` was being read as `typeof(SmeltingSkill`,
+  // dropping the qty=2 and the modifier).
+  const re = /new\s+CraftingElement<(\w+)>\(((?:typeof\(\w+\)|[^)])*)\)/g
   let mm: RegExpExecArray | null
   while ((mm = re.exec(block))) {
     const itemName = mm[1]
@@ -547,9 +552,11 @@ function parseProductsFromBody(body: string): ElementJson[] {
 function parseItemAndRecipeFile(src: string) {
   // ----- Items -----
   // Strategy: find each [LocDisplayName("...")] (and surrounding attribute block)
-  // immediately preceding `public partial class XXX(Item|Object|Block|...) : ...`.
+  // immediately preceding `public [partial] class XXX(Item|Object|Block|...) : ...`.
+  // `partial` is optional — handwritten files outside AutoGen often declare
+  // items with plain `public class` (e.g. SoilSamplerItem, DirtItem).
   const itemClassRe =
-    /public\s+partial\s+class\s+(\w+(?:Item|Object|Block|Book|Scroll))\s*:\s*([^\s{]+)/g
+    /public\s+(?:partial\s+)?class\s+(\w+(?:Item|Object|Block|Book|Scroll))\s*:\s*([^\s{]+)/g
   let m: RegExpExecArray | null
   while ((m = itemClassRe.exec(src))) {
     const name = m[1]
@@ -583,14 +590,24 @@ function parseItemAndRecipeFile(src: string) {
     }
     const attrs = collected.join('\n')
     if (name.endsWith('Recipe')) continue
-    const display = /\[LocDisplayName\("([^"]+)"\)\]/.exec(attrs)?.[1] ?? name
+    // Only set display when LocDisplayName(...) is actually present. Items
+    // can be declared in multiple places (AutoGen partial + handwritten partial),
+    // and the handwritten part typically lacks the attribute — overwriting with
+    // the raw class name would clobber the good AutoGen-derived display. Match
+    // both standalone `[LocDisplayName("X")]` and combined-attribute forms like
+    // `[Serialized, LocDisplayName("X")]` (handwritten files mix both styles).
+    const displayMatch = /\bLocDisplayName\("([^"]+)"\)/.exec(attrs)
+    const display = displayMatch?.[1]
     const it = ensureItem(name, display)
-    it.display = display
+    if (display) it.display = display
 
-    // Tags from attributes
+    // Tags from attributes (dedupe: same item declared in two files would
+    // otherwise accumulate duplicate tag entries)
     const tagRe = /\[Tag\("([^"]+)"/g
     let tm: RegExpExecArray | null
-    while ((tm = tagRe.exec(attrs))) it.tags.push(tm[1])
+    while ((tm = tagRe.exec(attrs))) {
+      if (!it.tags.includes(tm[1])) it.tags.push(tm[1])
+    }
 
     // Crafting table plugin module detection from [AllowPluginModules] attribute.
     // The attribute can appear on *Object classes (checked via attrs or nearby source)
@@ -990,7 +1007,26 @@ async function main() {
   console.log('[extract] eco core:', coreRoot)
 
   const csFiles = await walk(autogen)
-  console.log(`[extract] scanning ${csFiles.length} .cs files`)
+  // Handwritten item-bearing dirs under __core__/. Some items (DirtItem,
+  // FishingPoleItem, GarbageItem, …) are declared only here — never in
+  // AutoGen — so without these dirs their LocDisplayName attribute is missed
+  // and they end up named after their raw class name.
+  const handwrittenDirs = [
+    'Items',
+    'Tools',
+    'Blocks',
+    'Objects',
+    'Vehicles',
+    'Rubble',
+    'Settlements',
+  ]
+  const autogenCount = csFiles.length
+  for (const sub of handwrittenDirs) {
+    await walk(path.join(coreRoot, sub), csFiles)
+  }
+  console.log(
+    `[extract] scanning ${csFiles.length} .cs files (autogen=${autogenCount}, handwritten=${csFiles.length - autogenCount})`
+  )
 
   // Pass 1: read files and dispatch by directory
   for (const file of csFiles) {
@@ -1033,6 +1069,30 @@ async function main() {
     parseTagDefinitionsFile(tagSrc)
   } catch (e) {
     console.warn('[extract] TagDefinitions.cs missing:', (e as Error).message)
+  }
+
+  // Pass 1c: recipe-derived display fallback for items whose class lives only
+  // in a compiled DLL (no .cs source anywhere — e.g. HomesteadClaimStakeItem).
+  // When a recipe `<X>Recipe` produces `<X>Item` and the item still has no
+  // [LocDisplayName]-derived display, adopt the recipe's displayName.
+  let recipeFallbackCount = 0
+  for (const r of recipes) {
+    const recipeStem = r.Name.replace(/Recipe$/, '')
+    const en = r.LocalizedName['en-US']
+    if (!en || en === recipeStem) continue
+    for (const product of r.Products) {
+      const itemName = product.ItemOrTag
+      const it = items.get(itemName)
+      if (!it || it.display !== itemName) continue
+      if (itemName.replace(/Item$/, '') !== recipeStem) continue
+      it.display = en
+      recipeFallbackCount++
+    }
+  }
+  if (recipeFallbackCount > 0) {
+    console.log(
+      `[extract] derived ${recipeFallbackCount} item display name(s) from matching recipe displayName`
+    )
   }
 
   // Pass 2: Crowdin
@@ -1274,13 +1334,16 @@ async function main() {
   }
   const itemJsons: ItemJson[] = []
   for (const it of [...items.values()].sort((a, b) => a.name.localeCompare(b.name))) {
-    const keep =
-      it.name.endsWith('Item') ||
-      it.name.endsWith('Book') ||
-      it.name.endsWith('Scroll') ||
-      it.isCraftingTable ||
-      it.isPluginModule ||
-      referenced.has(it.name)
+    // An item must be either referenced/special-purpose, or have a proper
+    // display name. Without the display-name guard, the broader handwritten-dir
+    // walk would surface hidden-category internal items (TrashItem,
+    // CompostablesItem, …) that have no LocDisplayName anywhere — they'd render
+    // as raw class names in the UI.
+    const isReferenced = it.isCraftingTable || it.isPluginModule || referenced.has(it.name)
+    const isCanonicalSuffix =
+      it.name.endsWith('Item') || it.name.endsWith('Book') || it.name.endsWith('Scroll')
+    const hasDisplayName = it.display !== it.name
+    const keep = isReferenced || (isCanonicalSuffix && hasDisplayName)
     if (!keep) continue
     const j: ItemJson = {
       Name: it.name,
