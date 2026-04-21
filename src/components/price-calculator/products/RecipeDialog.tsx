@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { CraftingTableIcon } from '@/components/common/CraftingTableIcon'
 import { ItemIcon } from '@/components/common/ItemIcon'
 import { SkillIcon } from '@/components/common/SkillIcon'
+import { TagLabel } from '@/components/common/TagLabel'
 import { ProductItemName } from '@/components/price-calculator/products/ProductItemName'
 import { UsedInRecipesTable } from '@/components/price-calculator/UsedInRecipesTable'
 import { useLocalizedName } from '@/hooks/use-localized-name'
@@ -338,6 +339,17 @@ export function RecipeDialog({
   // back to the first product if all products are reintegrated.
   const headerRawName = products[0]?.rawName || returnedIngredients[0]?.rawName || ''
 
+  const primaryProductId = products[0]?.itemOrTagId || returnedIngredients[0]?.itemOrTagId || ''
+  const productTagIds: string[] = []
+  if (primaryProductId) {
+    for (const tiId of gameDataStore.getRowIds('tagItems')) {
+      const ti = gameDataStore.getRow('tagItems', tiId)
+      if (ti.itemId === primaryProductId) {
+        productTagIds.push(ti.tagId as string)
+      }
+    }
+  }
+
   const sumTotals = (rows: Array<{ totalPrice: number | null }>): number | null => {
     let sum = 0
     let any = false
@@ -486,14 +498,28 @@ export function RecipeDialog({
       {headerRawName && <ItemIcon item={{ name: headerRawName }} size={48} />}
       <span className="mr-3">{recipeName}</span>
       {skillRawName && (
-        <span className="flex align-items-center" title={`${t('priceCalculator.recipe.skill')}: ${skillName}`}>
+        <span
+          className="flex align-items-center"
+          title={`${t('priceCalculator.recipe.skill')}: ${skillName}`}
+        >
           <SkillIcon skill={{ name: skillRawName }} />
         </span>
       )}
       {tableRawName && (
-        <span className="flex align-items-center" title={`${t('priceCalculator.recipe.craftingTable')}: ${tableName}`}>
+        <span
+          className="flex align-items-center"
+          title={`${t('priceCalculator.recipe.craftingTable')}: ${tableName}`}
+        >
           <CraftingTableIcon table={{ name: tableRawName }} />
         </span>
+      )}
+      {productTagIds.length > 0 && (
+        <div className="flex align-items-center gap-3 ml-3">
+          {productTagIds.map((tagId) => {
+            const tagName = getName('item', tagId)
+            return tagName ? <TagLabel key={tagId} tagName={tagName} /> : null
+          })}
+        </div>
       )}
     </div>
   )

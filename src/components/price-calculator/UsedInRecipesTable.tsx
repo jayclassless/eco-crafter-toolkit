@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 
 import { RecipeIcon } from '@/components/common/RecipeIcon'
 import { SkillIcon } from '@/components/common/SkillIcon'
+import { TagLabel } from '@/components/common/TagLabel'
 import type { UsedInRecipe } from '@/lib/used-in-recipes'
 
 interface Props {
@@ -39,13 +40,10 @@ export function UsedInRecipesTable({ rows, emptyMessage, onOpenRecipe }: Props) 
         onClick={() => onOpenRecipe(row.recipeId)}
       />
       {row.viaTag && (
-        <span
-          className="ml-2 text-color-secondary text-sm flex align-items-center gap-1"
+        <TagLabel
+          tagName={row.viaTag.tagName}
           title={t('priceCalculator.usedInRecipes.viaTag', { tag: row.viaTag.tagName })}
-        >
-          <i className="pi pi-tag text-xs" />
-          {row.viaTag.tagName}
-        </span>
+        />
       )}
     </div>
   )
