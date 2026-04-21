@@ -7,6 +7,6 @@ interface Props {
   alt?: string
 }
 
-export function ItemIcon({ item, size = 20, className, alt }: Props) {
+export function ItemIcon({ item, size = 24, className, alt }: Props) {
   return <EcoIcon name={item.name} size={size} className={className} alt={alt ?? item.name} />
 }

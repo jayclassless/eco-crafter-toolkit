@@ -46,6 +46,7 @@ export function GroupedAutoComplete<T extends GroupedAutoCompleteItem>({
       optionGroupLabel="profession"
       optionGroupChildren="items"
       dropdown
+      scrollHeight="300px"
       onDropdownClick={() => {
         if (wasVisibleRef.current) {
           ref.current?.hide()
@@ -65,7 +66,7 @@ export function GroupedAutoComplete<T extends GroupedAutoCompleteItem>({
         const opt = item as T
         return (
           <div className="flex align-items-center gap-2 ml-3">
-            <EcoIcon name={opt.rawName} size={20} />
+            <EcoIcon name={opt.rawName} size={24} />
             <span>{opt.name}</span>
           </div>
         )
@@ -74,7 +75,7 @@ export function GroupedAutoComplete<T extends GroupedAutoCompleteItem>({
         const g = group as GroupedAutoCompleteGroup<T>
         return (
           <div className="flex align-items-center gap-2">
-            <EcoIcon name={g.professionRawName} size={20} />
+            <EcoIcon name={g.professionRawName} size={24} />
             <span className="font-bold">{g.profession}</span>
           </div>
         )

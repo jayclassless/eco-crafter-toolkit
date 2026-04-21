@@ -7,6 +7,6 @@ interface Props {
   alt?: string
 }
 
-export function CraftingTableIcon({ table, size = 20, className, alt }: Props) {
+export function CraftingTableIcon({ table, size = 24, className, alt }: Props) {
   return <EcoIcon name={table.name} size={size} className={className} alt={alt ?? table.name} />
 }

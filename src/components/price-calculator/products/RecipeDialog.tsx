@@ -486,12 +486,12 @@ export function RecipeDialog({
       {headerRawName && <ItemIcon item={{ name: headerRawName }} size={48} />}
       <span className="mr-3">{recipeName}</span>
       {skillRawName && (
-        <span title={`${t('priceCalculator.recipe.skill')}: ${skillName}`}>
+        <span className="flex align-items-center" title={`${t('priceCalculator.recipe.skill')}: ${skillName}`}>
           <SkillIcon skill={{ name: skillRawName }} />
         </span>
       )}
       {tableRawName && (
-        <span title={`${t('priceCalculator.recipe.craftingTable')}: ${tableName}`}>
+        <span className="flex align-items-center" title={`${t('priceCalculator.recipe.craftingTable')}: ${tableName}`}>
           <CraftingTableIcon table={{ name: tableRawName }} />
         </span>
       )}

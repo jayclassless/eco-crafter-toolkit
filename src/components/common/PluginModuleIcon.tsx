@@ -7,6 +7,6 @@ interface Props {
   alt?: string
 }
 
-export function PluginModuleIcon({ module, size = 20, className, alt }: Props) {
+export function PluginModuleIcon({ module, size = 24, className, alt }: Props) {
   return <EcoIcon name={module.name} size={size} className={className} alt={alt ?? module.name} />
 }

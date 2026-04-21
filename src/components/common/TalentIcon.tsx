@@ -7,7 +7,7 @@ interface Props {
   alt?: string
 }
 
-export function TalentIcon({ talent, size = 20, className, alt }: Props) {
+export function TalentIcon({ talent, size = 24, className, alt }: Props) {
   return (
     <EcoIcon
       name={talent.talentGroupName}

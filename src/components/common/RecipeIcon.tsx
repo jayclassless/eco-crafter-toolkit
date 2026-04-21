@@ -7,7 +7,7 @@ interface Props {
   alt?: string
 }
 
-export function RecipeIcon({ primaryProduct, size = 20, className, alt }: Props) {
+export function RecipeIcon({ primaryProduct, size = 24, className, alt }: Props) {
   return (
     <EcoIcon
       name={primaryProduct.name}
