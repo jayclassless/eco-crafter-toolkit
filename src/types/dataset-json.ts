@@ -44,9 +44,16 @@ export interface TalentBonusScopeJson {
   ItemTags?: string[]
 }
 
+export interface PartRequirementJson {
+  Name: string
+  Quantity: number
+}
+
 export interface ItemJson {
   Name: string
   LocalizedName: LocalizedNames
+  IsPart?: boolean
+  RequiredParts?: PartRequirementJson[]
   IsPluginModule?: boolean
   PluginType?: string
   PluginModulePercent?: number

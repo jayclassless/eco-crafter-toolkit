@@ -13,6 +13,7 @@ const emptyParsed = (): ParsedDataset => ({
   talents: [],
   talentBonuses: [],
   items: [],
+  itemParts: [],
   tagItems: [],
   craftingTables: [],
   pluginModules: [],

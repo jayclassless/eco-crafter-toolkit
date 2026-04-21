@@ -100,6 +100,7 @@ describe('hook wrappers (provider-backed)', () => {
         talents: [],
         talentBonuses: [],
         items: [],
+        itemParts: [],
         tagItems: [],
         craftingTables: [],
         pluginModules: [],

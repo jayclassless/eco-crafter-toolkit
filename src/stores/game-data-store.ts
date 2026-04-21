@@ -50,6 +50,14 @@ export function createGameDataStore() {
       datasetId: { type: 'string' },
       name: { type: 'string' },
       isTag: { type: 'boolean' },
+      isPart: { type: 'boolean', default: false },
+    },
+    itemParts: {
+      id: { type: 'string' },
+      datasetId: { type: 'string' },
+      itemId: { type: 'string' },
+      partItemId: { type: 'string' },
+      quantity: { type: 'number' },
     },
     tagItems: {
       id: { type: 'string' },

@@ -48,6 +48,9 @@ export function createGameDataOps(gameDataStore: Store) {
     for (const item of parsed.items) {
       gameDataStore.setRow('items', item.id, { ...item, datasetId })
     }
+    for (const ip of parsed.itemParts) {
+      gameDataStore.setRow('itemParts', ip.id, { ...ip, datasetId })
+    }
     for (const tagItem of parsed.tagItems) {
       gameDataStore.setRow('tagItems', tagItem.id, { ...tagItem, datasetId })
     }
@@ -93,6 +96,7 @@ export function createGameDataOps(gameDataStore: Store) {
       'talents',
       'talentBonuses',
       'items',
+      'itemParts',
       'tagItems',
       'craftingTables',
       'pluginModules',

@@ -47,6 +47,15 @@ export interface Item {
   datasetId: string
   name: string
   isTag: boolean
+  isPart?: boolean
+}
+
+export interface ItemPart {
+  id: string
+  datasetId: string
+  itemId: string
+  partItemId: string
+  quantity: number
 }
 
 export interface TagItem {

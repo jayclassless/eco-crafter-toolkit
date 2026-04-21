@@ -4,6 +4,7 @@ import type {
   Talent,
   TalentBonus,
   Item,
+  ItemPart,
   TagItem,
   CraftingTable,
   PluginModule,
@@ -92,6 +93,7 @@ export interface ParsedDataset {
   talents: Talent[]
   talentBonuses: TalentBonus[]
   items: Item[]
+  itemParts: ItemPart[]
   tagItems: TagItem[]
   craftingTables: CraftingTable[]
   pluginModules: PluginModule[]
@@ -108,6 +110,7 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
   const talents: Talent[] = []
   const talentBonuses: TalentBonus[] = []
   const items: Item[] = []
+  const itemParts: ItemPart[] = []
   const tagItems: TagItem[] = []
   const craftingTables: CraftingTable[] = []
   const pluginModules: PluginModule[] = []
@@ -126,6 +129,10 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
   // Recipes aren't parsed until after talents, so Unlock bonuses get stashed
   // here and resolved to recipe ids once recipeIdByName is populated.
   const pendingUnlocks: { talentId: string; recipeNames: string[] }[] = []
+
+  // Part requirements reference other items; stash them and resolve after the
+  // full items list is in itemIdByName (parts are items, not tags).
+  const pendingItemParts: { itemId: string; partName: string; quantity: number }[] = []
 
   // Parse skills and talents
   for (const s of data.Skills) {
@@ -192,8 +199,14 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
   for (const i of data.Items) {
     const itemId = generateId()
     itemIdByName.set(i.Name, itemId)
-    items.push({ id: itemId, datasetId, name: i.Name, isTag: false })
+    items.push({ id: itemId, datasetId, name: i.Name, isTag: false, isPart: i.IsPart ?? false })
     addLocalizedNames(localizedNames, 'item', itemId, i.LocalizedName)
+
+    if (i.RequiredParts) {
+      for (const part of i.RequiredParts) {
+        pendingItemParts.push({ itemId, partName: part.Name, quantity: part.Quantity })
+      }
+    }
 
     if (i.IsCraftingTable) {
       const ctId = generateId()
@@ -233,6 +246,20 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
           })
         }
       }
+    }
+  }
+
+  // Resolve item part requirements now that all item ids are known.
+  for (const pending of pendingItemParts) {
+    const partItemId = itemIdByName.get(pending.partName)
+    if (partItemId) {
+      itemParts.push({
+        id: generateId(),
+        datasetId,
+        itemId: pending.itemId,
+        partItemId,
+        quantity: pending.quantity,
+      })
     }
   }
 
@@ -367,6 +394,7 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
     talents,
     talentBonuses,
     items,
+    itemParts,
     tagItems,
     craftingTables,
     pluginModules,

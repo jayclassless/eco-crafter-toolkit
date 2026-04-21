@@ -40,6 +40,7 @@ const DATASET_SCOPED_TABLES = [
   'skills',
   'talents',
   'items',
+  'itemParts',
   'tagItems',
   'craftingTables',
   'pluginModules',

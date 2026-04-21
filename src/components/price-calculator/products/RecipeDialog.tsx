@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 
 import { CraftingTableIcon } from '@/components/common/CraftingTableIcon'
 import { ItemIcon } from '@/components/common/ItemIcon'
+import { PartLabel } from '@/components/common/PartLabel'
 import { SkillIcon } from '@/components/common/SkillIcon'
 import { TagLabel } from '@/components/common/TagLabel'
 import { ProductItemName } from '@/components/price-calculator/products/ProductItemName'
@@ -279,6 +280,7 @@ export function RecipeDialog({
     'recipes',
     'tagItems',
     'items',
+    'itemParts',
   ])
 
   // Recipes in this build that consume the primary product of the current
@@ -340,6 +342,23 @@ export function RecipeDialog({
   const headerRawName = products[0]?.rawName || returnedIngredients[0]?.rawName || ''
 
   const primaryProductId = products[0]?.itemOrTagId || returnedIngredients[0]?.itemOrTagId || ''
+  const isPrimaryProductPart = primaryProductId
+    ? !!gameDataStore.getRow('items', primaryProductId)?.isPart
+    : false
+  let partLabelTitle: string | undefined
+  if (isPrimaryProductPart && primaryProductId) {
+    const usedIn: Array<{ name: string; quantity: number }> = []
+    for (const ipId of gameDataStore.getRowIds('itemParts')) {
+      const ip = gameDataStore.getRow('itemParts', ipId)
+      if ((ip.partItemId as string) === primaryProductId) {
+        usedIn.push({ name: getName('item', ip.itemId as string), quantity: ip.quantity as number })
+      }
+    }
+    if (usedIn.length > 0) {
+      usedIn.sort((a, b) => a.name.localeCompare(b.name))
+      partLabelTitle = usedIn.map((u) => `${u.name} ×${u.quantity}`).join('\n')
+    }
+  }
   const productTagIds: string[] = []
   if (primaryProductId) {
     for (const tiId of gameDataStore.getRowIds('tagItems')) {
@@ -513,8 +532,9 @@ export function RecipeDialog({
           <CraftingTableIcon table={{ name: tableRawName }} />
         </span>
       )}
-      {productTagIds.length > 0 && (
+      {(isPrimaryProductPart || productTagIds.length > 0) && (
         <div className="flex align-items-center gap-3 ml-3">
+          {isPrimaryProductPart && <PartLabel title={partLabelTitle} />}
           {productTagIds.map((tagId) => {
             const tagName = getName('item', tagId)
             return tagName ? <TagLabel key={tagId} tagName={tagName} /> : null

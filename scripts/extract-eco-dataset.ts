@@ -177,6 +177,8 @@ interface RawItem {
   name: string
   display: string
   tags: string[]
+  isPart?: boolean
+  requiredParts?: Array<{ typeName: string; quantity: number }>
   isPluginModule?: boolean
   pluginType?: string
   pluginModulePercent?: number
@@ -547,6 +549,24 @@ function parseProductsFromBody(body: string): ElementJson[] {
   return out
 }
 
+// ---- PartsComponent parsing -------------------------------------------------
+
+function parsePartsFromBody(body: string): Array<{ typeName: string; quantity: number }> {
+  const configMatch =
+    /GetComponent<PartsComponent>\(\)\.Config\([\s\S]*?new\s+PartInfo\[\]\s*/.exec(body)
+  if (!configMatch) return []
+  const arrayStart = body.indexOf('{', configMatch.index + configMatch[0].length)
+  if (arrayStart < 0) return []
+  const arrayEnd = matchBrace(body, arrayStart)
+  if (arrayEnd < 0) return []
+  const block = body.slice(arrayStart + 1, arrayEnd - 1)
+  const out: Array<{ typeName: string; quantity: number }> = []
+  const re = /TypeName\s*=\s*nameof\((\w+)\)\s*,\s*Quantity\s*=\s*(\d+)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(block))) out.push({ typeName: m[1], quantity: Number(m[2]) })
+  return out
+}
+
 // ---- Item + Recipe parsing (run on every AutoGen .cs) -----------------------
 
 function parseItemAndRecipeFile(src: string) {
@@ -600,6 +620,17 @@ function parseItemAndRecipeFile(src: string) {
     const display = displayMatch?.[1]
     const it = ensureItem(name, display)
     if (display) it.display = display
+
+    if (baseClass === 'PartItem') it.isPart = true
+
+    if (name.endsWith('Object')) {
+      const after = src.slice(m.index, m.index + 12000)
+      const parts = parsePartsFromBody(after)
+      if (parts.length > 0) {
+        const itemRaw = ensureItem(name.replace(/Object$/, 'Item'))
+        itemRaw.requiredParts = parts
+      }
+    }
 
     // Tags from attributes (dedupe: same item declared in two files would
     // otherwise accumulate duplicate tag entries)
@@ -1348,6 +1379,10 @@ async function main() {
     const j: ItemJson = {
       Name: it.name,
       LocalizedName: mergeLocalized(it.display, crowdin),
+    }
+    if (it.isPart) j.IsPart = true
+    if (it.requiredParts?.length) {
+      j.RequiredParts = it.requiredParts.map((p) => ({ Name: p.typeName, Quantity: p.quantity }))
     }
     if (it.isPluginModule) {
       j.IsPluginModule = true
