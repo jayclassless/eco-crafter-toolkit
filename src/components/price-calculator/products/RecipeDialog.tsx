@@ -12,9 +12,11 @@ import { ItemIcon } from '@/components/common/ItemIcon'
 import { PartLabel } from '@/components/common/PartLabel'
 import { SkillIcon } from '@/components/common/SkillIcon'
 import { TagLabel } from '@/components/common/TagLabel'
+import { IngredientPriceCell } from '@/components/price-calculator/products/IngredientPriceCell'
 import { ProductItemName } from '@/components/price-calculator/products/ProductItemName'
 import { UsedInRecipesTable } from '@/components/price-calculator/UsedInRecipesTable'
 import { useLocalizedName } from '@/hooks/use-localized-name'
+import { usePriceManagement } from '@/hooks/use-price-management'
 import {
   type PriceSignal,
   useRecipeCostCell,
@@ -42,6 +44,9 @@ interface ElementRow {
   quantity: number
   unitPrice: number | null
   totalPrice: number | null
+  isTag: boolean
+  isProduced: boolean
+  userPriceId: string
 }
 
 interface ProductRow extends ElementRow {
@@ -70,6 +75,14 @@ export function RecipeDialog({
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
   const { setProductShare } = useRecipeManagement(buildId)
+  const { setPrice } = usePriceManagement(buildId)
+
+  const onPriceChange = useCallback(
+    (itemOrTagId: string, userPriceId: string, value: number | null) => {
+      setPrice(itemOrTagId, value, userPriceId)
+    },
+    [setPrice]
+  )
 
   const findUserRecipeId = useCallback((): string => {
     if (!recipeId) return ''
@@ -162,13 +175,20 @@ export function RecipeDialog({
 
     for (const r of rawRows) {
       if (!r.isProduct) {
+        const itemRow = gameDataStore.getRow('items', r.itemOrTagId)
         ingredients.push({
           itemOrTagId: r.itemOrTagId,
           name: getName('item', r.itemOrTagId),
-          rawName: getItemRawName(r.itemOrTagId),
+          rawName: (itemRow?.name as string) ?? '',
           quantity: Math.abs(r.baseQuantity),
           unitPrice: resolveUnitPrice(r.itemOrTagId, false),
           totalPrice: null,
+          isTag: (itemRow?.isTag as boolean) ?? false,
+          // isProduced and userPriceId are populated at render time below,
+          // since the producedItemIds / userPriceIdByItem maps are built by a
+          // memo that runs after this callback is declared.
+          isProduced: false,
+          userPriceId: '',
         })
       }
     }
@@ -191,6 +211,9 @@ export function RecipeDialog({
           quantity,
           unitPrice,
           totalPrice,
+          isTag: false,
+          isProduced: false,
+          userPriceId: '',
         })
       } else {
         let sharePercent: number
@@ -209,6 +232,9 @@ export function RecipeDialog({
           quantity,
           unitPrice,
           totalPrice,
+          isTag: false,
+          isProduced: false,
+          userPriceId: '',
           userRecipeId,
           sharePercent,
         })
@@ -245,8 +271,9 @@ export function RecipeDialog({
   // Items that are primary products of any user-selected recipe in this build.
   // Clicking an ingredient that is one of these opens its winning recipe (via
   // `ProductItemName`) instead of the generic `MaterialDialog`.
-  const { productItemIds, userPriceIdByItem } = useMemo(() => {
+  const { productItemIds, userPriceIdByItem, producedItemIds } = useMemo(() => {
     const products = new Set<string>()
+    const produced = new Set<string>()
     const priceIds = new Map<string, string>()
     for (const urId of buildStore.getRowIds('userRecipes')) {
       const ur = buildStore.getRow('userRecipes', urId)
@@ -254,14 +281,29 @@ export function RecipeDialog({
       const rId = ur.recipeId as string
       let firstProductId: string | null = null
       let firstIndex = Number.POSITIVE_INFINITY
+      const ownIngredientIds = new Set<string>()
+      const ownProducts: Array<{ itemId: string; index: number }> = []
       for (const reId of gameDataStore.getRowIds('recipeElements')) {
         const re = gameDataStore.getRow('recipeElements', reId)
-        if (re.recipeId !== rId || !re.isProduct) continue
+        if (re.recipeId !== rId) continue
+        const itemId = re.itemOrTagId as string
         const idx = (re.index as number) ?? 0
-        if (idx < firstIndex) {
-          firstIndex = idx
-          firstProductId = re.itemOrTagId as string
+        if (re.isProduct) {
+          ownProducts.push({ itemId, index: idx })
+          if (idx < firstIndex) {
+            firstIndex = idx
+            firstProductId = itemId
+          }
+        } else {
+          ownIngredientIds.add(itemId)
         }
+      }
+      // Produced set excludes reintegrated products (same rule as the
+      // Materials list at Materials.tsx:107-140), so a recipe that consumes
+      // its own product doesn't lock that ingredient as read-only.
+      for (const p of ownProducts) {
+        if (ownIngredientIds.has(p.itemId)) continue
+        produced.add(p.itemId)
       }
       if (firstProductId) products.add(firstProductId)
     }
@@ -270,7 +312,7 @@ export function RecipeDialog({
       if (up.buildId !== buildId) continue
       priceIds.set(up.itemOrTagId as string, upId)
     }
-    return { productItemIds: products, userPriceIdByItem: priceIds }
+    return { productItemIds: products, userPriceIdByItem: priceIds, producedItemIds: produced }
     // buildRecipesRev is the invalidation signal for this memo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildStore, gameDataStore, buildId, buildRecipesRev])
@@ -335,6 +377,14 @@ export function RecipeDialog({
     (gameDataStore.getRow('craftingTables', recipe.craftingTableId as string)?.name as string) ?? ''
 
   const { ingredients, returnedIngredients, products } = getElements()
+  // Enrich ingredient rows with build-scoped flags: whether the item is
+  // produced by any recipe in the build (locks it read-only) and its
+  // userPrices row id (for in-place edits). Populated here so the memo that
+  // owns these maps can live below `getElements`.
+  for (const ing of ingredients) {
+    ing.isProduced = producedItemIds.has(ing.itemOrTagId)
+    ing.userPriceId = userPriceIdByItem.get(ing.itemOrTagId) ?? ''
+  }
   const showShareColumn = products.length > 1
 
   // Recipe header icon: first non-reintegrated product's raw name, falling
@@ -457,6 +507,20 @@ export function RecipeDialog({
     </span>
   )
 
+  const ingredientPriceTemplate = (row: ElementRow) => (
+    <div className="flex justify-content-end">
+      <IngredientPriceCell
+        itemOrTagId={row.itemOrTagId}
+        userPriceId={row.userPriceId}
+        buildStore={buildStore}
+        isTag={row.isTag}
+        isProduced={row.isProduced}
+        unitPrice={row.unitPrice}
+        onChange={onPriceChange}
+      />
+    </div>
+  )
+
   const totalTemplate = (row: ElementRow) => (
     <span className="text-right block font-semibold">
       {row.totalPrice != null ? row.totalPrice.toFixed(2) : '-'}
@@ -571,8 +635,8 @@ export function RecipeDialog({
                 />
                 <Column
                   header={t('priceCalculator.recipe.unitPrice')}
-                  body={priceTemplate}
-                  style={{ width: '6rem' }}
+                  body={ingredientPriceTemplate}
+                  style={{ width: '7rem' }}
                   headerClassName="p-align-right"
                 />
                 <Column
