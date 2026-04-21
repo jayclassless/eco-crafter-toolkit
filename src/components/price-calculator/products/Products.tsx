@@ -13,6 +13,7 @@ import { type PriceSignal } from '@/hooks/use-prices-signal'
 import {
   buildMarginOptions,
   buildProductGroups,
+  buildTagIdsByItemId,
   findDefaultMarginId,
   type Product,
 } from '@/hooks/use-products'
@@ -32,7 +33,7 @@ import { MirrorChildCheckbox } from './MirrorChildCheckbox'
 import { ProductParentName } from './ProductParentName'
 import { RecipeCostCell } from './RecipeCostCell'
 import { RecipeDialog } from './RecipeDialog'
-import { RecipeFilterButton } from './RecipeFilterButton'
+import { RecipeFilterButton, type TagFilterOption } from './RecipeFilterButton'
 import type { Row } from './types'
 
 // Heavy tables that feed `buildProductGroups`. A change to any of these
@@ -59,6 +60,7 @@ const FILTER_BUILD_TABLES = [
   'userTalents',
   'hiddenSkills',
   'hiddenCraftingTables',
+  'hiddenTags',
 ] as const
 
 // Product mode picker omits 'manual' — users override product prices from
@@ -100,18 +102,25 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
 
   const {
     showUnskilledRecipes,
+    showParts,
+    showUntagged,
     onlyLevelAccessible,
     userSkillLevels,
     activeTalentIds,
     hiddenSkills,
     hiddenCraftingTables,
+    hiddenTags,
   } = useMemo(() => {
     let showUnskilled = true
+    let showPartsFlag = true
+    let showUntaggedFlag = true
     let levelOnly = false
     for (const rowId of buildStore.getRowIds('userSettings')) {
       const row = buildStore.getRow('userSettings', rowId)
       if (row.buildId !== buildId) continue
       showUnskilled = row.showUnskilledRecipes as boolean
+      showPartsFlag = row.showParts as boolean
+      showUntaggedFlag = row.showUntagged as boolean
       levelOnly = row.onlyLevelAccessible as boolean
       break
     }
@@ -141,13 +150,22 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       if (row.buildId !== buildId) continue
       hiddenTables.add(row.craftingTableId as string)
     }
+    const hiddenTagSet = new Set<string>()
+    for (const rowId of buildStore.getRowIds('hiddenTags')) {
+      const row = buildStore.getRow('hiddenTags', rowId)
+      if (row.buildId !== buildId) continue
+      hiddenTagSet.add(row.tagId as string)
+    }
     return {
       showUnskilledRecipes: showUnskilled,
+      showParts: showPartsFlag,
+      showUntagged: showUntaggedFlag,
       onlyLevelAccessible: levelOnly,
       userSkillLevels: skillLevels,
       activeTalentIds: activeTalents,
       hiddenSkills: hidden,
       hiddenCraftingTables: hiddenTables,
+      hiddenTags: hiddenTagSet,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildStore, buildId, filterRev])
@@ -184,6 +202,45 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
     return opts
   }, [groups, getName])
 
+  // Tag/part index, rebuilt whenever the group view-model rebuilds. The
+  // gameDataStore is effectively immutable after dataset import, so we piggy-
+  // back on `groups` for dependency tracking — the same pattern the other
+  // option lists above use.
+  const tagIdsByItemId = useMemo(
+    () => buildTagIdsByItemId(gameDataStore),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [gameDataStore, groups]
+  )
+
+  const tagOptions = useMemo<TagFilterOption[]>(() => {
+    const ids = new Set<string>()
+    let anyPart = false
+    for (const g of groups) {
+      for (const c of g.children) {
+        const tids = tagIdsByItemId.get(c.primaryProductId)
+        if (tids) for (const tid of tids) ids.add(tid)
+        if (!anyPart) {
+          const row = gameDataStore.getRow('items', c.primaryProductId)
+          if (row?.isPart) anyPart = true
+        }
+      }
+    }
+    const opts: TagFilterOption[] = [...ids].map((id) => ({
+      id,
+      name: getName('item', id) || id,
+      kind: 'tag',
+    }))
+    if (anyPart) {
+      opts.push({
+        id: '__part__',
+        name: t('priceCalculator.products.recipeFilter.part'),
+        kind: 'part',
+      })
+    }
+    opts.sort((a, b) => a.name.localeCompare(b.name))
+    return opts
+  }, [groups, gameDataStore, tagIdsByItemId, getName, t])
+
   const childVisible = useCallback(
     (c: Product): boolean => {
       if (!showUnskilledRecipes && !c.skillId) return false
@@ -199,6 +256,21 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       }
       if (hiddenSkills.has(c.skillId)) return false
       if (hiddenCraftingTables.has(c.craftingTableId)) return false
+      const tags = tagIdsByItemId.get(c.primaryProductId)
+      const isPart = gameDataStore.getRow('items', c.primaryProductId)?.isPart === true
+      let anyChecked = false
+      if (tags && tags.length > 0) {
+        for (const tid of tags) {
+          if (!hiddenTags.has(tid)) {
+            anyChecked = true
+            break
+          }
+        }
+      } else if (showUntagged) {
+        anyChecked = true
+      }
+      if (!anyChecked && isPart && showParts) anyChecked = true
+      if (!anyChecked) return false
       return true
     },
     [
@@ -208,6 +280,11 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       activeTalentIds,
       hiddenSkills,
       hiddenCraftingTables,
+      hiddenTags,
+      showParts,
+      showUntagged,
+      tagIdsByItemId,
+      gameDataStore,
     ]
   )
 
@@ -368,6 +445,57 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       })
     },
     [buildId, buildStore, craftingTableOptions]
+  )
+
+  const handleToggleTag = useCallback(
+    (tagId: string) => {
+      let existingId: string | null = null
+      for (const rowId of buildStore.getRowIds('hiddenTags')) {
+        const row = buildStore.getRow('hiddenTags', rowId)
+        if (row.buildId === buildId && row.tagId === tagId) {
+          existingId = rowId
+          break
+        }
+      }
+      if (existingId) {
+        buildStore.delRow('hiddenTags', existingId)
+      } else {
+        const rowId = generateId()
+        buildStore.setRow('hiddenTags', rowId, { buildId, tagId })
+      }
+    },
+    [buildId, buildStore]
+  )
+
+  const handleTogglePart = useCallback(
+    () => settingsMgmt.setSetting('showParts', !showParts),
+    [settingsMgmt, showParts]
+  )
+
+  const handleToggleUntagged = useCallback(
+    () => settingsMgmt.setSetting('showUntagged', !showUntagged),
+    [settingsMgmt, showUntagged]
+  )
+
+  const handleSetAllTags = useCallback(
+    (hideAll: boolean) => {
+      buildStore.transaction(() => {
+        for (const rowId of buildStore.getRowIds('hiddenTags')) {
+          const row = buildStore.getRow('hiddenTags', rowId)
+          if (row.buildId === buildId) buildStore.delRow('hiddenTags', rowId)
+        }
+        if (hideAll) {
+          for (const opt of tagOptions) {
+            if (opt.kind !== 'tag') continue
+            const rowId = generateId()
+            buildStore.setRow('hiddenTags', rowId, { buildId, tagId: opt.id })
+          }
+        }
+      })
+      settingsMgmt.setSetting('showParts', !hideAll)
+      settingsMgmt.setSetting('showUntagged', !hideAll)
+    },
+    [buildId, buildStore, tagOptions, settingsMgmt]
   )
 
   const nameTemplate = useCallback(
@@ -543,6 +671,14 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
           hiddenCraftingTables={hiddenCraftingTables}
           onToggleCraftingTable={handleToggleCraftingTable}
           onSetAllCraftingTables={handleSetAllCraftingTables}
+          tagOptions={tagOptions}
+          hiddenTags={hiddenTags}
+          showParts={showParts}
+          showUntagged={showUntagged}
+          onToggleTag={handleToggleTag}
+          onTogglePart={handleTogglePart}
+          onToggleUntagged={handleToggleUntagged}
+          onSetAllTags={handleSetAllTags}
           onlyLevelAccessible={onlyLevelAccessible}
           onToggleOnlyLevelAccessible={() =>
             settingsMgmt.setSetting('onlyLevelAccessible', !onlyLevelAccessible)

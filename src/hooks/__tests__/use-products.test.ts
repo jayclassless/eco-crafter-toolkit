@@ -8,6 +8,7 @@ import {
   buildMarginOptions,
   buildProducts,
   buildProductGroups,
+  buildTagIdsByItemId,
   findDefaultMarginId,
 } from '../use-products'
 
@@ -324,6 +325,88 @@ describe('buildProducts', () => {
     const items = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
     // skill:skill-aaa < skill:skill-mining alphabetically
     expect(items.map((i) => i.recipeId)).toEqual(['recipe-zzz', 'recipe-iron'])
+  })
+})
+
+describe('buildTagIdsByItemId', () => {
+  it('returns an empty map when no tagItems rows exist', () => {
+    const map = buildTagIdsByItemId(gameDataStore)
+    expect(map.size).toBe(0)
+  })
+
+  it('groups multiple tag ids under the same item id', () => {
+    gameDataStore.setRow('tagItems', 'ti-food', {
+      id: 'ti-food',
+      datasetId: 'ds1',
+      tagId: 'tag-food',
+      itemId: 'item-iron',
+    })
+    gameDataStore.setRow('tagItems', 'ti-metal', {
+      id: 'ti-metal',
+      datasetId: 'ds1',
+      tagId: 'tag-metal',
+      itemId: 'item-iron',
+    })
+
+    const map = buildTagIdsByItemId(gameDataStore)
+    expect(map.size).toBe(1)
+    expect([...(map.get('item-iron') ?? [])].sort()).toEqual(['tag-food', 'tag-metal'])
+  })
+
+  it('keeps tag lists separate per item', () => {
+    gameDataStore.setRow('items', 'item-coal', {
+      id: 'item-coal',
+      datasetId: 'ds1',
+      name: 'Coal',
+      isTag: false,
+    })
+    gameDataStore.setRow('tagItems', 'ti-1', {
+      id: 'ti-1',
+      datasetId: 'ds1',
+      tagId: 'tag-metal',
+      itemId: 'item-iron',
+    })
+    gameDataStore.setRow('tagItems', 'ti-2', {
+      id: 'ti-2',
+      datasetId: 'ds1',
+      tagId: 'tag-fuel',
+      itemId: 'item-coal',
+    })
+
+    const map = buildTagIdsByItemId(gameDataStore)
+    expect(map.get('item-iron')).toEqual(['tag-metal'])
+    expect(map.get('item-coal')).toEqual(['tag-fuel'])
+  })
+
+  it('omits items that are not referenced by any tagItems row', () => {
+    gameDataStore.setRow('tagItems', 'ti-1', {
+      id: 'ti-1',
+      datasetId: 'ds1',
+      tagId: 'tag-metal',
+      itemId: 'item-iron',
+    })
+
+    const map = buildTagIdsByItemId(gameDataStore)
+    expect(map.has('item-iron')).toBe(true)
+    expect(map.get('item-untagged')).toBeUndefined()
+  })
+
+  it('preserves tagItems insertion order within the same item', () => {
+    gameDataStore.setRow('tagItems', 'ti-a', {
+      id: 'ti-a',
+      datasetId: 'ds1',
+      tagId: 'tag-z',
+      itemId: 'item-iron',
+    })
+    gameDataStore.setRow('tagItems', 'ti-b', {
+      id: 'ti-b',
+      datasetId: 'ds1',
+      tagId: 'tag-a',
+      itemId: 'item-iron',
+    })
+
+    const map = buildTagIdsByItemId(gameDataStore)
+    expect(map.get('item-iron')).toEqual(['tag-z', 'tag-a'])
   })
 })
 

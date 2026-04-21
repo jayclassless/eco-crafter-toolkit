@@ -80,6 +80,8 @@ export function createBuildStore() {
       showUnskilledRecipes: { type: 'boolean', default: true },
       onlyLevelAccessible: { type: 'boolean', default: false },
       applyMarginBetweenSkills: { type: 'boolean', default: false },
+      showParts: { type: 'boolean', default: true },
+      showUntagged: { type: 'boolean', default: true },
     },
     computedPrices: {
       id: { type: 'string' },
@@ -96,6 +98,10 @@ export function createBuildStore() {
     hiddenCraftingTables: {
       buildId: { type: 'string' },
       craftingTableId: { type: 'string' },
+    },
+    hiddenTags: {
+      buildId: { type: 'string' },
+      tagId: { type: 'string' },
     },
   })
 

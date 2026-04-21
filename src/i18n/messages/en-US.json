@@ -111,7 +111,10 @@
         "none": "None",
         "skillSection": "Skill",
         "craftingTableSection": "Crafting Table",
-        "unskilled": "Unskilled"
+        "tagSection": "Tag",
+        "unskilled": "Unskilled",
+        "part": "Part",
+        "untagged": "Untagged"
       }
     },
     "addRecipeDialog": {

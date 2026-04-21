@@ -127,6 +127,26 @@ export function buildRecipeUnlockingTalents(gameDataStore: Store): Map<string, s
 }
 
 /**
+ * Single-pass index from item ID to the tag IDs that contain it. Mirrors
+ * `buildRecipeProductItemIds` — callers that need per-item tag lookups should
+ * build this map once up-front and then look up by item id in O(1).
+ */
+export function buildTagIdsByItemId(gameDataStore: Store): Map<string, string[]> {
+  const map = new Map<string, string[]>()
+  for (const tiId of gameDataStore.getRowIds('tagItems')) {
+    const ti = gameDataStore.getRow('tagItems', tiId)
+    const itemId = ti.itemId as string
+    let list = map.get(itemId)
+    if (!list) {
+      list = []
+      map.set(itemId, list)
+    }
+    list.push(ti.tagId as string)
+  }
+  return map
+}
+
+/**
  * Single-pass index from recipe ID to the set of its ingredient item/tag IDs.
  * Used to exclude "reintegrated" products — items that are both produced and
  * consumed by the same recipe shouldn't appear as user-facing products.

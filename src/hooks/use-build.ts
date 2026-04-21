@@ -34,6 +34,8 @@ export function createBuildOps(buildStore: Store, gameDataStore: Store) {
         showUnskilledRecipes: true,
         onlyLevelAccessible: false,
         applyMarginBetweenSkills: false,
+        showParts: true,
+        showUntagged: true,
       })
 
       // Default margin — must exist before addSkill runs, because addSkill
