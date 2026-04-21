@@ -1,4 +1,6 @@
 [tools]
+jd = "latest"
+jq = "latest"
 node = "24"
 pnpm = "10"
 

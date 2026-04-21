@@ -1446,7 +1446,7 @@ async function main() {
   console.log('[extract] dataset passed validateDatasetJson')
 
   await fs.mkdir(path.dirname(args.output), { recursive: true })
-  await fs.writeFile(args.output, JSON.stringify(dataset, null, 2))
+  await fs.writeFile(args.output, JSON.stringify(dataset))
   console.log(`[extract] wrote ${args.output}`)
   console.log(
     `[extract] counts: skills=${dataset.Skills.length} items=${dataset.Items.length} tags=${dataset.Tags.length} recipes=${dataset.Recipes.length}`
