@@ -47,6 +47,11 @@ export interface SolverPluginModule {
   percent: number
   skillPercent?: number
   skillId?: string
+  /** 'Resource' | 'Speed' | 'Resource&Speed' (possibly with '&Skill').
+   * Used to filter which target kinds the module affects — a Resource-only
+   * module must not reduce craft time, and a Speed-only module must not
+   * reduce ingredient quantity. */
+  pluginType?: string
 }
 
 export interface SolverElement {
@@ -66,6 +71,12 @@ export interface SolverProduct {
 export interface SolverModifier {
   dynamicType: 'Skill' | 'Talent' | 'Module'
   refName: string
+  /** For Module-type modifiers whose refName resolves to a skill, the
+   * game-data skill row id. Used to match the plugin module's own skill
+   * binding — a skill-bound module applies its `skillPercent` only when
+   * the modifier references that specific skill, not the recipe's skill
+   * (they can differ). */
+  skillId?: string
 }
 
 export interface SolverOutput {

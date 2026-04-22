@@ -11,7 +11,6 @@ describe('resolveModifiers', () => {
     activeTalents: [] as SolverTalent[],
     pluginModule: null as SolverPluginModule | null,
     speedPluginModule: null as SolverPluginModule | null,
-    recipeSkillId: 'cooking',
   }
 
   it('returns 1 for empty modifiers', () => {
@@ -40,27 +39,42 @@ describe('resolveModifiers', () => {
     expect(resolveModifiers(modifiers, baseContext)).toBe(1)
   })
 
-  it('applies resource plugin module modifier', () => {
+  it('uses skillPercent when modifier references the module-bound skill', () => {
     const ctx = {
       ...baseContext,
       pluginModule: { percent: 0.8, skillId: 'cooking', skillPercent: 0.7 },
     }
-    const modifiers: SolverModifier[] = [{ dynamicType: 'Module', refName: 'CookingSkill' }]
+    const modifiers: SolverModifier[] = [
+      { dynamicType: 'Module', refName: 'CookingSkill', skillId: 'cooking' },
+    ]
     expect(resolveModifiers(modifiers, ctx)).toBeCloseTo(0.7)
   })
 
-  it('uses base percent when skill does not match module', () => {
+  it('uses base percent when modifier references a different skill than the module', () => {
     const ctx = {
       ...baseContext,
       pluginModule: { percent: 0.8, skillId: 'mining', skillPercent: 0.7 },
     }
-    const modifiers: SolverModifier[] = [{ dynamicType: 'Module', refName: 'CookingSkill' }]
+    const modifiers: SolverModifier[] = [
+      { dynamicType: 'Module', refName: 'CookingSkill', skillId: 'cooking' },
+    ]
+    expect(resolveModifiers(modifiers, ctx)).toBeCloseTo(0.8)
+  })
+
+  it('uses base percent when modifier has no skill reference', () => {
+    const ctx = {
+      ...baseContext,
+      pluginModule: { percent: 0.8, skillId: 'cooking', skillPercent: 0.7 },
+    }
+    const modifiers: SolverModifier[] = [{ dynamicType: 'Module', refName: 'Generic' }]
     expect(resolveModifiers(modifiers, ctx)).toBeCloseTo(0.8)
   })
 
   it('uses base percent when module has no skillPercent', () => {
     const ctx = { ...baseContext, pluginModule: { percent: 0.8 } }
-    const modifiers: SolverModifier[] = [{ dynamicType: 'Module', refName: 'CookingSkill' }]
+    const modifiers: SolverModifier[] = [
+      { dynamicType: 'Module', refName: 'CookingSkill', skillId: 'cooking' },
+    ]
     expect(resolveModifiers(modifiers, ctx)).toBeCloseTo(0.8)
   })
 
@@ -80,6 +94,54 @@ describe('resolveModifiers', () => {
       { dynamicType: 'Talent', refName: 'CookingLavishTalent' },
     ]
     expect(resolveModifiers(modifiers, ctx)).toBeCloseTo(0.765)
+  })
+
+  describe('plugin module pluginType filtering', () => {
+    const modifiers: SolverModifier[] = [{ dynamicType: 'Module', refName: 'CookingSkill' }]
+
+    it('Resource-only module applies to resource targets', () => {
+      const ctx = { ...baseContext, pluginModule: { percent: 0.8, pluginType: 'Resource' } }
+      expect(resolveModifiers(modifiers, ctx, 'resource')).toBeCloseTo(0.8)
+    })
+
+    it('Resource-only module is ignored for speed targets (craft time)', () => {
+      const ctx = { ...baseContext, pluginModule: { percent: 0.8, pluginType: 'Resource' } }
+      expect(resolveModifiers(modifiers, ctx, 'speed')).toBe(1)
+    })
+
+    it('Speed-only module applies to speed targets', () => {
+      const ctx = { ...baseContext, pluginModule: { percent: 0.8, pluginType: 'Speed' } }
+      expect(resolveModifiers(modifiers, ctx, 'speed')).toBeCloseTo(0.8)
+    })
+
+    it('Speed-only module is ignored for resource targets', () => {
+      const ctx = { ...baseContext, pluginModule: { percent: 0.8, pluginType: 'Speed' } }
+      expect(resolveModifiers(modifiers, ctx, 'resource')).toBe(1)
+    })
+
+    it('Speed-only module is ignored for labor targets', () => {
+      const ctx = { ...baseContext, pluginModule: { percent: 0.8, pluginType: 'Speed' } }
+      expect(resolveModifiers(modifiers, ctx, 'labor')).toBe(1)
+    })
+
+    it('Resource&Speed module applies to both targets', () => {
+      const ctx = { ...baseContext, pluginModule: { percent: 0.8, pluginType: 'Resource&Speed' } }
+      expect(resolveModifiers(modifiers, ctx, 'resource')).toBeCloseTo(0.8)
+      expect(resolveModifiers(modifiers, ctx, 'speed')).toBeCloseTo(0.8)
+    })
+
+    it('Resource&Skill module applies to resource targets and is ignored for speed', () => {
+      const ctx = { ...baseContext, pluginModule: { percent: 0.8, pluginType: 'Resource&Skill' } }
+      expect(resolveModifiers(modifiers, ctx, 'resource')).toBeCloseTo(0.8)
+      expect(resolveModifiers(modifiers, ctx, 'speed')).toBe(1)
+    })
+
+    it('module without pluginType applies to any target (fallback)', () => {
+      const ctx = { ...baseContext, pluginModule: { percent: 0.8 } }
+      expect(resolveModifiers(modifiers, ctx, 'resource')).toBeCloseTo(0.8)
+      expect(resolveModifiers(modifiers, ctx, 'speed')).toBeCloseTo(0.8)
+      expect(resolveModifiers(modifiers, ctx, 'labor')).toBeCloseTo(0.8)
+    })
   })
 })
 

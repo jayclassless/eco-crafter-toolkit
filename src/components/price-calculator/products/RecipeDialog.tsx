@@ -12,6 +12,7 @@ import { ItemIcon } from '@/components/common/ItemIcon'
 import { PartLabel } from '@/components/common/PartLabel'
 import { SkillIcon } from '@/components/common/SkillIcon'
 import { TagLabel } from '@/components/common/TagLabel'
+import { AppliedBonuses } from '@/components/price-calculator/products/AppliedBonuses'
 import { IngredientPriceCell } from '@/components/price-calculator/products/IngredientPriceCell'
 import { ProductItemName } from '@/components/price-calculator/products/ProductItemName'
 import { UsedInRecipesTable } from '@/components/price-calculator/UsedInRecipesTable'
@@ -23,7 +24,9 @@ import {
   usePriceSignalRevision,
 } from '@/hooks/use-prices-signal'
 import { useRecipeManagement } from '@/hooks/use-recipe-management'
+import { buildRecipeBuildState, buildRecipeIndexes } from '@/hooks/use-solver-snapshot'
 import { useStoreRevision } from '@/hooks/use-store-revision'
+import { formatQty, resolveRecipeModifiers } from '@/lib/recipe-modifiers'
 import { computeUsedInRecipes, type UsedInRecipe } from '@/lib/used-in-recipes'
 import { useStores } from '@/stores/providers'
 
@@ -38,10 +41,13 @@ interface Props {
 }
 
 interface ElementRow {
+  recipeElementId: string
   itemOrTagId: string
   name: string
   rawName: string
-  quantity: number
+  baseQuantity: number
+  modifiedQuantity: number
+  hasModifiers: boolean
   unitPrice: number | null
   totalPrice: number | null
   isTag: boolean
@@ -57,7 +63,9 @@ interface ProductRow extends ElementRow {
 interface AdditionalCostRow {
   id: 'craftTime' | 'labor'
   label: string
-  quantity: string
+  baseQuantity: string
+  modifiedQuantity: string
+  hasModifiers: boolean
   unitPriceLabel: string
   totalPrice: number
 }
@@ -76,6 +84,65 @@ export function RecipeDialog({
   const { getName } = useLocalizedName(datasetId)
   const { setProductShare } = useRecipeManagement(buildId)
   const { setPrice } = usePriceManagement(buildId)
+
+  // Resolved modifier context for the current recipe. Rebuilt only when the
+  // game-data or build-options tables it reads actually change — not on every
+  // solver push. Shape mirrors the per-recipe slice of buildSolverSnapshot.
+  const gameRevForMods = useStoreRevision(gameDataStore, [
+    'modifiers',
+    'talents',
+    'talentBonuses',
+    'pluginModules',
+    'skills',
+    'recipes',
+    'recipeElements',
+  ])
+  const buildRevForMods = useStoreRevision(buildStore, [
+    'userSkills',
+    'userTalents',
+    'userCraftingTables',
+    'userRecipes',
+  ])
+  const resolvedMods = useMemo(
+    () => {
+      if (!recipeId) return null
+      let userRecipeId = ''
+      let roundFactor = 0
+      for (const urId of buildStore.getRowIds('userRecipes')) {
+        const ur = buildStore.getRow('userRecipes', urId)
+        if (ur.buildId === buildId && ur.recipeId === recipeId) {
+          userRecipeId = urId
+          roundFactor = (ur.roundFactor as number) ?? 0
+          break
+        }
+      }
+      const indexes = buildRecipeIndexes(gameDataStore)
+      const buildState = buildRecipeBuildState(buildStore, buildId)
+      return resolveRecipeModifiers(
+        gameDataStore,
+        recipeId,
+        userRecipeId,
+        roundFactor,
+        datasetId,
+        indexes,
+        buildState,
+        getName
+      )
+    },
+    // gameRevForMods / buildRevForMods are the invalidation signals; getName
+    // changes identity when the localized-name index reloads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      gameDataStore,
+      buildStore,
+      recipeId,
+      buildId,
+      datasetId,
+      getName,
+      gameRevForMods,
+      buildRevForMods,
+    ]
+  )
 
   const onPriceChange = useCallback(
     (itemOrTagId: string, userPriceId: string, value: number | null) => {
@@ -173,14 +240,26 @@ export function RecipeDialog({
     const productRaws = rawRows.filter((r) => r.isProduct).sort((a, b) => a.index - b.index)
     let primaryAssigned = false
 
+    // modifier multiplier + final modified quantity per recipeElement, keyed
+    // by recipeElement row id. Absent key → no bonuses apply (multiplier = 1).
+    const computeModified = (reId: string, baseAbsQuantity: number): number => {
+      const modified = resolvedMods?.elementModifiedQuantities.get(reId)
+      return modified != null ? Math.abs(modified) : baseAbsQuantity
+    }
+
     for (const r of rawRows) {
       if (!r.isProduct) {
         const itemRow = gameDataStore.getRow('items', r.itemOrTagId)
+        const baseAbs = Math.abs(r.baseQuantity)
+        const modifiedAbs = computeModified(r.id, baseAbs)
         ingredients.push({
+          recipeElementId: r.id,
           itemOrTagId: r.itemOrTagId,
           name: getName('item', r.itemOrTagId),
           rawName: (itemRow?.name as string) ?? '',
-          quantity: Math.abs(r.baseQuantity),
+          baseQuantity: baseAbs,
+          modifiedQuantity: modifiedAbs,
+          hasModifiers: modifiedAbs !== baseAbs,
           unitPrice: resolveUnitPrice(r.itemOrTagId, false),
           totalPrice: null,
           isTag: (itemRow?.isTag as boolean) ?? false,
@@ -192,23 +271,30 @@ export function RecipeDialog({
         })
       }
     }
+    // Totals use modified quantity so the dialog's subtotals match what the
+    // solver actually charges (baseQuantity × unitPrice would diverge once
+    // any bonus reduces ingredient needs).
     for (const ing of ingredients) {
-      ing.totalPrice = ing.unitPrice != null ? ing.unitPrice * ing.quantity : null
+      ing.totalPrice = ing.unitPrice != null ? ing.unitPrice * ing.modifiedQuantity : null
     }
 
     for (const r of productRaws) {
       const name = getName('item', r.itemOrTagId)
       const rawName = getItemRawName(r.itemOrTagId)
-      const quantity = Math.abs(r.baseQuantity)
+      const baseAbs = Math.abs(r.baseQuantity)
+      const modifiedAbs = computeModified(r.id, baseAbs)
       const unitPrice = resolveUnitPrice(r.itemOrTagId, true)
-      const totalPrice = unitPrice != null ? unitPrice * quantity : null
+      const totalPrice = unitPrice != null ? unitPrice * modifiedAbs : null
 
       if (ingredientItemIds.has(r.itemOrTagId)) {
         returnedIngredients.push({
+          recipeElementId: r.id,
           itemOrTagId: r.itemOrTagId,
           name,
           rawName,
-          quantity,
+          baseQuantity: baseAbs,
+          modifiedQuantity: modifiedAbs,
+          hasModifiers: modifiedAbs !== baseAbs,
           unitPrice,
           totalPrice,
           isTag: false,
@@ -226,10 +312,13 @@ export function RecipeDialog({
           sharePercent = 0
         }
         products.push({
+          recipeElementId: r.id,
           itemOrTagId: r.itemOrTagId,
           name,
           rawName,
-          quantity,
+          baseQuantity: baseAbs,
+          modifiedQuantity: modifiedAbs,
+          hasModifiers: modifiedAbs !== baseAbs,
           unitPrice,
           totalPrice,
           isTag: false,
@@ -251,6 +340,7 @@ export function RecipeDialog({
     resolveUnitPrice,
     getName,
     getItemRawName,
+    resolvedMods,
   ])
 
   const [activeTabIndex, setActiveTabIndex] = useState(0)
@@ -431,19 +521,27 @@ export function RecipeDialog({
     return any ? sum : null
   }
 
+  const baseCraftTime = (recipe.baseCraftTime as number) ?? 0
+  const baseLaborCost = (recipe.baseLaborCost as number) ?? 0
+  const craftTimeChanged = recipeCost ? recipeCost.craftTime !== baseCraftTime : false
+  const laborChanged = recipeCost ? recipeCost.laborAmount !== baseLaborCost : false
   const additionalCosts: AdditionalCostRow[] = recipeCost
     ? [
         {
           id: 'craftTime',
           label: t('priceCalculator.recipe.craftTime'),
-          quantity: `${recipeCost.craftTime.toFixed(2)} min`,
+          baseQuantity: `${baseCraftTime.toFixed(2)} min`,
+          modifiedQuantity: `${recipeCost.craftTime.toFixed(2)} min`,
+          hasModifiers: craftTimeChanged,
           unitPriceLabel: `${recipeCost.costPerMinute.toFixed(2)} $/min`,
           totalPrice: recipeCost.craftTimeCost,
         },
         {
           id: 'labor',
           label: t('priceCalculator.recipe.labor'),
-          quantity: `${recipeCost.laborAmount.toFixed(0)} cal`,
+          baseQuantity: `${baseLaborCost.toFixed(0)} cal`,
+          modifiedQuantity: `${recipeCost.laborAmount.toFixed(0)} cal`,
+          hasModifiers: laborChanged,
           unitPriceLabel: `${recipeCost.calorieCost.toFixed(2)} $/1k cal`,
           totalPrice: recipeCost.laborCost,
         },
@@ -460,6 +558,27 @@ export function RecipeDialog({
       ? null
       : (ingredientsSubtotal ?? 0) + (additionalCostsSubtotal ?? 0) - (returnedSubtotal ?? 0)
   const productsTotal = sumTotals(products)
+
+  const quantityTemplate = (row: ElementRow) =>
+    row.hasModifiers ? (
+      <span>
+        {formatQty(row.baseQuantity)}{' '}
+        <span className="text-color-secondary">({formatQty(row.modifiedQuantity)})</span>
+      </span>
+    ) : (
+      <span>{formatQty(row.baseQuantity)}</span>
+    )
+
+  const additionalCostQuantityTemplate = (row: AdditionalCostRow) =>
+    row.hasModifiers ? (
+      <span>
+        {row.baseQuantity.split(' ')[0]}{' '}
+        <span className="text-color-secondary">({row.modifiedQuantity.split(' ')[0]})</span>{' '}
+        {row.modifiedQuantity.split(' ').slice(1).join(' ')}
+      </span>
+    ) : (
+      <span>{row.modifiedQuantity}</span>
+    )
 
   const nameTemplate = (row: ElementRow) => (
     <div className="flex align-items-center gap-2">
@@ -625,8 +744,8 @@ export function RecipeDialog({
               <DataTable value={ingredients} size="small">
                 <Column
                   header={t('priceCalculator.recipe.quantity')}
-                  field="quantity"
-                  style={{ width: '4rem' }}
+                  body={quantityTemplate}
+                  style={{ width: '6rem' }}
                 />
                 <Column
                   header={t('priceCalculator.recipe.item')}
@@ -654,8 +773,8 @@ export function RecipeDialog({
                   <DataTable value={returnedIngredients} size="small">
                     <Column
                       header={t('priceCalculator.recipe.quantity')}
-                      field="quantity"
-                      style={{ width: '4rem' }}
+                      body={quantityTemplate}
+                      style={{ width: '6rem' }}
                     />
                     <Column
                       header={t('priceCalculator.recipe.item')}
@@ -685,8 +804,8 @@ export function RecipeDialog({
                   <DataTable value={additionalCosts} size="small">
                     <Column
                       header={t('priceCalculator.recipe.quantity')}
-                      body={(row: AdditionalCostRow) => row.quantity}
-                      style={{ width: '6rem' }}
+                      body={additionalCostQuantityTemplate}
+                      style={{ width: '8rem' }}
                     />
                     <Column
                       header={t('priceCalculator.recipe.item')}
@@ -718,8 +837,8 @@ export function RecipeDialog({
               <DataTable value={products} size="small">
                 <Column
                   header={t('priceCalculator.recipe.quantity')}
-                  field="quantity"
-                  style={{ width: '4rem' }}
+                  body={quantityTemplate}
+                  style={{ width: '6rem' }}
                 />
                 <Column header={t('priceCalculator.recipe.item')} body={nameTemplate} />
                 {showShareColumn && (
@@ -742,6 +861,10 @@ export function RecipeDialog({
                   headerClassName="p-align-right"
                 />
               </DataTable>
+
+              {resolvedMods && resolvedMods.bonuses.length > 0 && (
+                <AppliedBonuses bonuses={resolvedMods.bonuses} />
+              )}
 
               <div className="mt-auto pt-3">{totalFooter(productsTotal)}</div>
             </div>

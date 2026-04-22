@@ -218,7 +218,6 @@ function prepareRecipe(recipe: SolverRecipe, calorieCost: number): PreparedRecip
     activeTalents: recipe.activeTalents,
     pluginModule: recipe.pluginModule,
     speedPluginModule: recipe.speedPluginModule,
-    recipeSkillId: recipe.skillId,
   }
   // Mirror solver.ts:71-74 — speedPluginModule overrides pluginModule for craft
   // time resolution, falling back to pluginModule when null.
@@ -227,8 +226,8 @@ function prepareRecipe(recipe: SolverRecipe, calorieCost: number): PreparedRecip
       ? { ...ctx, pluginModule: recipe.speedPluginModule ?? ctx.pluginModule }
       : ctx
 
-  const laborMultiplier = resolveModifiers(recipe.laborModifiers, ctx)
-  const craftMultiplier = resolveModifiers(recipe.craftMinutesModifiers, craftCtx)
+  const laborMultiplier = resolveModifiers(recipe.laborModifiers, ctx, 'labor')
+  const craftMultiplier = resolveModifiers(recipe.craftMinutesModifiers, craftCtx, 'speed')
   const craftTime = recipe.baseCraftTime * craftMultiplier
   const laborAmount = recipe.baseLaborCost * laborMultiplier
   const craftTimeCost = craftTime * recipe.costPerMinute

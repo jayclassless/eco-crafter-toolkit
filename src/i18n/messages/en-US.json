@@ -167,7 +167,14 @@
       "roundFactor": "Round Factor",
       "tabCostComponents": "Cost Components",
       "tabUsedIn": "Used in Recipes",
-      "usedInEmpty": "No recipes in this build use this recipe's primary product."
+      "usedInEmpty": "No recipes in this build use this recipe's primary product.",
+      "bonusesApplied": "Bonuses Applied",
+      "metric": {
+        "labor": "labor",
+        "craftTime": "craft time",
+        "ingredients": "ingredients",
+        "products": "products"
+      }
     }
   },
   "settings": {

@@ -350,7 +350,12 @@ describe('buildSolverSnapshot', () => {
     expect(r.skillLevel).toBe(4)
     expect(r.laborReducePercent).toEqual([1, 0.9, 0.8])
     expect(r.activeTalents).toEqual([{ name: 'Sharp', value: 0.1 }])
-    expect(r.pluginModule).toEqual({ percent: 0.5, skillId: 'sk1', skillPercent: 0.1 })
+    expect(r.pluginModule).toEqual({
+      percent: 0.5,
+      skillId: 'sk1',
+      skillPercent: 0.1,
+      pluginType: 'speed',
+    })
     expect(r.costPerMinute).toBe(0.5)
     expect(r.roundFactor).toBe(2)
     expect(r.ingredients).toHaveLength(1)
@@ -499,7 +504,12 @@ describe('buildSolverSnapshot', () => {
     const snap = buildSolverSnapshot(game, build, BUILD, DS)!
     const r = snap.recipes[0]
     expect(r.activeTalents.map((t) => t.name)).toEqual(['OK'])
-    expect(r.pluginModule).toEqual({ percent: 0.25, skillId: undefined, skillPercent: undefined })
+    expect(r.pluginModule).toEqual({
+      percent: 0.25,
+      skillId: undefined,
+      skillPercent: undefined,
+      pluginType: 'speed',
+    })
     expect(r.skillLevel).toBe(0) // foreign userSkill not associated
     expect(r.costPerMinute).toBe(0.1)
   })

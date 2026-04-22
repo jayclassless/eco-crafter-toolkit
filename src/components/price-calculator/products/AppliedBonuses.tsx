@@ -1,0 +1,49 @@
+import { useTranslation } from 'react-i18next'
+
+import { PluginModuleIcon } from '@/components/common/PluginModuleIcon'
+import { SkillIcon } from '@/components/common/SkillIcon'
+import { TalentIcon } from '@/components/common/TalentIcon'
+import type { AppliedBonus, AppliedEffect } from '@/lib/recipe-modifiers'
+
+interface Props {
+  bonuses: AppliedBonus[]
+}
+
+function BonusIconFor({ bonus }: { bonus: AppliedBonus }) {
+  switch (bonus.icon.kind) {
+    case 'skill':
+      return <SkillIcon skill={{ name: bonus.icon.rawName }} size={20} />
+    case 'talent':
+      return <TalentIcon talent={{ talentGroupName: bonus.icon.talentGroupName }} size={20} />
+    case 'module':
+      return <PluginModuleIcon module={{ name: bonus.icon.rawName }} size={20} />
+  }
+}
+
+export function AppliedBonuses({ bonuses }: Props) {
+  const { t } = useTranslation()
+
+  if (bonuses.length === 0) return null
+
+  const renderEffect = (e: AppliedEffect): string => {
+    const sign = e.signedPercent > 0 ? '+' : ''
+    return `${sign}${e.signedPercent}% ${t(`priceCalculator.recipe.metric.${e.metric}`)}`
+  }
+
+  return (
+    <div className="mt-3">
+      <h4 className="mt-0 mb-2">{t('priceCalculator.recipe.bonusesApplied')}</h4>
+      <ul className="list-none p-0 m-0 flex flex-column gap-2">
+        {bonuses.map((bonus, i) => (
+          <li key={`${bonus.source}-${i}`} className="flex align-items-center gap-2">
+            <BonusIconFor bonus={bonus} />
+            <span>{bonus.displayName}</span>
+            <span className="text-color-secondary">
+              — {bonus.effects.map(renderEffect).join(', ')}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
