@@ -65,9 +65,19 @@ interface AdditionalCostRow {
   label: string
   baseQuantity: string
   modifiedQuantity: string
+  unitSuffix: string
   hasModifiers: boolean
   unitPriceLabel: string
   totalPrice: number
+}
+
+function formatCraftTime(minutes: number): string {
+  const totalSeconds = Math.round(minutes * 60)
+  const m = Math.floor(totalSeconds / 60)
+  const s = totalSeconds % 60
+  if (m === 0) return `${s}sec`
+  if (s === 0) return `${m}min`
+  return `${m}min ${s}sec`
 }
 
 export function RecipeDialog({
@@ -530,8 +540,9 @@ export function RecipeDialog({
         {
           id: 'craftTime',
           label: t('priceCalculator.recipe.craftTime'),
-          baseQuantity: `${baseCraftTime.toFixed(2)} min`,
-          modifiedQuantity: `${recipeCost.craftTime.toFixed(2)} min`,
+          baseQuantity: formatCraftTime(baseCraftTime),
+          modifiedQuantity: formatCraftTime(recipeCost.craftTime),
+          unitSuffix: '',
           hasModifiers: craftTimeChanged,
           unitPriceLabel: `${recipeCost.costPerMinute.toFixed(2)} $/min`,
           totalPrice: recipeCost.craftTimeCost,
@@ -539,8 +550,9 @@ export function RecipeDialog({
         {
           id: 'labor',
           label: t('priceCalculator.recipe.labor'),
-          baseQuantity: `${baseLaborCost.toFixed(0)} cal`,
-          modifiedQuantity: `${recipeCost.laborAmount.toFixed(0)} cal`,
+          baseQuantity: baseLaborCost.toFixed(0),
+          modifiedQuantity: recipeCost.laborAmount.toFixed(0),
+          unitSuffix: 'cal',
           hasModifiers: laborChanged,
           unitPriceLabel: `${recipeCost.calorieCost.toFixed(2)} $/1k cal`,
           totalPrice: recipeCost.laborCost,
@@ -562,23 +574,36 @@ export function RecipeDialog({
   const quantityTemplate = (row: ElementRow) =>
     row.hasModifiers ? (
       <span>
-        {formatQty(row.baseQuantity)}{' '}
-        <span className="text-color-secondary">({formatQty(row.modifiedQuantity)})</span>
+        <span style={{ color: 'var(--primary-color)' }}>{formatQty(row.modifiedQuantity)}</span>{' '}
+        <span className="font-italic">({formatQty(row.baseQuantity)})</span>
       </span>
     ) : (
       <span>{formatQty(row.baseQuantity)}</span>
     )
 
-  const additionalCostQuantityTemplate = (row: AdditionalCostRow) =>
-    row.hasModifiers ? (
+  const additionalCostQuantityTemplate = (row: AdditionalCostRow) => {
+    const suffix = row.unitSuffix ? ` ${row.unitSuffix}` : ''
+    if (!row.hasModifiers) {
+      return (
+        <span>
+          {row.modifiedQuantity}
+          {suffix}
+        </span>
+      )
+    }
+    return (
       <span>
-        {row.baseQuantity.split(' ')[0]}{' '}
-        <span className="text-color-secondary">({row.modifiedQuantity.split(' ')[0]})</span>{' '}
-        {row.modifiedQuantity.split(' ').slice(1).join(' ')}
+        <span style={{ color: 'var(--primary-color)' }}>
+          {row.modifiedQuantity}
+          {suffix}
+        </span>{' '}
+        <span className="font-italic">
+          ({row.baseQuantity}
+          {suffix})
+        </span>
       </span>
-    ) : (
-      <span>{row.modifiedQuantity}</span>
     )
+  }
 
   const nameTemplate = (row: ElementRow) => (
     <div className="flex align-items-center gap-2">
@@ -732,9 +757,10 @@ export function RecipeDialog({
       header={headerNode}
       visible={!!recipeId}
       onHide={onHide}
-      style={{ width: '50vw' }}
+      style={{ width: '75vw' }}
       modal
       dismissableMask
+      maximizable
     >
       <TabView activeIndex={activeTabIndex} onTabChange={(e) => setActiveTabIndex(e.index)}>
         <TabPanel header={t('priceCalculator.recipe.tabCostComponents')}>

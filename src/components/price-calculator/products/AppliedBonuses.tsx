@@ -31,16 +31,20 @@ export function AppliedBonuses({ bonuses }: Props) {
   }
 
   return (
-    <div className="mt-3">
-      <h4 className="mt-0 mb-2">{t('priceCalculator.recipe.bonusesApplied')}</h4>
-      <ul className="list-none p-0 m-0 flex flex-column gap-2">
+    <div>
+      <h4 className="mt-4 mb-2">{t('priceCalculator.recipe.bonusesApplied')}</h4>
+      <ul className="list-none p-0 m-0 flex flex-column gap-2 ml-3">
         {bonuses.map((bonus, i) => (
-          <li key={`${bonus.source}-${i}`} className="flex align-items-center gap-2">
-            <BonusIconFor bonus={bonus} />
-            <span>{bonus.displayName}</span>
-            <span className="text-color-secondary">
-              — {bonus.effects.map(renderEffect).join(', ')}
+          <li key={`${bonus.source}-${i}`} className="mt-2">
+            <span className="flex align-items-center gap-2">
+              <BonusIconFor bonus={bonus} />
+              <span>{bonus.displayName}</span>
             </span>
+            <ul>
+              {bonus.effects.map((effect, i) => (
+                <li key={i.toString()}>{renderEffect(effect)}</li>
+              ))}
+            </ul>
           </li>
         ))}
       </ul>

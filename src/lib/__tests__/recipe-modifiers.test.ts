@@ -249,7 +249,7 @@ describe('resolveRecipeModifiers', () => {
     expect(result.bonuses).toHaveLength(1)
     const b = result.bonuses[0]
     expect(b.source).toBe('talent')
-    expect(b.displayName).toBe('Bricklaying')
+    expect(b.displayName).toBe('Bricklaying (Level 3)')
     // Matching signedPercent: round((0.857375 - 1) * 1000)/10 = -14.3
     expect(b.effects).toEqual([{ metric: 'ingredients', signedPercent: -14.3 }])
   })

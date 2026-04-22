@@ -183,9 +183,12 @@ export function resolveRecipeModifiers(
           const talentRow = gameDataStore.getRow('talents', parent.id)
           const rawGroupName = (talentRow?.talentGroupName as string) || ''
           const localizedName = getName('talent', parent.id)
+          const baseName = localizedName || parent.name
+          const level = buildState.userTalentsByTalentId.get(parent.id)?.level ?? 0
+          const displayName = parent.isLevelable ? `${baseName} (Level ${level})` : baseName
           existing = {
             source: 'talent',
-            displayName: localizedName || parent.name,
+            displayName,
             icon: { kind: 'talent', talentGroupName: rawGroupName },
             modsByMetric: new Map(),
           }
