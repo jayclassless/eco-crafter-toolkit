@@ -6,6 +6,7 @@ import { markStoresReady } from '@/lib/app-ready'
 
 import { createPersistedBuildStore } from './build-store'
 import { createPersistedGameDataStore } from './game-data-store'
+import { loadIndex } from './localized-name-store'
 import { createPersistedUIStore } from './ui-store'
 
 interface StoreContextValue {
@@ -31,6 +32,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         createPersistedBuildStore(),
         createPersistedUIStore(),
       ])
+
+      // Warm the localized-name cache for the dataset the app will show first.
+      // Without this, every component that calls `useLocalizedName` kicks off
+      // its own async IDB read after mount and renders empty names until it
+      // lands. Prefetching into the module cache lets `useLocalizedName`
+      // initialize synchronously on first render. A miss (stale uiStore id,
+      // or no datasets yet) is harmless — the hook will still load on demand.
+      const activeDatasetId =
+        (ui.store.getCell('uiState', 'main', 'activeDatasetId') as string) ||
+        gameData.store.getRowIds('datasets')[0]
+      if (activeDatasetId) {
+        try {
+          await loadIndex(activeDatasetId, 'en-US')
+        } catch {
+          // Non-fatal: fall back to the hook's on-mount load path.
+        }
+      }
 
       if (!cancelled) {
         const value: StoreContextValue = {

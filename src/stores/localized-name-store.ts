@@ -27,6 +27,16 @@ function openDb(): Promise<IDBDatabase> {
   return dbPromise
 }
 
+/**
+ * Sync accessor for an already-loaded index. Returns null on cache miss so
+ * callers can decide whether to kick off `loadIndex` (async) or render with
+ * empty names. Used by `useLocalizedName` to initialize state from the cache
+ * the app prefetches at startup, avoiding a first-render flash of empty names.
+ */
+export function peekIndex(datasetId: string, locale: string): LocalizedNameIndex | null {
+  return cache.get(`${datasetId}:${locale}`) ?? null
+}
+
 export async function loadIndex(datasetId: string, locale: string): Promise<LocalizedNameIndex> {
   const cacheKey = `${datasetId}:${locale}`
   const cached = cache.get(cacheKey)
