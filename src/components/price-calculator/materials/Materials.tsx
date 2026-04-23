@@ -9,7 +9,9 @@ import { ItemIcon } from '@/components/common/ItemIcon'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { usePriceManagement } from '@/hooks/use-price-management'
 import { type PriceSignal } from '@/hooks/use-prices-signal'
+import { arrayEquals, shallowEquals, useStableContent } from '@/hooks/use-stable-content'
 import { useStoreRevision, useTableRowIdsRevision } from '@/hooks/use-store-revision'
+import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { useStores } from '@/stores/providers'
 import type { PriceMode } from '@/types/solver'
 
@@ -40,6 +42,18 @@ const BUILD_TABLES = ['userRecipes'] as const
 const USER_PRICES_TABLE = ['userPrices'] as const
 const GAME_TABLES = ['recipeElements', 'items', 'tagItems'] as const
 
+// Let `ProductsDataTable`-style re-renders bail out when a userPrices row
+// add touches at most one Material's `userPriceId`. Without this, all ~114
+// Materials rows re-render their body templates on every add.
+function groupEquals(a: MaterialGroup, b: MaterialGroup): boolean {
+  if (!shallowEquals(a.parent, b.parent)) return false
+  return arrayEquals(a.children, b.children, shallowEquals)
+}
+
+function groupsEqual(a: MaterialGroup[], b: MaterialGroup[]): boolean {
+  return arrayEquals(a, b, groupEquals)
+}
+
 function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
   const { t } = useTranslation()
   const { gameDataStore, buildStore } = useStores()
@@ -53,27 +67,16 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
   const userPricesRowIdsRev = useTableRowIdsRevision(buildStore, USER_PRICES_TABLE)
   const gameRev = useStoreRevision(gameDataStore, GAME_TABLES)
 
-  const allGroups = useMemo<MaterialGroup[]>(
+  const rawAllGroups = useMemo<MaterialGroup[]>(
     () => {
-      // Index recipeElements by recipeId once.
-      const elementsByRecipeId = new Map<
-        string,
-        Array<{ itemOrTagId: string; isProduct: boolean }>
-      >()
-      for (const reId of gameDataStore.getRowIds('recipeElements')) {
-        const re = gameDataStore.getRow('recipeElements', reId)
-        if (re.datasetId !== datasetId) continue
-        const recipeId = re.recipeId as string
-        let list = elementsByRecipeId.get(recipeId)
-        if (!list) {
-          list = []
-          elementsByRecipeId.set(recipeId, list)
-        }
-        list.push({
-          itemOrTagId: re.itemOrTagId as string,
-          isProduct: re.isProduct as boolean,
-        })
-      }
+      // Cached indexes: the per-recipe product/ingredient maps and the
+      // per-tag item list are dataset-scoped and immutable after import.
+      // Previously this memo re-scanned `recipeElements` (~4500 rows) and
+      // `tagItems` (~1300 rows) on every rebuild, which made a new
+      // userPrices row (`userPricesRowIdsRev` bump) trigger a ~600ms
+      // synchronous task.
+      const { productItemIdsByRecipeId, ingredientItemIdsByRecipeId, itemIdsByTagId } =
+        getGameDataIndexes(gameDataStore)
 
       // Index userPrices by itemOrTagId for this build. We only care about
       // `userPriceId` (for cells to subscribe to their own cell) and
@@ -90,20 +93,6 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
         })
       }
 
-      // Index items satisfying each tag, scoped to this dataset.
-      const itemsByTagId = new Map<string, string[]>()
-      for (const tiId of gameDataStore.getRowIds('tagItems')) {
-        const row = gameDataStore.getRow('tagItems', tiId)
-        if (row.datasetId !== datasetId) continue
-        const tagId = row.tagId as string
-        let list = itemsByTagId.get(tagId)
-        if (!list) {
-          list = []
-          itemsByTagId.set(tagId, list)
-        }
-        list.push(row.itemId as string)
-      }
-
       const ingredientIds = new Set<string>()
       const primaryProductIds = new Set<string>()
       const producedItemIds = new Set<string>()
@@ -112,29 +101,27 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
         const ur = buildStore.getRow('userRecipes', urId)
         if (ur.buildId !== buildId) continue
 
-        const elems = elementsByRecipeId.get(ur.recipeId as string)
-        if (!elems) continue
+        const recipeId = ur.recipeId as string
+        const ownIngredients = ingredientItemIdsByRecipeId.get(recipeId)
+        const ownProducts = productItemIdsByRecipeId.get(recipeId)
+        if (!ownProducts && !ownIngredients) continue
 
         // A recipe that consumes its own product (reintegration) is a net
         // sink, not a source — skip it so the item still gets a manually
         // priced row in the materials list. Other recipes that cleanly
         // produce the same item will still mark it as produced.
-        const ownIngredientIds = new Set<string>()
-        for (const e of elems) {
-          if (!e.isProduct) ownIngredientIds.add(e.itemOrTagId)
+        if (ownIngredients) {
+          for (const id of ownIngredients) ingredientIds.add(id)
         }
-
-        let foundPrimary = false
-        for (const e of elems) {
-          if (e.isProduct) {
-            if (ownIngredientIds.has(e.itemOrTagId)) continue
-            producedItemIds.add(e.itemOrTagId)
+        if (ownProducts) {
+          let foundPrimary = false
+          for (const itemId of ownProducts) {
+            if (ownIngredients?.has(itemId)) continue
+            producedItemIds.add(itemId)
             if (!foundPrimary) {
-              primaryProductIds.add(e.itemOrTagId)
+              primaryProductIds.add(itemId)
               foundPrimary = true
             }
-          } else {
-            ingredientIds.add(e.itemOrTagId)
           }
         }
       }
@@ -170,7 +157,7 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
       for (const itemId of ingredientIds) {
         const itemRow = gameDataStore.getRow('items', itemId)
         if (!itemRow?.isTag) continue
-        for (const childId of itemsByTagId.get(itemId) ?? []) {
+        for (const childId of itemIdsByTagId.get(itemId) ?? []) {
           tagChildItemIds.add(childId)
         }
       }
@@ -184,7 +171,7 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
 
         const children: Material[] = []
         if (parent.isTag) {
-          const childIds = itemsByTagId.get(itemId) ?? []
+          const childIds = itemIdsByTagId.get(itemId) ?? []
           for (const childId of childIds) {
             const childMat = buildMaterial(
               childId,
@@ -212,6 +199,10 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [buildId, datasetId, buildStore, gameDataStore, getName, buildRev, userPricesRowIdsRev, gameRev]
   )
+  // Preserve reference when semantic content didn't change so the
+  // downstream `rows` memo and the DataTable re-render bail out when a
+  // userPrices row add doesn't actually alter any visible Material.
+  const allGroups = useStableContent(rawAllGroups, groupsEqual)
 
   // Filter + flatten into a single row list for DataTable. A tag stays
   // visible if its own name matches (all children shown) or if any child

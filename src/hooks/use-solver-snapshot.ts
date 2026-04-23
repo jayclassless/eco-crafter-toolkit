@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import type { Store } from 'tinybase'
 
+import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { useStores } from '@/stores/providers'
 import type { PriceMode, SolverInput, SolverRecipe, SolverModifier } from '@/types/solver'
 
@@ -383,7 +384,7 @@ export function buildSolverSnapshot(
   buildId: string,
   datasetId: string
 ): SolverInput | null {
-  const indexes = buildRecipeIndexes(gameDataStore)
+  const indexes = getGameDataIndexes(gameDataStore).recipeIndexes
   const buildState = buildRecipeBuildState(buildStore, buildId)
 
   // ---- Build-store side: partition remaining snapshot-only tables. ----

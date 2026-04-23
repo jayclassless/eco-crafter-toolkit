@@ -30,6 +30,12 @@ export type RecipeCostsMap = Record<string, RecipeCostBreakdown>
  * recipe-keyed prices (per-userRecipe cost/sale for multi-recipe children).
  */
 export interface PriceSignal {
+  /** Replace all three namespaces at once and notify changed cells. Fires
+   * `subscribeAny` listeners exactly once for the whole update, so consumers
+   * like `usePriceSignalRevision` don't see three separate React commits per
+   * solver result. Prefer this over calling `set`/`setRecipe`/`setRecipeCosts`
+   * in sequence. */
+  setAll(prices: PricesMap, recipePrices: PricesMap, recipeCosts: RecipeCostsMap): void
   /** Replace the item-keyed prices map and notify only cells whose price changed. */
   set(prices: PricesMap): void
   /** Replace the recipe-keyed prices map and notify only cells whose price changed. */
@@ -131,7 +137,27 @@ function createPriceSignal(): PriceSignal {
     for (const listener of anyListeners) listener()
   }
 
+  const notifyRecipeCostListeners = (prev: RecipeCostsMap, next: RecipeCostsMap) => {
+    for (const [recipeId, set] of recipeCostListeners) {
+      if (!breakdownEqual(prev[recipeId], next[recipeId])) {
+        for (const listener of set) listener()
+      }
+    }
+  }
+
   return {
+    setAll(prices, rPrices, rCosts) {
+      const prevItem = itemPrices
+      const prevRecipe = recipePrices
+      const prevCosts = recipeCosts
+      itemPrices = prices
+      recipePrices = rPrices
+      recipeCosts = rCosts
+      notifyChangedCells(itemListeners, prevItem, prices)
+      notifyChangedCells(recipeListeners, prevRecipe, rPrices)
+      notifyRecipeCostListeners(prevCosts, rCosts)
+      notifyAny()
+    },
     set(prices) {
       const prev = itemPrices
       itemPrices = prices
@@ -147,11 +173,7 @@ function createPriceSignal(): PriceSignal {
     setRecipeCosts(costs) {
       const prev = recipeCosts
       recipeCosts = costs
-      for (const [recipeId, set] of recipeCostListeners) {
-        if (!breakdownEqual(prev[recipeId], costs[recipeId])) {
-          for (const listener of set) listener()
-        }
-      }
+      notifyRecipeCostListeners(prev, costs)
       notifyAny()
     },
     subscribe(itemId, field, listener) {

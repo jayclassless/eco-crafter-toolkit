@@ -128,11 +128,11 @@ export function PriceCalculator() {
 
   // Push new solver results into the out-of-React price signal. Cells that
   // subscribe via `usePriceCell` wake up individually; no React re-render
-  // cascades through PriceCalculator → Products → DataTable here.
+  // cascades through PriceCalculator → Products → DataTable here. The single
+  // `setAll` call batches the three namespaces into one notification sweep
+  // so `subscribeAny` listeners don't fire three times per solver result.
   useEffect(() => {
-    priceSignal.set(result?.prices ?? {})
-    priceSignal.setRecipe(result?.recipePrices ?? {})
-    priceSignal.setRecipeCosts(result?.recipeCosts ?? {})
+    priceSignal.setAll(result?.prices ?? {}, result?.recipePrices ?? {}, result?.recipeCosts ?? {})
   }, [result, priceSignal])
 
   if (!activeDatasetId || !activeBuildId) return null

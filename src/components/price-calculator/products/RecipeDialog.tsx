@@ -25,7 +25,8 @@ import {
 } from '@/hooks/use-prices-signal'
 import { useRecipeManagement } from '@/hooks/use-recipe-management'
 import { buildRecipeBuildState, buildRecipeIndexes } from '@/hooks/use-solver-snapshot'
-import { useStoreRevision } from '@/hooks/use-store-revision'
+import { useStoreRevision, useTableRowIdsRevision } from '@/hooks/use-store-revision'
+import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { formatQty, resolveRecipeModifiers } from '@/lib/recipe-modifiers'
 import { computeUsedInRecipes, type UsedInRecipe } from '@/lib/used-in-recipes'
 import { useStores } from '@/stores/providers'
@@ -361,7 +362,11 @@ export function RecipeDialog({
   }, [recipeId])
 
   useStoreRevision(buildStore, ['userProductShares'])
-  const buildRecipesRev = useStoreRevision(buildStore, ['userRecipes', 'userPrices'])
+  // Row-ids-only: the useMemo below only reads userRecipes.recipeId (stable
+  // after row creation) and userPrices.itemOrTagId (ditto). Cell edits like
+  // a userPrices.price change must not invalidate this memo — doing so
+  // caused ~2.8s main-thread blocks per keystroke in a material price.
+  const buildRecipesRev = useTableRowIdsRevision(buildStore, ['userRecipes', 'userPrices'])
   // Re-render whenever the solver pushes a new result, so the inline reads
   // via `priceSignal.get(...)` / `priceSignal.getRecipe(...)` above reflect
   // the new numbers (e.g. when the user edits a share %).
@@ -375,37 +380,33 @@ export function RecipeDialog({
     const products = new Set<string>()
     const produced = new Set<string>()
     const priceIds = new Map<string, string>()
+    // Dialog is closed — skip the scan entirely. None of the return values
+    // are read before the `recipeId ? ... : null` render guard below.
+    if (!recipeId) {
+      return { productItemIds: products, userPriceIdByItem: priceIds, producedItemIds: produced }
+    }
+    // Use the cached per-recipe indexes instead of the N×M nested scan over
+    // recipeElements — with a full dataset that loop was 225 × 4585 ≈ 1M
+    // row reads per rebuild.
+    const { productItemIdsByRecipeId, ingredientItemIdsByRecipeId } =
+      getGameDataIndexes(gameDataStore)
     for (const urId of buildStore.getRowIds('userRecipes')) {
       const ur = buildStore.getRow('userRecipes', urId)
       if (ur.buildId !== buildId) continue
       const rId = ur.recipeId as string
-      let firstProductId: string | null = null
-      let firstIndex = Number.POSITIVE_INFINITY
-      const ownIngredientIds = new Set<string>()
-      const ownProducts: Array<{ itemId: string; index: number }> = []
-      for (const reId of gameDataStore.getRowIds('recipeElements')) {
-        const re = gameDataStore.getRow('recipeElements', reId)
-        if (re.recipeId !== rId) continue
-        const itemId = re.itemOrTagId as string
-        const idx = (re.index as number) ?? 0
-        if (re.isProduct) {
-          ownProducts.push({ itemId, index: idx })
-          if (idx < firstIndex) {
-            firstIndex = idx
-            firstProductId = itemId
-          }
-        } else {
-          ownIngredientIds.add(itemId)
-        }
-      }
+      const ownProducts = productItemIdsByRecipeId.get(rId)
+      if (!ownProducts || ownProducts.length === 0) continue
+      const ownIngredients = ingredientItemIdsByRecipeId.get(rId) ?? new Set<string>()
       // Produced set excludes reintegrated products (same rule as the
       // Materials list at Materials.tsx:107-140), so a recipe that consumes
       // its own product doesn't lock that ingredient as read-only.
-      for (const p of ownProducts) {
-        if (ownIngredientIds.has(p.itemId)) continue
-        produced.add(p.itemId)
+      for (const itemId of ownProducts) {
+        if (ownIngredients.has(itemId)) continue
+        produced.add(itemId)
       }
-      if (firstProductId) products.add(firstProductId)
+      // The index preserves recipeElements order, so the first product is
+      // the primary (same definition the rest of the app uses).
+      products.add(ownProducts[0])
     }
     for (const upId of buildStore.getRowIds('userPrices')) {
       const up = buildStore.getRow('userPrices', upId)
@@ -415,7 +416,7 @@ export function RecipeDialog({
     return { productItemIds: products, userPriceIdByItem: priceIds, producedItemIds: produced }
     // buildRecipesRev is the invalidation signal for this memo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildStore, gameDataStore, buildId, buildRecipesRev])
+  }, [buildStore, gameDataStore, buildId, recipeId, buildRecipesRev])
 
   const gameRev = useStoreRevision(gameDataStore, [
     'recipeElements',

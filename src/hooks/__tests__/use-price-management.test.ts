@@ -62,6 +62,37 @@ describe('createPriceManagement', () => {
     expect(buildStore.getCell('userPrices', id, 'buildId')).toBe(BUILD_ID)
   })
 
+  it('setPrice on an existing manual row fires listeners exactly once', () => {
+    mgmt().setPrice('item1', 5)
+    const id = buildStore.getRowIds('userPrices')[0]
+    // Count table-level notifications: the write must be wrapped in a
+    // transaction so subscribers (DataTable re-renders, solver trigger)
+    // don't see two separate mutation events per keystroke.
+    let fires = 0
+    const listenerId = buildStore.addTableListener('userPrices', () => {
+      fires += 1
+    })
+    mgmt().setPrice('item1', 7, id)
+    buildStore.delListener(listenerId)
+    expect(fires).toBe(1)
+    expect(buildStore.getCell('userPrices', id, 'price')).toBe(7)
+  })
+
+  it('setPrice on an already-manual row skips the redundant priceMode write', () => {
+    mgmt().setPrice('item1', 5)
+    const id = buildStore.getRowIds('userPrices')[0]
+    // Track priceMode cell writes specifically. Re-writing an identical
+    // value would still fire cell listeners, so we must skip it.
+    let priceModeFires = 0
+    const listenerId = buildStore.addCellListener('userPrices', id, 'priceMode', () => {
+      priceModeFires += 1
+    })
+    mgmt().setPrice('item1', 7, id)
+    buildStore.delListener(listenerId)
+    expect(priceModeFires).toBe(0)
+    expect(buildStore.getCell('userPrices', id, 'priceMode')).toBe('manual')
+  })
+
   describe('setPriceMode', () => {
     it('creates a new row with the given mode and price=0 when none exists', () => {
       mgmt().setPriceMode('tag1', 'avg')

@@ -28,8 +28,18 @@ export function createPriceManagement(buildStore: Store, buildId: string): UsePr
   return {
     setPrice: (itemOrTagId: string, price: number | null, userPriceId?: string) => {
       if (userPriceId) {
-        buildStore.setCell('userPrices', userPriceId, 'price', price ?? 0)
-        buildStore.setCell('userPrices', userPriceId, 'priceMode', 'manual')
+        // Transaction batches the two cell writes into a single listener
+        // sweep. Without it, each setCell fires subscribers separately, so
+        // editing an existing manual price did two full React commits per
+        // keystroke. Also skip the priceMode write when it's already
+        // 'manual' — halves listener work for the common edit-in-place case.
+        buildStore.transaction(() => {
+          buildStore.setCell('userPrices', userPriceId, 'price', price ?? 0)
+          const mode = buildStore.getCell('userPrices', userPriceId, 'priceMode')
+          if (mode !== 'manual') {
+            buildStore.setCell('userPrices', userPriceId, 'priceMode', 'manual')
+          }
+        })
         return
       }
       const id = generateId()

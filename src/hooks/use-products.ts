@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { Store } from 'tinybase'
 
 import { useLocalizedName } from '@/hooks/use-localized-name'
+import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { useStores } from '@/stores/providers'
 
 export interface Product {
@@ -173,12 +174,13 @@ export function buildProducts(
   buildId: string,
   getName: (entityType: string, entityId: string) => string
 ): Product[] {
-  // Index products- and ingredients-per-recipe once (single pass each over
-  // recipeElements) so the per-user-recipe loop is O(k) instead of
-  // O(N_elements).
-  const productsByRecipeId = buildRecipeProductItemIds(gameDataStore)
-  const ingredientsByRecipeId = buildRecipeIngredientItemIds(gameDataStore)
-  const unlockingTalentsByRecipeId = buildRecipeUnlockingTalents(gameDataStore)
+  // Indexes are immutable per dataset import — pull from the cached bundle
+  // instead of scanning ~4500 recipeElements + recipeUnlocks on every change
+  // to userRecipes / userMargins / etc.
+  const indexes = getGameDataIndexes(gameDataStore)
+  const productsByRecipeId = indexes.productItemIdsByRecipeId
+  const ingredientsByRecipeId = indexes.ingredientItemIdsByRecipeId
+  const unlockingTalentsByRecipeId = indexes.unlockingTalentsByRecipeId
 
   // Index userRecipeMargins by userRecipeId once (build-scoped).
   const marginByUserRecipeId = new Map<string, string>()

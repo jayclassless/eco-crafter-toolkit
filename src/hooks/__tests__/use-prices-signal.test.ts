@@ -7,6 +7,7 @@ import {
   useRecipePriceCell,
   type PriceSignal,
   type PricesMap,
+  type RecipeCostsMap,
 } from '../use-prices-signal'
 
 const makePrices = (entries: Record<string, [number, number]>): PricesMap => {
@@ -450,6 +451,113 @@ describe('signal.getAll', () => {
       iron: { costPrice: 1, salePrice: 2 },
       copper: { costPrice: 3, salePrice: 4 },
     })
+  })
+})
+
+describe('signal.setAll', () => {
+  const makeCosts = (entries: Record<string, number>): RecipeCostsMap => {
+    const out: RecipeCostsMap = {}
+    for (const [id, cost] of Object.entries(entries)) {
+      out[id] = {
+        craftTime: 1,
+        craftTimeCost: cost,
+        laborAmount: 0,
+        laborCost: 0,
+        costPerMinute: 0,
+        calorieCost: 0,
+      }
+    }
+    return out
+  }
+
+  it('updates all three namespaces from a single call', () => {
+    const { result } = renderHook(() => usePriceSignal())
+    const signal = result.current
+    act(() =>
+      signal.setAll(
+        makePrices({ iron: [10, 15] }),
+        makePrices({ r1: [3, 8] }),
+        makeCosts({ r1: 2 })
+      )
+    )
+    expect(signal.get('iron', 'costPrice')).toBe(10)
+    expect(signal.getRecipe('r1', 'costPrice')).toBe(3)
+    expect(signal.getRecipeCost('r1')?.craftTimeCost).toBe(2)
+  })
+
+  it('notifies item, recipe, and recipe-cost subscribers', () => {
+    const { result } = renderHook(() => usePriceSignal())
+    const signal = result.current
+    const itemListener = vi.fn()
+    const recipeListener = vi.fn()
+    const recipeCostListener = vi.fn()
+    signal.subscribe('iron', 'costPrice', itemListener)
+    signal.subscribeRecipe('r1', 'costPrice', recipeListener)
+    signal.subscribeRecipeCost('r1', recipeCostListener)
+
+    act(() =>
+      signal.setAll(
+        makePrices({ iron: [10, 15] }),
+        makePrices({ r1: [3, 8] }),
+        makeCosts({ r1: 2 })
+      )
+    )
+    expect(itemListener).toHaveBeenCalledTimes(1)
+    expect(recipeListener).toHaveBeenCalledTimes(1)
+    expect(recipeCostListener).toHaveBeenCalledTimes(1)
+  })
+
+  it('fires subscribeAny exactly once per call, not three times', () => {
+    // This is the key contract that makes `setAll` worth having over three
+    // separate calls: `usePriceSignalRevision` consumers must not see three
+    // React commits per solver result.
+    const { result } = renderHook(() => usePriceSignal())
+    const signal = result.current
+    const anyListener = vi.fn()
+    signal.subscribeAny(anyListener)
+
+    act(() =>
+      signal.setAll(
+        makePrices({ iron: [10, 15] }),
+        makePrices({ r1: [3, 8] }),
+        makeCosts({ r1: 2 })
+      )
+    )
+    expect(anyListener).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips unchanged cells across all three namespaces', () => {
+    const { result } = renderHook(() => usePriceSignal())
+    const signal = result.current
+    const itemListener = vi.fn()
+    const recipeListener = vi.fn()
+    const recipeCostListener = vi.fn()
+    signal.subscribe('iron', 'costPrice', itemListener)
+    signal.subscribeRecipe('r1', 'costPrice', recipeListener)
+    signal.subscribeRecipeCost('r1', recipeCostListener)
+
+    act(() =>
+      signal.setAll(
+        makePrices({ iron: [10, 15] }),
+        makePrices({ r1: [3, 8] }),
+        makeCosts({ r1: 2 })
+      )
+    )
+    itemListener.mockClear()
+    recipeListener.mockClear()
+    recipeCostListener.mockClear()
+
+    // Second call with identical inputs — no listener should fire.
+    act(() =>
+      signal.setAll(
+        makePrices({ iron: [10, 15] }),
+        makePrices({ r1: [3, 8] }),
+        makeCosts({ r1: 2 })
+      )
+    )
+    expect(itemListener).not.toHaveBeenCalled()
+    expect(recipeListener).not.toHaveBeenCalled()
+    expect(recipeCostListener).not.toHaveBeenCalled()
   })
 })
 

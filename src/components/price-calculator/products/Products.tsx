@@ -1,6 +1,4 @@
 import { Button } from 'primereact/button'
-import { Column } from 'primereact/column'
-import { DataTable } from 'primereact/datatable'
 import { memo, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -16,10 +14,18 @@ import {
   buildTagIdsByItemId,
   findDefaultMarginId,
   type Product,
+  type ProductGroup,
 } from '@/hooks/use-products'
 import { useRecipeManagement } from '@/hooks/use-recipe-management'
 import { useSettings } from '@/hooks/use-settings'
-import { useStoreRevision } from '@/hooks/use-store-revision'
+import {
+  arrayEquals,
+  mapEquals,
+  setEquals,
+  shallowEquals,
+  useStableContent,
+} from '@/hooks/use-stable-content'
+import { useStoreRevision, useTableRowIdsRevision } from '@/hooks/use-store-revision'
 import { generateId } from '@/lib/ids'
 import { useStores } from '@/stores/providers'
 import type { PriceMode } from '@/types/solver'
@@ -28,9 +34,10 @@ import { MaterialDialog } from '../materials/MaterialDialog'
 import { AddRecipeDialog } from './AddRecipeDialog'
 import { ItemCostCell } from './ItemCostCell'
 import { ItemSaleCell } from './ItemSaleCell'
-import { MarginCell, MarginOptionsContext } from './MarginCell'
+import { MarginCell } from './MarginCell'
 import { MirrorChildCheckbox } from './MirrorChildCheckbox'
 import { ProductParentName } from './ProductParentName'
+import { ProductsDataTable } from './ProductsDataTable'
 import { RecipeCostCell } from './RecipeCostCell'
 import { RecipeDialog } from './RecipeDialog'
 import { RecipeFilterButton, type TagFilterOption } from './RecipeFilterButton'
@@ -42,12 +49,15 @@ import type { Row } from './types'
 // deliberately NOT here — it only affects dropdown labels + default-id
 // lookup and is tracked on its own revision below so editing a margin name
 // doesn't trigger the expensive group rebuild.
-const GROUPS_BUILD_TABLES = [
-  'userRecipes',
-  'userRecipeMargins',
-  'userProductMargins',
-  'userPrices',
-] as const
+//
+// `userPrices` is tracked on a separate row-ids-only revision below —
+// `buildProductGroups` only reads `userPriceId` (a stable row id), so a
+// price cell edit doesn't change the view-model. Without that split, every
+// keystroke in a material price cell rebuilt groups and re-rendered the
+// Products DataTable (~9s with 225 user-recipes).
+const GROUPS_BUILD_TABLES = ['userRecipes', 'userRecipeMargins', 'userProductMargins'] as const
+
+const USER_PRICES_TABLE = ['userPrices'] as const
 
 const MARGINS_BUILD_TABLES = ['userMargins'] as const
 
@@ -67,6 +77,57 @@ const FILTER_BUILD_TABLES = [
 // the Materials list, not the Products panel.
 const PRODUCT_MODE_ORDER: PriceMode[] = ['min', 'max', 'avg', 'mirror']
 
+// Module-level sentinels: when `onlyLevelAccessible` is off, the level/talent
+// gates in `childVisible` are bypassed, so we hand it these stable empty
+// containers instead of reading the build store. Level / talent edits then
+// produce no observable filter change → `childVisible` keeps its identity →
+// `rows` keeps its identity → the Products DataTable doesn't re-render its
+// 500+ rows on a single skill-level click.
+const EMPTY_LEVEL_MAP: Map<string, number> = new Map()
+const EMPTY_TALENT_SET: Set<string> = new Set()
+
+// `buildProductGroups` produces a new array of new objects on every
+// invocation, even when the underlying data hasn't meaningfully changed.
+// Without a content comparison, a userPrices row add (which bumps
+// `userPricesRowIdsRev` and can affect at most one group's `userPriceId`)
+// forces a new `groups` ref → new `rows` ref → full DataTable re-render of
+// ~229 rows. The comparator below walks parents + children by scalar
+// fields, letting `useStableContent` preserve the prior reference when
+// nothing visible changed.
+function productEquals(a: Product, b: Product): boolean {
+  return (
+    a.userRecipeId === b.userRecipeId &&
+    a.recipeId === b.recipeId &&
+    a.recipeName === b.recipeName &&
+    a.skillId === b.skillId &&
+    a.skillName === b.skillName &&
+    a.skillRawName === b.skillRawName &&
+    a.craftingTableId === b.craftingTableId &&
+    a.requiredSkillLevel === b.requiredSkillLevel &&
+    a.primaryProductRawName === b.primaryProductRawName &&
+    a.recipePrimaryProductRawName === b.recipePrimaryProductRawName &&
+    a.primaryProductId === b.primaryProductId &&
+    a.primaryProductName === b.primaryProductName &&
+    a.userMarginId === b.userMarginId &&
+    arrayEquals(a.productItemIds, b.productItemIds, (x, y) => x === y) &&
+    arrayEquals(a.unlockingTalentIds, b.unlockingTalentIds, (x, y) => x === y)
+  )
+}
+
+function groupEquals(a: ProductGroup, b: ProductGroup): boolean {
+  if (a.parent === null) {
+    if (b.parent !== null) return false
+  } else {
+    if (b.parent === null) return false
+    if (!shallowEquals(a.parent, b.parent)) return false
+  }
+  return arrayEquals(a.children, b.children, productEquals)
+}
+
+function groupsEqual(a: ProductGroup[], b: ProductGroup[]): boolean {
+  return arrayEquals(a, b, groupEquals)
+}
+
 interface Props {
   buildId: string
   datasetId: string
@@ -82,14 +143,18 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
   const settingsMgmt = useSettings(buildId)
 
   const groupsRev = useStoreRevision(buildStore, GROUPS_BUILD_TABLES)
+  const userPricesRowIdsRev = useTableRowIdsRevision(buildStore, USER_PRICES_TABLE)
   const marginsRev = useStoreRevision(buildStore, MARGINS_BUILD_TABLES)
   const filterRev = useStoreRevision(buildStore, FILTER_BUILD_TABLES)
 
-  const groups = useMemo(
+  const rawGroups = useMemo(
     () => buildProductGroups(buildStore, gameDataStore, buildId, getName),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [buildStore, gameDataStore, buildId, getName, groupsRev]
+    [buildStore, gameDataStore, buildId, getName, groupsRev, userPricesRowIdsRev]
   )
+  // Preserve reference when content is semantically unchanged so downstream
+  // memos (`rows`, `ProductsDataTable`) can bail out.
+  const groups = useStableContent(rawGroups, groupsEqual)
 
   const { margins, defaultMarginId } = useMemo(
     () => ({
@@ -100,17 +165,13 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
     [buildStore, buildId, marginsRev]
   )
 
-  const {
-    showUnskilledRecipes,
-    showParts,
-    showUntagged,
-    onlyLevelAccessible,
-    userSkillLevels,
-    activeTalentIds,
-    hiddenSkills,
-    hiddenCraftingTables,
-    hiddenTags,
-  } = useMemo(() => {
+  // The filter cascade rebuilds whenever any FILTER_BUILD_TABLES row changes
+  // (most often a userSkills.level cell edit). The Map/Set outputs below are
+  // run through `useStableContent` so unchanged contents preserve identity —
+  // that lets `childVisible` and `rows` bail out via dep equality, avoiding a
+  // full re-render of the ~700-row Products DataTable on every level/talent
+  // edit.
+  const filterRaw = useMemo(() => {
     let showUnskilled = true
     let showPartsFlag = true
     let showUntaggedFlag = true
@@ -124,20 +185,34 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       levelOnly = row.onlyLevelAccessible as boolean
       break
     }
-    const skillLevels = new Map<string, number>()
-    for (const rowId of buildStore.getRowIds('userSkills')) {
-      const row = buildStore.getRow('userSkills', rowId)
-      if (row.buildId !== buildId) continue
-      skillLevels.set(row.skillId as string, row.level as number)
-    }
+    // Skill levels and active talents only feed `childVisible` when
+    // `onlyLevelAccessible` is on. Skip the scans (and the resulting Map/Set
+    // identity churn) when the flag is off — the empty sentinels are
+    // referentially stable across renders.
+    const skillLevels = levelOnly
+      ? (() => {
+          const m = new Map<string, number>()
+          for (const rowId of buildStore.getRowIds('userSkills')) {
+            const row = buildStore.getRow('userSkills', rowId)
+            if (row.buildId !== buildId) continue
+            m.set(row.skillId as string, row.level as number)
+          }
+          return m
+        })()
+      : EMPTY_LEVEL_MAP
     // Unlock talents are always non-levelable (BonusEffectOverride), so the
     // `enabled` flag alone is the activation signal.
-    const activeTalents = new Set<string>()
-    for (const rowId of buildStore.getRowIds('userTalents')) {
-      const row = buildStore.getRow('userTalents', rowId)
-      if (row.buildId !== buildId) continue
-      if (row.enabled) activeTalents.add(row.talentId as string)
-    }
+    const activeTalents = levelOnly
+      ? (() => {
+          const s = new Set<string>()
+          for (const rowId of buildStore.getRowIds('userTalents')) {
+            const row = buildStore.getRow('userTalents', rowId)
+            if (row.buildId !== buildId) continue
+            if (row.enabled) s.add(row.talentId as string)
+          }
+          return s
+        })()
+      : EMPTY_TALENT_SET
     const hidden = new Set<string>()
     for (const rowId of buildStore.getRowIds('hiddenSkills')) {
       const row = buildStore.getRow('hiddenSkills', rowId)
@@ -169,6 +244,13 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildStore, buildId, filterRev])
+
+  const { showUnskilledRecipes, showParts, showUntagged, onlyLevelAccessible } = filterRaw
+  const userSkillLevels = useStableContent(filterRaw.userSkillLevels, mapEquals)
+  const activeTalentIds = useStableContent(filterRaw.activeTalentIds, setEquals)
+  const hiddenSkills = useStableContent(filterRaw.hiddenSkills, setEquals)
+  const hiddenCraftingTables = useStableContent(filterRaw.hiddenCraftingTables, setEquals)
+  const hiddenTags = useStableContent(filterRaw.hiddenTags, setEquals)
 
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [addDialogVisible, setAddDialogVisible] = useState(false)
@@ -592,10 +674,6 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
   // re-invoked when BodyCell's memo bails — so margin-name edits wouldn't
   // reach the dropdown options. Context updates propagate to consumers
   // regardless of parent memoization.
-  const marginContextValue = useMemo(
-    () => ({ options: margins, defaultMarginId }),
-    [margins, defaultMarginId]
-  )
 
   const marginTemplate = useCallback(
     (row: Row) => {
@@ -723,36 +801,21 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
           setSelectedRecipeId(id)
         }}
       />
-      <MarginOptionsContext.Provider value={marginContextValue}>
-        <DataTable
-          value={rows}
-          dataKey="rowKey"
-          size="small"
-          scrollable
-          scrollHeight="flex"
-          emptyMessage={t('priceCalculator.products.emptyMessage')}
-        >
-          <Column header={t('priceCalculator.products.product')} body={nameTemplate} />
-          <Column
-            header={t('priceCalculator.products.costPrice')}
-            body={costTemplate}
-            style={{ width: '5rem' }}
-            headerClassName="p-align-right"
-          />
-          <Column
-            header={t('priceCalculator.products.margin')}
-            body={marginTemplate}
-            style={{ width: '7rem' }}
-          />
-          <Column
-            header={t('priceCalculator.products.salePrice')}
-            body={saleTemplate}
-            style={{ width: '5rem' }}
-            headerClassName="p-align-right"
-          />
-          <Column body={deleteTemplate} style={{ width: '3rem' }} />
-        </DataTable>
-      </MarginOptionsContext.Provider>
+      <ProductsDataTable
+        rows={rows}
+        margins={margins}
+        defaultMarginId={defaultMarginId}
+        emptyMessage={t('priceCalculator.products.emptyMessage')}
+        productHeader={t('priceCalculator.products.product')}
+        costHeader={t('priceCalculator.products.costPrice')}
+        marginHeader={t('priceCalculator.products.margin')}
+        saleHeader={t('priceCalculator.products.salePrice')}
+        nameTemplate={nameTemplate}
+        costTemplate={costTemplate}
+        marginTemplate={marginTemplate}
+        saleTemplate={saleTemplate}
+        deleteTemplate={deleteTemplate}
+      />
     </div>
   )
 }

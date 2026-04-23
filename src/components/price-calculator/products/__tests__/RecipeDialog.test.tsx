@@ -49,6 +49,7 @@ function stubPersister(): IndexedDbPersister {
 
 function stubPriceSignal(): PriceSignal {
   return {
+    setAll: () => {},
     set: () => {},
     setRecipe: () => {},
     setRecipeCosts: () => {},

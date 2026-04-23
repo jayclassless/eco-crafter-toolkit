@@ -15,6 +15,7 @@ import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useSkillManagement } from '@/hooks/use-skill-management'
 import { useStarCost } from '@/hooks/use-star-cost'
 import { useTableRowIdsRevision } from '@/hooks/use-store-revision'
+import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { useStores } from '@/stores/providers'
 
 import { SkillLevelCell } from './SkillLevelCell'
@@ -54,6 +55,20 @@ export function SkillsPanel({ buildId, datasetId }: Props) {
   const rowIdsRev = useTableRowIdsRevision(buildStore, BUILD_TABLES)
 
   const skills = useMemo<UserSkillRow[]>(() => {
+    // Game-data indexes are cached per dataset import; reading them here is
+    // O(1) instead of re-scanning ~140 talents per render.
+    const { talentDetailsBySkillId } = getGameDataIndexes(gameDataStore)
+
+    // Bucket the build's userTalents by talentId once so the per-talent
+    // lookup below is O(1) — replaces an inner O(N_userTalents) scan that
+    // made the original loop O(skills × talents × userTalents).
+    const userTalentIdByTalentId = new Map<string, string>()
+    for (const utId of buildStore.getRowIds('userTalents')) {
+      const ut = buildStore.getRow('userTalents', utId)
+      if (ut.buildId !== buildId) continue
+      userTalentIdByTalentId.set(ut.talentId as string, utId)
+    }
+
     const rows: UserSkillRow[] = []
     for (const rowId of buildStore.getRowIds('userSkills')) {
       const row = buildStore.getRow('userSkills', rowId)
@@ -63,30 +78,16 @@ export function SkillsPanel({ buildId, datasetId }: Props) {
       const skillRow = gameDataStore.getRow('skills', skillId)
       if (!skillRow) continue
 
-      const talents: TalentRow[] = []
-      for (const tRowId of gameDataStore.getRowIds('talents')) {
-        const talent = gameDataStore.getRow('talents', tRowId)
-        if (talent.skillId !== skillId) continue
-
-        let userTalentId = ''
-        for (const utId of buildStore.getRowIds('userTalents')) {
-          const ut = buildStore.getRow('userTalents', utId)
-          if (ut.buildId === buildId && ut.talentId === talent.id) {
-            userTalentId = utId
-            break
-          }
-        }
-
-        talents.push({
-          id: talent.id as string,
-          userTalentId,
-          name: getName('talent', talent.id as string),
-          talentGroupName: talent.talentGroupName as string,
-          level: talent.level as number,
-          isLevelable: (talent.isLevelable as boolean) ?? false,
-          maxTalentLevel: (talent.maxTalentLevel as number) ?? 0,
-        })
-      }
+      const skillTalents = talentDetailsBySkillId.get(skillId) ?? []
+      const talents: TalentRow[] = skillTalents.map((t) => ({
+        id: t.id,
+        userTalentId: userTalentIdByTalentId.get(t.id) ?? '',
+        name: getName('talent', t.id),
+        talentGroupName: t.talentGroupName,
+        level: t.level,
+        isLevelable: t.isLevelable,
+        maxTalentLevel: t.maxTalentLevel,
+      }))
 
       talents.sort((a, b) => a.level - b.level || a.name.localeCompare(b.name))
 
