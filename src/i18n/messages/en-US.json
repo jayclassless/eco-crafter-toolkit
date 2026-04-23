@@ -44,6 +44,8 @@
     "config": {
       "skills": "Skills",
       "skillsCount": "Skills ({count})",
+      "stars_one": "{count} Star needed for this build",
+      "stars_other": "{count} Stars needed for this build",
       "addSkill": "Add skill...",
       "level": "Level",
       "talents": "Talents",

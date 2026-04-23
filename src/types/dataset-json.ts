@@ -16,6 +16,9 @@ export interface SkillJson {
   Profession?: string
   MaxLevel: number
   LaborReducePercent: number[]
+  // Star cost to unlock the skill. Introduced in Eco v13 (`SpecialtyCost` on
+  // the generated Skill class); absent in v11/v12 where every skill cost 1.
+  SpecialtyCost?: number
   Talents: TalentJson[]
 }
 

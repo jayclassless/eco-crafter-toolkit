@@ -172,6 +172,7 @@ interface RawSkill {
   profession?: string
   maxLevel: number
   laborReducePercent: number[]
+  specialtyCost?: number
 }
 interface RawItem {
   name: string
@@ -278,12 +279,19 @@ function parseSkillFile(src: string) {
         .filter((n) => !Number.isNaN(n))
     }
 
+    // `SpecialtyCost => N` was introduced in v13; absent in v11/v12 where every
+    // skill cost 1 star flat. Leaving it undefined lets the importer apply the
+    // v11/v12 default without baking the 1-star assumption into the dataset.
+    const specialtyMatch = /SpecialtyCost\s*=>\s*(\d+)/.exec(body)
+    const specialtyCost = specialtyMatch ? Number(specialtyMatch[1]) : undefined
+
     skills.push({
       name,
       display,
       profession: profession && profession !== name ? profession : undefined,
       maxLevel,
       laborReducePercent: labor,
+      specialtyCost,
     })
   }
 }
@@ -1161,14 +1169,16 @@ async function main() {
   // 3c) Build skill JSON with talents
   const skillByName = new Map<string, SkillJson>()
   for (const s of skills) {
-    skillByName.set(s.name, {
+    const json: SkillJson = {
       Name: s.name,
       LocalizedName: mergeLocalized(s.display, crowdin),
       Profession: s.profession,
       MaxLevel: s.maxLevel,
       LaborReducePercent: s.laborReducePercent,
       Talents: [],
-    })
+    }
+    if (s.specialtyCost !== undefined) json.SpecialtyCost = s.specialtyCost
+    skillByName.set(s.name, json)
   }
   // Index talents by name
   const talentByName = new Map(talents.map((t) => [t.name, t]))

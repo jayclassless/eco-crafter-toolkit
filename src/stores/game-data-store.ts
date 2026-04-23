@@ -22,6 +22,8 @@ export function createGameDataStore() {
       profession: { type: 'string', default: '' },
       maxLevel: { type: 'number' },
       laborReducePercent: { type: 'string' }, // JSON array stored as string
+      // v11/v12 datasets lack SpecialtyCost; default 1 matches pre-v13 flat cost.
+      specialtyCost: { type: 'number', default: 1 },
     },
     talents: {
       id: { type: 'string' },

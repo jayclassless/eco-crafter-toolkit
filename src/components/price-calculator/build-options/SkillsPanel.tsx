@@ -13,6 +13,7 @@ import {
 import { SkillIcon } from '@/components/common/SkillIcon'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useSkillManagement } from '@/hooks/use-skill-management'
+import { useStarCost } from '@/hooks/use-star-cost'
 import { useTableRowIdsRevision } from '@/hooks/use-store-revision'
 import { useStores } from '@/stores/providers'
 
@@ -45,6 +46,7 @@ export function SkillsPanel({ buildId, datasetId }: Props) {
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
   const skillMgmt = useSkillManagement(buildId, datasetId)
+  const starCost = useStarCost(buildId, datasetId)
   const [suggestions, setSuggestions] = useState<SkillGroup[]>([])
   // Only rebuild the view-model when rows are added/removed. Cell edits
   // (level, talent enabled) are handled by `SkillLevelCell` / `TalentChip`
@@ -229,7 +231,25 @@ export function SkillsPanel({ buildId, datasetId }: Props) {
   )
 
   return (
-    <Panel header={t('priceCalculator.config.skillsCount', { count: skills.length })} toggleable>
+    <Panel
+      headerTemplate={(options) => (
+        <div className={`${options.className} justify-content-between`}>
+          <span className={options.titleClassName}>
+            {t('priceCalculator.config.skillsCount', { count: skills.length })}
+          </span>
+          <span
+            className="ml-auto mr-2"
+            title={t('priceCalculator.config.stars', { count: starCost.total })}
+            aria-label={t('priceCalculator.config.stars', { count: starCost.total })}
+          >
+            <i className="pi pi-star-fill mr-1" style={{ color: 'var(--yellow-500)' }} />
+            {starCost.total}
+          </span>
+          {options.togglerElement}
+        </div>
+      )}
+      toggleable
+    >
       <GroupedAutoComplete
         placeholder={t('priceCalculator.config.addSkill')}
         suggestions={suggestions}

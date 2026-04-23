@@ -16,6 +16,7 @@ export interface Skill {
   profession?: string
   maxLevel: number
   laborReducePercent: number[]
+  specialtyCost: number
 }
 
 export interface Talent {

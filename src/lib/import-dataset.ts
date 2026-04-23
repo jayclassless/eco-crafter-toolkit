@@ -145,6 +145,7 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
       profession: s.Profession,
       maxLevel: s.MaxLevel,
       laborReducePercent: s.LaborReducePercent,
+      specialtyCost: s.SpecialtyCost ?? 1,
     })
     addLocalizedNames(localizedNames, 'skill', skillId, s.LocalizedName)
 
