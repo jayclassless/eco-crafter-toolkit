@@ -1,4 +1,4 @@
-import { InputNumber, type InputNumberValueChangeEvent } from 'primereact/inputnumber'
+import { InputNumber, type InputNumberChangeEvent } from 'primereact/inputnumber'
 import { memo } from 'react'
 import type { Store } from 'tinybase'
 
@@ -14,6 +14,10 @@ interface Props {
 // Subscribes to its own userSkills.level cell so typing in the InputNumber
 // re-renders only this one component — no DataTable rebuild. Memoized on
 // userSkillId so unrelated parent re-renders also skip.
+//
+// Uses `onChange` rather than `onValueChange` so typed digits commit live,
+// not only on blur. `onChange` also fires for the +/- spinner buttons, so
+// the showButtons UX still works.
 export const SkillLevelCell = memo(function SkillLevelCell({
   buildStore,
   userSkillId,
@@ -24,11 +28,11 @@ export const SkillLevelCell = memo(function SkillLevelCell({
   return (
     <InputNumber
       value={level}
-      onValueChange={(e: InputNumberValueChangeEvent) => onChange(userSkillId, e.value ?? 1)}
+      onChange={(e: InputNumberChangeEvent) => onChange(userSkillId, e.value ?? 1)}
       min={1}
       max={maxLevel}
       showButtons
-      size={1}
+      inputStyle={{ width: '2.25rem', textAlign: 'center', padding: '0.25rem 0.375rem' }}
     />
   )
 })

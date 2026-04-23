@@ -14,9 +14,23 @@ body {
 }
 
 .p-dropdown .p-dropdown-trigger,
-.p-autocomplete-dropdown,
-.p-inputnumber .p-inputnumber-button {
+.p-autocomplete-dropdown {
   width: 1.8rem;
+}
+
+.p-inputnumber .p-inputnumber-button {
+  width: 1.25rem;
+}
+
+/* PrimeReact's default 3rem width for icon-only buttons overflows narrow
+ * fixed-width columns in compact DataTables — e.g. the Margins table's
+ * delete column — and triggers a spurious horizontal scrollbar. The
+ * :not() excludes InputNumber's spinner buttons, which have their own
+ * sizing rule above. */
+.p-datatable-sm .p-datatable-tbody .p-button.p-button-icon-only:not(.p-inputnumber-button) {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
 }
 
 .p-datatable .p-rowgroup-header td > .p-row-toggler {

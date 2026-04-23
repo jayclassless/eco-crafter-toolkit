@@ -263,7 +263,7 @@ export function SkillsPanel({ buildId, datasetId }: Props) {
           <Column
             header={t('priceCalculator.config.level')}
             body={levelTemplate}
-            style={{ width: '8rem' }}
+            style={{ width: '5rem' }}
           />
           <Column header={t('priceCalculator.config.talents')} body={talentTemplate} />
           <Column body={deleteTemplate} style={{ width: '3rem' }} />
