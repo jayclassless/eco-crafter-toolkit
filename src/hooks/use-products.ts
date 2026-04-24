@@ -24,6 +24,10 @@ export interface Product {
   productItemIds: string[]
   primaryProductId: string
   primaryProductName: string
+  /** userPrices row id for this entry's primary product, or '' when none
+   * exists yet. Used by single-recipe (flat) rows that have no parent to
+   * carry the id. */
+  userPriceId: string
   userMarginId: string
   /** Talent ids that unlock this recipe. Empty when the recipe isn't
    * talent-gated (i.e. the v13+ `RequiresTalentUnlock` flag is off, or the
@@ -190,6 +194,22 @@ export function buildProducts(
     marginByUserRecipeId.set(urm.userRecipeId as string, urm.userMarginId as string)
   }
 
+  // Items the user has moved from Products to Materials. These should not
+  // appear as product rows even if a recipe in the build produces them — the
+  // user-set price wins on the Materials side. Build the userPrices index in
+  // the same pass so per-Product `userPriceId` lookups are O(1).
+  const excludedItems = new Set<string>()
+  const userPriceIdByItem = new Map<string, string>()
+  for (const upId of buildStore.getRowIds('userPrices')) {
+    const up = buildStore.getRow('userPrices', upId)
+    if (up.buildId !== buildId) continue
+    const itemId = up.itemOrTagId as string
+    userPriceIdByItem.set(itemId, upId)
+    if (up.isOverride && up.priceMode === 'manual') {
+      excludedItems.add(itemId)
+    }
+  }
+
   const items: Product[] = []
 
   for (const urId of buildStore.getRowIds('userRecipes')) {
@@ -224,6 +244,7 @@ export function buildProducts(
     // appear in the user's product list.
     for (const productId of productItemIds) {
       if (ingredientIds?.has(productId)) continue
+      if (excludedItems.has(productId)) continue
       const productRow = gameDataStore.getRow('items', productId)
       items.push({
         userRecipeId: urId,
@@ -239,6 +260,7 @@ export function buildProducts(
         productItemIds,
         primaryProductId: productId,
         primaryProductName: getName('item', productId),
+        userPriceId: userPriceIdByItem.get(productId) ?? '',
         userMarginId,
         unlockingTalentIds,
       })

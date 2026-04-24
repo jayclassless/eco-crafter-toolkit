@@ -1,6 +1,7 @@
 import { Button } from 'primereact/button'
 import { Column } from 'primereact/column'
 import { DataTable } from 'primereact/datatable'
+import { Tooltip } from 'primereact/tooltip'
 import { memo, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -10,7 +11,11 @@ import { useLocalizedName } from '@/hooks/use-localized-name'
 import { usePriceManagement } from '@/hooks/use-price-management'
 import { type PriceSignal } from '@/hooks/use-prices-signal'
 import { arrayEquals, shallowEquals, useStableContent } from '@/hooks/use-stable-content'
-import { useStoreRevision, useTableRowIdsRevision } from '@/hooks/use-store-revision'
+import {
+  useCellInTableRevision,
+  useStoreRevision,
+  useTableRowIdsRevision,
+} from '@/hooks/use-store-revision'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { useStores } from '@/stores/providers'
 import type { PriceMode } from '@/types/solver'
@@ -20,8 +25,13 @@ import { ComputedPriceCell } from './ComputedPriceCell'
 import { ManualPriceCell } from './ManualPriceCell'
 import { MaterialDialog } from './MaterialDialog'
 import { MirrorCheckbox } from './MirrorCheckbox'
+import { RowActionsMenu } from './RowActionsMenu'
 import { TagPriceCell } from './TagPriceCell'
 import type { Material, MaterialGroup } from './types'
+
+// Tag rows can use any price-resolution mode; the picker in the action menu
+// shows the full set.
+const TAG_MODE_ORDER: PriceMode[] = ['manual', 'min', 'max', 'avg', 'mirror']
 
 interface Props {
   buildId: string
@@ -65,6 +75,10 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
 
   const buildRev = useStoreRevision(buildStore, BUILD_TABLES)
   const userPricesRowIdsRev = useTableRowIdsRevision(buildStore, USER_PRICES_TABLE)
+  // Toggling `userPrices.isOverride` on an existing row moves an item between
+  // Products and Materials but doesn't add/remove userPrices rows; subscribe
+  // to that one cell so the view-model rebuilds on toggle.
+  const isOverrideRev = useCellInTableRevision(buildStore, 'userPrices', 'isOverride')
   const gameRev = useStoreRevision(gameDataStore, GAME_TABLES)
 
   const rawAllGroups = useMemo<MaterialGroup[]>(
@@ -83,14 +97,19 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
       // `isOverride` (view-model flag). Price *values*, mode, and primary
       // are read by per-cell subscriptions, NOT baked into the view-model,
       // so edits don't invalidate this memo.
+      //
+      // Items with `isOverride=true && priceMode='manual'` have been moved
+      // from Products to Materials by the user. They must appear here even
+      // when the build's recipes produce them, with a manual-price cell.
       const userPriceByItem = new Map<string, { id: string; isOverride: boolean }>()
+      const excludedItemIds = new Set<string>()
       for (const upId of buildStore.getRowIds('userPrices')) {
         const up = buildStore.getRow('userPrices', upId)
         if (up.buildId !== buildId) continue
-        userPriceByItem.set(up.itemOrTagId as string, {
-          id: upId,
-          isOverride: up.isOverride as boolean,
-        })
+        const itemId = up.itemOrTagId as string
+        const isOverride = up.isOverride as boolean
+        userPriceByItem.set(itemId, { id: upId, isOverride })
+        if (isOverride && up.priceMode === 'manual') excludedItemIds.add(itemId)
       }
 
       const ingredientIds = new Set<string>()
@@ -136,6 +155,7 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
         const itemRow = gameDataStore.getRow('items', itemId)
         if (!itemRow) return null
         const up = userPriceByItem.get(itemId)
+        const isExcluded = excludedItemIds.has(itemId)
         return {
           rowKey,
           itemOrTagId: itemId,
@@ -147,7 +167,9 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
           isChild,
           parentTagId,
           parentUserPriceId,
-          isProduced: producedItemIds.has(itemId),
+          // Excluded items render as manual-price even if a recipe produces
+          // them — the user opted out of solver pricing for them.
+          isProduced: !isExcluded && producedItemIds.has(itemId),
         }
       }
 
@@ -162,9 +184,16 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
         }
       }
 
+      // Iterate over ingredients ∪ excluded items so a freshly-excluded
+      // product that no other recipe consumes still gets a Materials row
+      // (so the user can set its price).
+      const candidateIds = new Set<string>(ingredientIds)
+      for (const id of excludedItemIds) candidateIds.add(id)
+
       const groups: MaterialGroup[] = []
-      for (const itemId of ingredientIds) {
-        if (primaryProductIds.has(itemId)) continue
+      for (const itemId of candidateIds) {
+        // Skip primaries unless the user moved them to Materials.
+        if (primaryProductIds.has(itemId) && !excludedItemIds.has(itemId)) continue
         const parent = buildMaterial(itemId, itemId, false, '', '')
         if (!parent) continue
         if (!parent.isTag && tagChildItemIds.has(itemId)) continue
@@ -197,7 +226,17 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
     // unpriced item) without firing on cell edits. The lint rule can't see
     // through the revision counters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [buildId, datasetId, buildStore, gameDataStore, getName, buildRev, userPricesRowIdsRev, gameRev]
+    [
+      buildId,
+      datasetId,
+      buildStore,
+      gameDataStore,
+      getName,
+      buildRev,
+      userPricesRowIdsRev,
+      isOverrideRev,
+      gameRev,
+    ]
   )
   // Preserve reference when semantic content didn't change so the
   // downstream `rows` memo and the DataTable re-render bail out when a
@@ -231,6 +270,7 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
   const setPrice = priceMgmt.setPrice
   const setPriceMode = priceMgmt.setPriceMode
   const setPrimaryItem = priceMgmt.setPrimaryItem
+  const setOverrideAsMaterial = priceMgmt.setOverrideAsMaterial
   const onPriceChange = useCallback(
     (itemOrTagId: string, userPriceId: string, price: number | null) => {
       setPrice(itemOrTagId, price, userPriceId)
@@ -248,6 +288,12 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
       setPrimaryItem(parentTagId, childItemId, parentUserPriceId)
     },
     [setPrimaryItem]
+  )
+  const onMoveToProducts = useCallback(
+    (itemOrTagId: string, userPriceId: string) => {
+      setOverrideAsMaterial(itemOrTagId, false, userPriceId || undefined)
+    },
+    [setOverrideAsMaterial]
   )
 
   const nameTemplate = useCallback(
@@ -270,6 +316,29 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
     []
   )
 
+  const actionsTemplate = useCallback(
+    (row: Material) => {
+      // Override-toggle is meaningful on any row that carries the flag,
+      // including child items under a tag. Price mode is parent-tag only —
+      // children inherit their parent's mode.
+      const moveToProducts = row.isOverride
+        ? () => onMoveToProducts(row.itemOrTagId, row.userPriceId)
+        : undefined
+      const priceMode =
+        row.isTag && !row.isChild
+          ? {
+              itemOrTagId: row.itemOrTagId,
+              userPriceId: row.userPriceId,
+              buildStore,
+              modes: TAG_MODE_ORDER,
+              onSelect: onSelectMode,
+            }
+          : undefined
+      return <RowActionsMenu onMoveToProducts={moveToProducts} priceMode={priceMode} />
+    },
+    [buildStore, onMoveToProducts, onSelectMode]
+  )
+
   const priceTemplate = useCallback(
     (row: Material) => {
       if (row.isTag && !row.isChild) {
@@ -280,7 +349,6 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
             buildStore={buildStore}
             signal={priceSignal}
             onPriceChange={onPriceChange}
-            onSelectMode={onSelectMode}
           />
         )
       }
@@ -288,7 +356,12 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
         return (
           <div className="flex align-items-center justify-content-end gap-1">
             {row.isProduced ? (
-              <ComputedPriceCell itemOrTagId={row.itemOrTagId} signal={priceSignal} showIcon />
+              <ComputedPriceCell
+                itemOrTagId={row.itemOrTagId}
+                signal={priceSignal}
+                showIcon
+                iconTooltip={t('priceCalculator.materials.calculatedFromRecipeTooltip')}
+              />
             ) : (
               <div style={{ width: '5.5rem' }}>
                 <ManualPriceCell
@@ -314,7 +387,12 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
       if (row.isProduced) {
         return (
           <div className="flex justify-content-end">
-            <ComputedPriceCell itemOrTagId={row.itemOrTagId} signal={priceSignal} showIcon />
+            <ComputedPriceCell
+              itemOrTagId={row.itemOrTagId}
+              signal={priceSignal}
+              showIcon
+              iconTooltip={t('priceCalculator.materials.calculatedFromRecipeTooltip')}
+            />
           </div>
         )
       }
@@ -331,7 +409,7 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
         </div>
       )
     },
-    [onPriceChange, onSelectMode, onSelectPrimary, buildStore, priceSignal]
+    [onPriceChange, onSelectPrimary, buildStore, priceSignal, t]
   )
 
   return (
@@ -365,6 +443,7 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
           setSelectedItemId(id)
         }}
       />
+      <Tooltip target=".computed-price-icon" position="top" />
       <DataTable
         value={rows}
         dataKey="rowKey"
@@ -379,6 +458,12 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
           body={priceTemplate}
           style={{ width: '13rem' }}
           headerClassName="p-align-right"
+        />
+        <Column
+          body={actionsTemplate}
+          style={{ width: '2rem' }}
+          bodyStyle={{ paddingLeft: '0.25rem', paddingRight: '0.25rem' }}
+          headerStyle={{ paddingLeft: '0.25rem', paddingRight: '0.25rem' }}
         />
       </DataTable>
     </div>

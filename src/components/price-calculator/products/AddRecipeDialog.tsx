@@ -9,7 +9,11 @@ import { RecipeIcon } from '@/components/common/RecipeIcon'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { buildRecipeProductItemIds, getRecipePrimaryProductRawName } from '@/hooks/use-products'
 import { useRecipeManagement } from '@/hooks/use-recipe-management'
-import { useStoreRevision } from '@/hooks/use-store-revision'
+import {
+  useCellInTableRevision,
+  useStoreRevision,
+  useTableRowIdsRevision,
+} from '@/hooks/use-store-revision'
 import { useStores } from '@/stores/providers'
 
 interface RecipeOption {
@@ -33,6 +37,7 @@ interface Props {
 }
 
 const BUILD_TABLES = ['userSkills'] as const
+const USER_PRICES_TABLE = ['userPrices'] as const
 const GAME_DATA_TABLES = ['recipes'] as const
 
 export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingRecipeIds }: Props) {
@@ -42,6 +47,11 @@ export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingR
   const recipeMgmt = useRecipeManagement(buildId)
 
   const buildRev = useStoreRevision(buildStore, BUILD_TABLES)
+  const userPricesRowIdsRev = useTableRowIdsRevision(buildStore, USER_PRICES_TABLE)
+  // Toggling `userPrices.isOverride` on an existing row should invalidate the
+  // recipe list (so a freshly-overridden item disappears from suggestions
+  // without waiting for a row-id change).
+  const isOverrideRev = useCellInTableRevision(buildStore, 'userPrices', 'isOverride')
   const gameDataRev = useStoreRevision(gameDataStore, GAME_DATA_TABLES)
 
   const { skillRecipes, anyRecipes } = useMemo(() => {
@@ -50,6 +60,18 @@ export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingR
       const row = buildStore.getRow('userSkills', rowId)
       if (row.buildId === buildId) {
         buildSkillIds.add(row.skillId as string)
+      }
+    }
+
+    // Items the user has moved from Products to Materials. Recipes whose
+    // primary product is one of these are useless to add (the solver
+    // ignores them as a producer of that item) so hide them.
+    const excludedItems = new Set<string>()
+    for (const upId of buildStore.getRowIds('userPrices')) {
+      const up = buildStore.getRow('userPrices', upId)
+      if (up.buildId !== buildId) continue
+      if (up.isOverride && up.priceMode === 'manual') {
+        excludedItems.add(up.itemOrTagId as string)
       }
     }
 
@@ -65,6 +87,9 @@ export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingR
       const recipe = gameDataStore.getRow('recipes', rowId)
       if (recipe.datasetId !== datasetId) continue
       if (existingRecipeIds.has(rowId)) continue
+      const productIds = productItemIdsByRecipeId.get(rowId)
+      const primaryProductId = productIds && productIds.length > 0 ? productIds[0] : ''
+      if (primaryProductId && excludedItems.has(primaryProductId)) continue
       const name = getName('recipe', rowId)
       const rawName = getRecipePrimaryProductRawName(gameDataStore, rowId, productItemIdsByRecipeId)
       const option: RecipeOption = { id: rowId, name, rawName }
@@ -87,6 +112,8 @@ export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingR
     existingRecipeIds,
     getName,
     buildRev,
+    userPricesRowIdsRev,
+    isOverrideRev,
     gameDataRev,
   ])
 

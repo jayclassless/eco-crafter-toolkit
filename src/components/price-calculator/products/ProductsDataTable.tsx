@@ -20,7 +20,7 @@ interface Props {
   costTemplate: (row: Row) => ReactNode
   marginTemplate: (row: Row) => ReactNode
   saleTemplate: (row: Row) => ReactNode
-  deleteTemplate: (row: Row) => ReactNode
+  actionsTemplate: (row: Row) => ReactNode
 }
 
 // Memoized DataTable host. `Products` re-renders on any `FILTER_BUILD_TABLES`
@@ -43,7 +43,7 @@ function ProductsDataTableImpl({
   costTemplate,
   marginTemplate,
   saleTemplate,
-  deleteTemplate,
+  actionsTemplate,
 }: Props) {
   return (
     <MarginOptionsContext.Provider value={{ options: margins, defaultMarginId }}>
@@ -69,7 +69,12 @@ function ProductsDataTableImpl({
           style={{ width: '5rem' }}
           headerClassName="p-align-right"
         />
-        <Column body={deleteTemplate} style={{ width: '3rem' }} />
+        <Column
+          body={actionsTemplate}
+          style={{ width: '2rem' }}
+          bodyStyle={{ paddingLeft: '0.25rem', paddingRight: '0.25rem' }}
+          headerStyle={{ paddingLeft: '0.25rem', paddingRight: '0.25rem' }}
+        />
       </DataTable>
     </MarginOptionsContext.Provider>
   )

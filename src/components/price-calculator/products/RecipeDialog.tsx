@@ -25,7 +25,11 @@ import {
 } from '@/hooks/use-prices-signal'
 import { useRecipeManagement } from '@/hooks/use-recipe-management'
 import { buildRecipeBuildState, buildRecipeIndexes } from '@/hooks/use-solver-snapshot'
-import { useStoreRevision, useTableRowIdsRevision } from '@/hooks/use-store-revision'
+import {
+  useCellInTableRevision,
+  useStoreRevision,
+  useTableRowIdsRevision,
+} from '@/hooks/use-store-revision'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { formatQty, resolveRecipeModifiers } from '@/lib/recipe-modifiers'
 import { computeUsedInRecipes, type UsedInRecipe } from '@/lib/used-in-recipes'
@@ -386,6 +390,10 @@ export function RecipeDialog({
   // a userPrices.price change must not invalidate this memo — doing so
   // caused ~2.8s main-thread blocks per keystroke in a material price.
   const buildRecipesRev = useTableRowIdsRevision(buildStore, ['userRecipes', 'userPrices'])
+  // The excluded-item set in the memo below depends on userPrices.isOverride
+  // — flipping it on an existing row doesn't change row IDs, so subscribe to
+  // that one cell across all rows.
+  const isOverrideRev = useCellInTableRevision(buildStore, 'userPrices', 'isOverride')
   // Re-render whenever the solver pushes a new result, so the inline reads
   // via `priceSignal.get(...)` / `priceSignal.getRecipe(...)` above reflect
   // the new numbers (e.g. when the user edits a share %).
@@ -409,6 +417,19 @@ export function RecipeDialog({
     // row reads per rebuild.
     const { productItemIdsByRecipeId, ingredientItemIdsByRecipeId } =
       getGameDataIndexes(gameDataStore)
+    // Items the user has moved from Products to Materials. They must be
+    // treated as not-produced here so the dialog renders an editable price
+    // cell and a Material-link name (instead of locking the row read-only
+    // and routing the name click to a recipe view).
+    const excluded = new Set<string>()
+    for (const upId of buildStore.getRowIds('userPrices')) {
+      const up = buildStore.getRow('userPrices', upId)
+      if (up.buildId !== buildId) continue
+      priceIds.set(up.itemOrTagId as string, upId)
+      if (up.isOverride && up.priceMode === 'manual') {
+        excluded.add(up.itemOrTagId as string)
+      }
+    }
     for (const urId of buildStore.getRowIds('userRecipes')) {
       const ur = buildStore.getRow('userRecipes', urId)
       if (ur.buildId !== buildId) continue
@@ -421,21 +442,20 @@ export function RecipeDialog({
       // its own product doesn't lock that ingredient as read-only.
       for (const itemId of ownProducts) {
         if (ownIngredients.has(itemId)) continue
+        if (excluded.has(itemId)) continue
         produced.add(itemId)
       }
       // The index preserves recipeElements order, so the first product is
-      // the primary (same definition the rest of the app uses).
-      products.add(ownProducts[0])
-    }
-    for (const upId of buildStore.getRowIds('userPrices')) {
-      const up = buildStore.getRow('userPrices', upId)
-      if (up.buildId !== buildId) continue
-      priceIds.set(up.itemOrTagId as string, upId)
+      // the primary (same definition the rest of the app uses). Skip when
+      // the primary has been moved to Materials — the row should render as
+      // a material, not a clickable recipe-product.
+      const primary = ownProducts[0]
+      if (!excluded.has(primary)) products.add(primary)
     }
     return { productItemIds: products, userPriceIdByItem: priceIds, producedItemIds: produced }
-    // buildRecipesRev is the invalidation signal for this memo.
+    // buildRecipesRev / isOverrideRev are the invalidation signals.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildStore, gameDataStore, buildId, recipeId, buildRecipesRev])
+  }, [buildStore, gameDataStore, buildId, recipeId, buildRecipesRev, isOverrideRev])
 
   const gameRev = useStoreRevision(gameDataStore, [
     'recipeElements',

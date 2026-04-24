@@ -59,6 +59,24 @@ export function useTableRowIdsRevision(store: Store, tableIds: readonly string[]
 }
 
 /**
+ * Revision counter that increments on any change to a specific cell across
+ * any row of a table. Useful when a single boolean column gates a view-model
+ * (e.g. `userPrices.isOverride` deciding whether an item appears in Products
+ * or Materials) and you want to invalidate the memo only on changes to that
+ * column — not on every cell edit in the table.
+ */
+export function useCellInTableRevision(store: Store, tableId: string, cellId: string): number {
+  const [rev, setRev] = useState(0)
+  useEffect(() => {
+    const id = store.addCellListener(tableId, null, cellId, () => setRev((r) => r + 1))
+    return () => {
+      store.delListener(id)
+    }
+  }, [store, tableId, cellId])
+  return rev
+}
+
+/**
  * Subscribe to a single cell's value. Returns null if the row doesn't exist.
  * Uses `useSyncExternalStore` so React bails out of re-renders when the
  * scalar value is `===` to the previous snapshot.

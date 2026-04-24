@@ -405,6 +405,10 @@ export function buildSolverSnapshot(
   const primaryTagItems: Record<string, string> = {}
   const primaryRecipeIds: Record<string, string> = {}
   const priceModes: Record<string, PriceMode> = {}
+  // Items the user has moved from Products to Materials. The solver must not
+  // emit a candidate for these — their price comes from `overrides` instead,
+  // so downstream recipes consume them at the user-set price.
+  const excludedItems = new Set<string>()
   for (const rowId of buildStore.getRowIds('userPrices')) {
     const row = buildStore.getRow('userPrices', rowId)
     if (row.buildId !== buildId) continue
@@ -418,6 +422,9 @@ export function buildSolverSnapshot(
     }
     const mode = (row.priceMode as PriceMode) || 'min'
     if (mode !== 'manual') priceModes[itemId] = mode
+    if (row.isOverride && mode === 'manual') {
+      excludedItems.add(itemId)
+    }
     const price = row.price as number
     if (!price) continue
     // Non-manual modes ignore any stored `price` value — switching from
@@ -482,7 +489,18 @@ export function buildSolverSnapshot(
       indexes,
       buildState
     )
-    if (solverRecipe) recipes.push(solverRecipe)
+    if (!solverRecipe) continue
+    if (excludedItems.size > 0) {
+      // Drop excluded items from the recipe's products so the solver doesn't
+      // emit a candidate for them. Reintegrated entries stay (they're
+      // ingredients accounted as cost credits, not sale candidates), and the
+      // remaining products keep their original shares — the excluded item's
+      // share is intentionally "lost" from the recipe's price attribution.
+      solverRecipe.products = solverRecipe.products.filter(
+        (p) => p.isReintegrated || !excludedItems.has(p.itemOrTagId)
+      )
+    }
+    recipes.push(solverRecipe)
   }
 
   return {

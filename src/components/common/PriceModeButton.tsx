@@ -1,20 +1,14 @@
 import { Button } from 'primereact/button'
 import { OverlayPanel } from 'primereact/overlaypanel'
-import { RadioButton } from 'primereact/radiobutton'
 import { memo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Store } from 'tinybase'
 
+import { useOverlayScrollDismiss } from '@/hooks/use-overlay-scroll-dismiss'
 import { useCellValue } from '@/hooks/use-store-revision'
 import type { PriceMode } from '@/types/solver'
 
-const MODE_ICON: Record<PriceMode, string> = {
-  manual: 'pi pi-pencil',
-  min: 'pi pi-sort-amount-down',
-  max: 'pi pi-sort-amount-up',
-  avg: 'pi pi-calculator',
-  mirror: 'pi pi-link',
-}
+import { PRICE_MODE_ICON, PriceModeList } from './PriceModeList'
 
 interface Props {
   entityId: string
@@ -40,6 +34,7 @@ export const PriceModeButton = memo(function PriceModeButton({
 }: Props) {
   const { t } = useTranslation()
   const op = useRef<OverlayPanel>(null)
+  const dismiss = useOverlayScrollDismiss(op)
   const stored = useCellValue<string>(buildStore, 'userPrices', userPriceId, 'priceMode')
   const mode: PriceMode = ((stored ?? 'min') as PriceMode) || 'min'
   const activeMode: PriceMode = modes.includes(mode) ? mode : modes[0]
@@ -47,7 +42,7 @@ export const PriceModeButton = memo(function PriceModeButton({
   return (
     <>
       <Button
-        icon={MODE_ICON[activeMode]}
+        icon={PRICE_MODE_ICON[activeMode]}
         text
         size="small"
         aria-label={t('priceCalculator.materials.priceMode.label')}
@@ -58,28 +53,16 @@ export const PriceModeButton = memo(function PriceModeButton({
         onClick={(e) => op.current?.toggle(e)}
         style={{ width: '1rem', minWidth: '1rem', padding: 0 }}
       />
-      <OverlayPanel ref={op}>
-        <div className="flex flex-column gap-2">
-          {modes.map((m) => {
-            const inputId = `${inputIdPrefix}-${userPriceId || entityId}-${m}`
-            return (
-              <div key={m} className="flex align-items-center gap-2">
-                <RadioButton
-                  inputId={inputId}
-                  checked={activeMode === m}
-                  onChange={() => {
-                    onSelectMode(entityId, m, userPriceId)
-                    op.current?.hide()
-                  }}
-                />
-                <label htmlFor={inputId} className="text-sm cursor-pointer">
-                  <i className={`${MODE_ICON[m]} mr-2`} />
-                  {t(`priceCalculator.materials.priceMode.${m}`)}
-                </label>
-              </div>
-            )
-          })}
-        </div>
+      <OverlayPanel ref={op} onShow={dismiss.onShow} onHide={dismiss.onHide}>
+        <PriceModeList
+          inputIdPrefix={`${inputIdPrefix}-${userPriceId || entityId}`}
+          modes={modes}
+          activeMode={activeMode}
+          onSelectMode={(m) => {
+            onSelectMode(entityId, m, userPriceId)
+            op.current?.hide()
+          }}
+        />
       </OverlayPanel>
     </>
   )

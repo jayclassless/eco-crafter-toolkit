@@ -7,12 +7,14 @@ interface Props {
   itemOrTagId: string
   signal: PriceSignal
   showIcon?: boolean
+  iconTooltip?: string
 }
 
 export const ComputedPriceCell = memo(function ComputedPriceCell({
   itemOrTagId,
   signal,
   showIcon = false,
+  iconTooltip,
 }: Props) {
   const { t } = useTranslation()
   const value = usePriceCell(signal, itemOrTagId, 'costPrice')
@@ -37,7 +39,12 @@ export const ComputedPriceCell = memo(function ComputedPriceCell({
           ? value.toFixed(2)
           : t('priceCalculator.materials.priceMode.noComputedPrice')}
       </div>
-      {showIcon && <i className="pi pi-calculator text-xs text-color-secondary" />}
+      {showIcon && (
+        <i
+          className="pi pi-calculator text-xs text-color-secondary computed-price-icon"
+          data-pr-tooltip={iconTooltip}
+        />
+      )}
     </div>
   )
 })

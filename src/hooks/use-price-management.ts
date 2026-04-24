@@ -22,6 +22,14 @@ export interface UsePriceManagement {
    * priceMode is `'mirror'`). Creates the row if it doesn't exist yet.
    */
   setPrimaryItem: (itemOrTagId: string, primaryItemId: string, userPriceId?: string) => void
+  /**
+   * Moves an item between the Products list and the Materials list.
+   * `value=true` excludes it from products: solver stops emitting candidates
+   * for it and downstream recipes consume it at the user's manual price.
+   * `value=false` lets the solver produce it again. The stored `price` is
+   * preserved either way so re-enabling restores the prior value.
+   */
+  setOverrideAsMaterial: (itemOrTagId: string, value: boolean, userPriceId?: string) => void
 }
 
 export function createPriceManagement(buildStore: Store, buildId: string): UsePriceManagement {
@@ -83,6 +91,34 @@ export function createPriceManagement(buildStore: Store, buildId: string): UsePr
         isOverride: false,
         primaryItemId,
         priceMode: 'mirror',
+      })
+    },
+    setOverrideAsMaterial: (itemOrTagId: string, value: boolean, userPriceId?: string) => {
+      if (userPriceId) {
+        // Coalesce the two cell writes so listeners fire once per toggle.
+        // When excluding (value=true) we also force priceMode='manual' —
+        // the solver only treats override rows as materials when both flags
+        // align (see use-solver-snapshot.ts excludedItems).
+        buildStore.transaction(() => {
+          buildStore.setCell('userPrices', userPriceId, 'isOverride', value)
+          if (value) {
+            const mode = buildStore.getCell('userPrices', userPriceId, 'priceMode')
+            if (mode !== 'manual') {
+              buildStore.setCell('userPrices', userPriceId, 'priceMode', 'manual')
+            }
+          }
+        })
+        return
+      }
+      const id = generateId()
+      buildStore.setRow('userPrices', id, {
+        id,
+        buildId,
+        itemOrTagId,
+        price: 0,
+        isOverride: value,
+        primaryItemId: '',
+        priceMode: 'manual',
       })
     },
   }

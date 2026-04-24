@@ -76,6 +76,8 @@
       "item": "Item",
       "price": "Price",
       "emptyMessage": "Add recipes to see ingredients",
+      "moveToProducts": "Return to Products",
+      "rowActions": "Row actions",
       "priceMode": {
         "manual": "Manual",
         "min": "Minimum",
@@ -85,7 +87,9 @@
         "label": "Price mode",
         "modeTooltip": "Price mode: {mode}",
         "noComputedPrice": "—"
-      }
+      },
+      "calculatedFromTagTooltip": "Calculated based on the cost of the items in this tag",
+      "calculatedFromRecipeTooltip": "Calculated based on a Product recipe"
     },
     "products": {
       "title": "Products ({count})",
@@ -96,6 +100,9 @@
       "product": "Product",
       "emptyMessage": "Add recipes or loosen your filters to see products",
       "onlyLevelAccessible": "Only show level/talent-accessible recipes",
+      "moveToMaterials": "Treat as a Material",
+      "deleteRecipe": "Delete recipe",
+      "rowActions": "Row actions",
       "recipeFilter": {
         "label": "Filter recipes",
         "tooltip": "Filter visible recipes",

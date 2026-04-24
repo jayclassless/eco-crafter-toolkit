@@ -326,6 +326,65 @@ describe('buildProducts', () => {
     // skill:skill-aaa < skill:skill-mining alphabetically
     expect(items.map((i) => i.recipeId)).toEqual(['recipe-zzz', 'recipe-iron'])
   })
+
+  it('attaches the matching userPrices row id to userPriceId', () => {
+    buildStore.setRow('userRecipes', 'ur1', {
+      id: 'ur1',
+      buildId: BUILD_ID,
+      recipeId: 'recipe-iron',
+      roundFactor: 0,
+    })
+    buildStore.setRow('userPrices', 'up1', {
+      id: 'up1',
+      buildId: BUILD_ID,
+      itemOrTagId: 'item-iron',
+      price: 0,
+      isOverride: false,
+      primaryItemId: '',
+      priceMode: 'min',
+    })
+    const [it0] = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    expect(it0.userPriceId).toBe('up1')
+  })
+
+  it('omits products the user moved to Materials (isOverride=true, manual)', () => {
+    buildStore.setRow('userRecipes', 'ur1', {
+      id: 'ur1',
+      buildId: BUILD_ID,
+      recipeId: 'recipe-iron',
+      roundFactor: 0,
+    })
+    buildStore.setRow('userPrices', 'up1', {
+      id: 'up1',
+      buildId: BUILD_ID,
+      itemOrTagId: 'item-iron',
+      price: 9,
+      isOverride: true,
+      primaryItemId: '',
+      priceMode: 'manual',
+    })
+    expect(buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)).toEqual([])
+  })
+
+  it("does not omit products when isOverride=true but priceMode isn't 'manual'", () => {
+    buildStore.setRow('userRecipes', 'ur1', {
+      id: 'ur1',
+      buildId: BUILD_ID,
+      recipeId: 'recipe-iron',
+      roundFactor: 0,
+    })
+    buildStore.setRow('userPrices', 'up1', {
+      id: 'up1',
+      buildId: BUILD_ID,
+      itemOrTagId: 'item-iron',
+      price: 9,
+      isOverride: true,
+      primaryItemId: '',
+      priceMode: 'min',
+    })
+    const items = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    expect(items).toHaveLength(1)
+  })
 })
 
 describe('buildTagIdsByItemId', () => {

@@ -25,7 +25,11 @@ import {
   shallowEquals,
   useStableContent,
 } from '@/hooks/use-stable-content'
-import { useStoreRevision, useTableRowIdsRevision } from '@/hooks/use-store-revision'
+import {
+  useCellInTableRevision,
+  useStoreRevision,
+  useTableRowIdsRevision,
+} from '@/hooks/use-store-revision'
 import { generateId } from '@/lib/ids'
 import { useStores } from '@/stores/providers'
 import type { PriceMode } from '@/types/solver'
@@ -41,6 +45,7 @@ import { ProductsDataTable } from './ProductsDataTable'
 import { RecipeCostCell } from './RecipeCostCell'
 import { RecipeDialog } from './RecipeDialog'
 import { RecipeFilterButton, type TagFilterOption } from './RecipeFilterButton'
+import { RowActionsMenu } from './RowActionsMenu'
 import type { Row } from './types'
 
 // Heavy tables that feed `buildProductGroups`. A change to any of these
@@ -108,6 +113,7 @@ function productEquals(a: Product, b: Product): boolean {
     a.recipePrimaryProductRawName === b.recipePrimaryProductRawName &&
     a.primaryProductId === b.primaryProductId &&
     a.primaryProductName === b.primaryProductName &&
+    a.userPriceId === b.userPriceId &&
     a.userMarginId === b.userMarginId &&
     arrayEquals(a.productItemIds, b.productItemIds, (x, y) => x === y) &&
     arrayEquals(a.unlockingTalentIds, b.unlockingTalentIds, (x, y) => x === y)
@@ -144,13 +150,18 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
 
   const groupsRev = useStoreRevision(buildStore, GROUPS_BUILD_TABLES)
   const userPricesRowIdsRev = useTableRowIdsRevision(buildStore, USER_PRICES_TABLE)
+  // `userPrices.isOverride` flips when the user moves an item between
+  // Products and Materials. The flip happens on an existing row's cell, not
+  // a row add/remove, so neither `groupsRev` nor `userPricesRowIdsRev` would
+  // catch it. Subscribe to that one cell across all rows.
+  const isOverrideRev = useCellInTableRevision(buildStore, 'userPrices', 'isOverride')
   const marginsRev = useStoreRevision(buildStore, MARGINS_BUILD_TABLES)
   const filterRev = useStoreRevision(buildStore, FILTER_BUILD_TABLES)
 
   const rawGroups = useMemo(
     () => buildProductGroups(buildStore, gameDataStore, buildId, getName),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [buildStore, gameDataStore, buildId, getName, groupsRev, userPricesRowIdsRev]
+    [buildStore, gameDataStore, buildId, getName, groupsRev, userPricesRowIdsRev, isOverrideRev]
   )
   // Preserve reference when content is semantically unchanged so downstream
   // memos (`rows`, `ProductsDataTable`) can bail out.
@@ -424,6 +435,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
   const removeRecipe = recipeMgmt.removeRecipe
   const setPriceMode = priceMgmt.setPriceMode
   const setPrimaryItem = priceMgmt.setPrimaryItem
+  const setOverrideAsMaterial = priceMgmt.setOverrideAsMaterial
 
   const handleRecipeMarginChange = useCallback(
     (userRecipeId: string, marginId: string) => setRecipeMargin(userRecipeId, marginId),
@@ -442,6 +454,11 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
     (productId: string, childRecipeId: string, userPriceId: string) =>
       setPrimaryItem(productId, childRecipeId, userPriceId),
     [setPrimaryItem]
+  )
+  const handleMoveToMaterials = useCallback(
+    (productId: string, userPriceId: string) =>
+      setOverrideAsMaterial(productId, true, userPriceId || undefined),
+    [setOverrideAsMaterial]
   )
 
   const handleToggleSkill = useCallback(
@@ -709,22 +726,29 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
     [priceSignal]
   )
 
-  const deleteTemplate = useCallback(
+  const actionsTemplate = useCallback(
     (row: Row) => {
-      if (row.kind === 'parent') return null
-      const userRecipeId =
-        row.kind === 'child' ? row.product.userRecipeId : row.product.userRecipeId
+      if (row.kind === 'parent') {
+        return (
+          <RowActionsMenu
+            onMoveToMaterials={() =>
+              handleMoveToMaterials(row.parent.primaryProductId, row.parent.userPriceId)
+            }
+          />
+        )
+      }
+      if (row.kind === 'child') {
+        return <RowActionsMenu onDeleteRecipe={() => removeRecipe(row.product.userRecipeId)} />
+      }
+      const p = row.product
       return (
-        <Button
-          icon="pi pi-trash"
-          severity="danger"
-          text
-          size="small"
-          onClick={() => removeRecipe(userRecipeId)}
+        <RowActionsMenu
+          onMoveToMaterials={() => handleMoveToMaterials(p.primaryProductId, p.userPriceId)}
+          onDeleteRecipe={() => removeRecipe(p.userRecipeId)}
         />
       )
     },
-    [removeRecipe]
+    [removeRecipe, handleMoveToMaterials]
   )
 
   return (
@@ -812,7 +836,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
         costTemplate={costTemplate}
         marginTemplate={marginTemplate}
         saleTemplate={saleTemplate}
-        deleteTemplate={deleteTemplate}
+        actionsTemplate={actionsTemplate}
       />
     </div>
   )

@@ -1071,5 +1071,85 @@ describe('buildSolverSnapshot', () => {
       expect(r.products[0].share).toBeCloseTo(1)
       expect(r.products[1].share).toBe(0)
     })
+
+    it('drops products the user has moved to Materials (isOverride=true, manual)', () => {
+      setupMultiProductRecipe({ productIds: ['a', 'b'] })
+      // 'a' is excluded — solver must not see it as a product of this recipe.
+      build.setRow('userPrices', 'p-a', {
+        id: 'p-a',
+        buildId: BUILD,
+        itemOrTagId: 'a',
+        price: 7,
+        isOverride: true,
+        primaryItemId: '',
+        priceMode: 'manual',
+      })
+      const snap = buildSolverSnapshot(game, build, BUILD, DS)!
+      const r = snap.recipes[0]
+      expect(r.products.map((p) => p.itemOrTagId)).toEqual(['b'])
+      // Override is still routed into the overrides map so consumers price 'a'
+      // at the user's number.
+      expect(snap.overrides).toEqual({ a: 7 })
+    })
+
+    it('does not drop a reintegrated entry even when the same item is overridden', () => {
+      setupMultiProductRecipe({
+        productIds: ['ingot', 'scrap'],
+        ingredientId: 'scrap',
+      })
+      // User excludes scrap from products. Its reintegrated product entry
+      // still has to stay so the recipe's cost-credit accounting is correct.
+      build.setRow('userPrices', 'p-scrap', {
+        id: 'p-scrap',
+        buildId: BUILD,
+        itemOrTagId: 'scrap',
+        price: 1,
+        isOverride: true,
+        primaryItemId: '',
+        priceMode: 'manual',
+      })
+      const snap = buildSolverSnapshot(game, build, BUILD, DS)!
+      const r = snap.recipes[0]
+      const scrap = r.products.find((p) => p.itemOrTagId === 'scrap')
+      expect(scrap).toBeDefined()
+      expect(scrap!.isReintegrated).toBe(true)
+    })
+
+    it("does not drop a product when isOverride=true but priceMode isn't 'manual'", () => {
+      setupMultiProductRecipe({ productIds: ['a', 'b'] })
+      // Defensive: the toggle flag only counts as "moved to materials" when
+      // priceMode='manual'. Mode mismatch means the row is in some other
+      // transitional state — don't filter.
+      build.setRow('userPrices', 'p-a', {
+        id: 'p-a',
+        buildId: BUILD,
+        itemOrTagId: 'a',
+        price: 7,
+        isOverride: true,
+        primaryItemId: '',
+        priceMode: 'min',
+      })
+      const snap = buildSolverSnapshot(game, build, BUILD, DS)!
+      expect(snap.recipes[0].products.map((p) => p.itemOrTagId).sort()).toEqual(['a', 'b'])
+    })
+
+    it("filters a single-product recipe's sole product to an empty array", () => {
+      setupMultiProductRecipe({ productIds: ['a'] })
+      build.setRow('userPrices', 'p-a', {
+        id: 'p-a',
+        buildId: BUILD,
+        itemOrTagId: 'a',
+        price: 3,
+        isOverride: true,
+        primaryItemId: '',
+        priceMode: 'manual',
+      })
+      const snap = buildSolverSnapshot(game, build, BUILD, DS)!
+      // Recipe is still emitted (its labor/craft costs still count if any
+      // other recipe consumes its outputs in some other build), but no
+      // candidate will be emitted by the solver since products is empty.
+      expect(snap.recipes).toHaveLength(1)
+      expect(snap.recipes[0].products).toEqual([])
+    })
   })
 })
