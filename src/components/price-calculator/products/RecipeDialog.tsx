@@ -4,7 +4,7 @@ import { DataTable } from 'primereact/datatable'
 import { Dialog } from 'primereact/dialog'
 import { InputNumber } from 'primereact/inputnumber'
 import { TabPanel, TabView } from 'primereact/tabview'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CraftingTableIcon } from '@/components/common/CraftingTableIcon'
@@ -360,6 +360,25 @@ export function RecipeDialog({
   useEffect(() => {
     setActiveTabIndex(0)
   }, [recipeId])
+
+  // Keep the dialog from shrinking when the user switches to a tab with less
+  // content (e.g. "Used in Recipes" is often much shorter than "Cost
+  // Components"). Snapshot the current tab's rendered height at switch time
+  // and apply it as a min-height — content can still grow past it, but can't
+  // collapse below. Reset on recipe change so a new recipe starts fresh.
+  const tabContentRef = useRef<HTMLDivElement | null>(null)
+  const [tabMinHeight, setTabMinHeight] = useState<number | undefined>(undefined)
+  useEffect(() => {
+    setTabMinHeight(undefined)
+  }, [recipeId])
+  const handleTabChange = useCallback((e: { index: number }) => {
+    const el = tabContentRef.current
+    if (el) {
+      const h = el.getBoundingClientRect().height
+      if (h > 0) setTabMinHeight((prev) => (prev == null || h > prev ? h : prev))
+    }
+    setActiveTabIndex(e.index)
+  }, [])
 
   useStoreRevision(buildStore, ['userProductShares'])
   // Row-ids-only: the useMemo below only reads userRecipes.recipeId (stable
@@ -763,148 +782,153 @@ export function RecipeDialog({
       dismissableMask
       maximizable
     >
-      <TabView activeIndex={activeTabIndex} onTabChange={(e) => setActiveTabIndex(e.index)}>
-        <TabPanel header={t('priceCalculator.recipe.tabCostComponents')}>
-          <div className="grid">
-            <div className="col-6 flex flex-column">
-              <h4 className="mt-0 mb-2">{t('priceCalculator.recipe.ingredients')}</h4>
-              <DataTable value={ingredients} size="small">
-                <Column
-                  header={t('priceCalculator.recipe.quantity')}
-                  body={quantityTemplate}
-                  style={{ width: '6rem' }}
-                />
-                <Column
-                  header={t('priceCalculator.recipe.item')}
-                  body={ingredientNameTemplate}
-                  footer={subtotalLabelFooter}
-                />
-                <Column
-                  header={t('priceCalculator.recipe.unitPrice')}
-                  body={ingredientPriceTemplate}
-                  style={{ width: '7rem' }}
-                  headerClassName="p-align-right"
-                />
-                <Column
-                  header={t('priceCalculator.recipe.totalCost')}
-                  body={totalTemplate}
-                  footer={subtotalValueFooter(ingredientsSubtotal)}
-                  style={{ width: '6rem' }}
-                  headerClassName="p-align-right"
-                />
-              </DataTable>
-
-              {returnedIngredients.length > 0 && (
-                <>
-                  <h4 className="mt-4 mb-2">{t('priceCalculator.recipe.returnedIngredients')}</h4>
-                  <DataTable value={returnedIngredients} size="small">
-                    <Column
-                      header={t('priceCalculator.recipe.quantity')}
-                      body={quantityTemplate}
-                      style={{ width: '6rem' }}
-                    />
-                    <Column
-                      header={t('priceCalculator.recipe.item')}
-                      body={materialOnlyNameTemplate}
-                      footer={subtotalLabelFooter}
-                    />
-                    <Column
-                      header={t('priceCalculator.recipe.unitPrice')}
-                      body={priceTemplate}
-                      style={{ width: '6rem' }}
-                      headerClassName="p-align-right"
-                    />
-                    <Column
-                      header={t('priceCalculator.recipe.totalCost')}
-                      body={deductedTotalTemplate}
-                      footer={subtotalValueFooter(returnedSubtotal, true)}
-                      style={{ width: '6rem' }}
-                      headerClassName="p-align-right"
-                    />
-                  </DataTable>
-                </>
-              )}
-
-              {additionalCosts.length > 0 && (
-                <>
-                  <h4 className="mt-4 mb-2">{t('priceCalculator.recipe.additionalCosts')}</h4>
-                  <DataTable value={additionalCosts} size="small">
-                    <Column
-                      header={t('priceCalculator.recipe.quantity')}
-                      body={additionalCostQuantityTemplate}
-                      style={{ width: '8rem' }}
-                    />
-                    <Column
-                      header={t('priceCalculator.recipe.item')}
-                      body={additionalCostNameTemplate}
-                      footer={subtotalLabelFooter}
-                    />
-                    <Column
-                      header={t('priceCalculator.recipe.unitPrice')}
-                      body={additionalCostUnitTemplate}
-                      style={{ width: '7rem' }}
-                      headerClassName="p-align-right"
-                    />
-                    <Column
-                      header={t('priceCalculator.recipe.totalCost')}
-                      body={additionalCostTotalTemplate}
-                      footer={subtotalValueFooter(additionalCostsSubtotal)}
-                      style={{ width: '6rem' }}
-                      headerClassName="p-align-right"
-                    />
-                  </DataTable>
-                </>
-              )}
-
-              <div className="mt-auto pt-3">{totalFooter(leftTotal)}</div>
-            </div>
-
-            <div className="col-6 flex flex-column">
-              <h4 className="mt-0 mb-2">{t('priceCalculator.recipe.products')}</h4>
-              <DataTable value={products} size="small">
-                <Column
-                  header={t('priceCalculator.recipe.quantity')}
-                  body={quantityTemplate}
-                  style={{ width: '6rem' }}
-                />
-                <Column header={t('priceCalculator.recipe.item')} body={nameTemplate} />
-                {showShareColumn && (
+      <div
+        ref={tabContentRef}
+        style={tabMinHeight != null ? { minHeight: tabMinHeight } : undefined}
+      >
+        <TabView activeIndex={activeTabIndex} onTabChange={handleTabChange}>
+          <TabPanel header={t('priceCalculator.recipe.tabCostComponents')}>
+            <div className="grid">
+              <div className="col-6 flex flex-column">
+                <h4 className="mt-0 mb-2">{t('priceCalculator.recipe.ingredients')}</h4>
+                <DataTable value={ingredients} size="small">
                   <Column
-                    header={t('priceCalculator.recipe.share')}
-                    body={shareTemplate}
+                    header={t('priceCalculator.recipe.quantity')}
+                    body={quantityTemplate}
                     style={{ width: '6rem' }}
                   />
+                  <Column
+                    header={t('priceCalculator.recipe.item')}
+                    body={ingredientNameTemplate}
+                    footer={subtotalLabelFooter}
+                  />
+                  <Column
+                    header={t('priceCalculator.recipe.unitPrice')}
+                    body={ingredientPriceTemplate}
+                    style={{ width: '7rem' }}
+                    headerClassName="p-align-right"
+                  />
+                  <Column
+                    header={t('priceCalculator.recipe.totalCost')}
+                    body={totalTemplate}
+                    footer={subtotalValueFooter(ingredientsSubtotal)}
+                    style={{ width: '6rem' }}
+                    headerClassName="p-align-right"
+                  />
+                </DataTable>
+
+                {returnedIngredients.length > 0 && (
+                  <>
+                    <h4 className="mt-4 mb-2">{t('priceCalculator.recipe.returnedIngredients')}</h4>
+                    <DataTable value={returnedIngredients} size="small">
+                      <Column
+                        header={t('priceCalculator.recipe.quantity')}
+                        body={quantityTemplate}
+                        style={{ width: '6rem' }}
+                      />
+                      <Column
+                        header={t('priceCalculator.recipe.item')}
+                        body={materialOnlyNameTemplate}
+                        footer={subtotalLabelFooter}
+                      />
+                      <Column
+                        header={t('priceCalculator.recipe.unitPrice')}
+                        body={priceTemplate}
+                        style={{ width: '6rem' }}
+                        headerClassName="p-align-right"
+                      />
+                      <Column
+                        header={t('priceCalculator.recipe.totalCost')}
+                        body={deductedTotalTemplate}
+                        footer={subtotalValueFooter(returnedSubtotal, true)}
+                        style={{ width: '6rem' }}
+                        headerClassName="p-align-right"
+                      />
+                    </DataTable>
+                  </>
                 )}
-                <Column
-                  header={t('priceCalculator.recipe.unitPrice')}
-                  body={priceTemplate}
-                  style={{ width: '6rem' }}
-                  headerClassName="p-align-right"
-                />
-                <Column
-                  header={t('priceCalculator.recipe.totalCost')}
-                  body={totalTemplate}
-                  style={{ width: '6rem' }}
-                  headerClassName="p-align-right"
-                />
-              </DataTable>
 
-              {resolvedMods && resolvedMods.bonuses.length > 0 && (
-                <AppliedBonuses bonuses={resolvedMods.bonuses} />
-              )}
+                {additionalCosts.length > 0 && (
+                  <>
+                    <h4 className="mt-4 mb-2">{t('priceCalculator.recipe.additionalCosts')}</h4>
+                    <DataTable value={additionalCosts} size="small">
+                      <Column
+                        header={t('priceCalculator.recipe.quantity')}
+                        body={additionalCostQuantityTemplate}
+                        style={{ width: '8rem' }}
+                      />
+                      <Column
+                        header={t('priceCalculator.recipe.item')}
+                        body={additionalCostNameTemplate}
+                        footer={subtotalLabelFooter}
+                      />
+                      <Column
+                        header={t('priceCalculator.recipe.unitPrice')}
+                        body={additionalCostUnitTemplate}
+                        style={{ width: '7rem' }}
+                        headerClassName="p-align-right"
+                      />
+                      <Column
+                        header={t('priceCalculator.recipe.totalCost')}
+                        body={additionalCostTotalTemplate}
+                        footer={subtotalValueFooter(additionalCostsSubtotal)}
+                        style={{ width: '6rem' }}
+                        headerClassName="p-align-right"
+                      />
+                    </DataTable>
+                  </>
+                )}
 
-              <div className="mt-auto pt-3">{totalFooter(productsTotal)}</div>
+                <div className="mt-auto pt-3">{totalFooter(leftTotal)}</div>
+              </div>
+
+              <div className="col-6 flex flex-column">
+                <h4 className="mt-0 mb-2">{t('priceCalculator.recipe.products')}</h4>
+                <DataTable value={products} size="small">
+                  <Column
+                    header={t('priceCalculator.recipe.quantity')}
+                    body={quantityTemplate}
+                    style={{ width: '6rem' }}
+                  />
+                  <Column header={t('priceCalculator.recipe.item')} body={nameTemplate} />
+                  {showShareColumn && (
+                    <Column
+                      header={t('priceCalculator.recipe.share')}
+                      body={shareTemplate}
+                      style={{ width: '6rem' }}
+                    />
+                  )}
+                  <Column
+                    header={t('priceCalculator.recipe.unitPrice')}
+                    body={priceTemplate}
+                    style={{ width: '6rem' }}
+                    headerClassName="p-align-right"
+                  />
+                  <Column
+                    header={t('priceCalculator.recipe.totalCost')}
+                    body={totalTemplate}
+                    style={{ width: '6rem' }}
+                    headerClassName="p-align-right"
+                  />
+                </DataTable>
+
+                {resolvedMods && resolvedMods.bonuses.length > 0 && (
+                  <AppliedBonuses bonuses={resolvedMods.bonuses} />
+                )}
+
+                <div className="mt-auto pt-3">{totalFooter(productsTotal)}</div>
+              </div>
             </div>
-          </div>
-        </TabPanel>
-        <TabPanel header={t('priceCalculator.recipe.tabUsedIn')}>
-          <UsedInRecipesTable
-            rows={usedInRows}
-            emptyMessage={t('priceCalculator.recipe.usedInEmpty')}
-            onOpenRecipe={onOpenRecipe ?? (() => {})}
-          />
-        </TabPanel>
-      </TabView>
+          </TabPanel>
+          <TabPanel header={t('priceCalculator.recipe.tabUsedIn')}>
+            <UsedInRecipesTable
+              rows={usedInRows}
+              emptyMessage={t('priceCalculator.recipe.usedInEmpty')}
+              onOpenRecipe={onOpenRecipe ?? (() => {})}
+            />
+          </TabPanel>
+        </TabView>
+      </div>
     </Dialog>
   )
 }

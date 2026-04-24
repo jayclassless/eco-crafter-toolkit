@@ -196,6 +196,8 @@ export function CraftingTablesPanel({ buildId, datasetId }: Props) {
 
   const moduleItemTemplate = (opt: unknown) => {
     const o = opt as PluginModuleOption
+    // The synthetic "None" option at the top of the list has no icon.
+    if (!o.id) return <span className="text-color-secondary">{o.name}</span>
     return (
       <div className="flex align-items-center gap-2">
         <PluginModuleIcon module={{ name: o.rawName }} />
@@ -206,24 +208,38 @@ export function CraftingTablesPanel({ buildId, datasetId }: Props) {
 
   const moduleValueTemplate = (opt: unknown) => {
     const o = opt as PluginModuleOption | null
-    if (!o) return <span>{t('common.none')}</span>
+    // Both branches use the same flex container + min-height so the dropdown
+    // doesn't resize when toggling between "None" and an icon (the icon is
+    // 24px tall; plain text is shorter and caused a visible height shift).
+    // Centering also closes the gap between the icon and the trigger caret
+    // — the label flex-grows to fill this narrow column.
     return (
-      <div className="flex align-items-center" style={{ paddingLeft: '0.25rem' }}>
-        <PluginModuleIcon module={{ name: o.rawName }} />
+      <div className="flex align-items-center justify-content-center" style={{ minHeight: 24 }}>
+        {!o || !o.id ? (
+          <span>{t('common.none')}</span>
+        ) : (
+          <PluginModuleIcon module={{ name: o.rawName }} />
+        )}
       </div>
     )
   }
 
   const moduleTemplate = (row: UserTableRow) =>
     row.pluginModules.length > 0 ? (
+      // `showClear` places an absolutely-positioned X at the right edge of
+      // the dropdown's label area, which overlapped the module icon in this
+      // narrow column. We use a synthetic "None" option at the top of the
+      // list instead so users can explicitly clear a selection.
       <Dropdown
         value={row.pluginModuleId || null}
-        options={row.pluginModules}
+        options={[
+          { id: '', name: t('common.none'), rawName: '', isVanilla: false, percent: 0 },
+          ...row.pluginModules,
+        ]}
         optionLabel="name"
         optionValue="id"
         onChange={(e: DropdownChangeEvent) => tableMgmt.setPluginModule(row.id, e.value ?? '')}
         placeholder={t('common.none')}
-        showClear
         className="w-full"
         itemTemplate={moduleItemTemplate}
         valueTemplate={moduleValueTemplate}
