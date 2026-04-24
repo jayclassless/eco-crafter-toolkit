@@ -1,21 +1,17 @@
 {
-  "app": {
-    "title": "Eco Crafter Toolkit",
-    "description": "Price calculator and planning tools for the game Eco"
-  },
   "common": {
     "otherProfession": "Other",
     "none": "None",
     "notApplicable": "N/A",
     "ok": "OK",
-    "back": "Back"
+    "back": "Back",
+    "clearSearch": "Clear Search",
+    "missingIcon": "Missing Icon"
   },
   "dataset": {
     "selector": {
       "label": "Dataset",
       "import": "Import Dataset",
-      "update": "Update Available",
-      "updateMessage": "{name} has been updated (revision {revision}). Would you like to update? Your builds will be preserved.",
       "noDatasets": "No datasets installed. Please select at least one to get started.",
       "bundledDatasets": "Bundled Datasets"
     },
@@ -23,24 +19,18 @@
       "title": "Import Dataset",
       "upload": "Upload JSON file",
       "name": "Dataset Name",
-      "validate": "Validate",
       "import": "Import",
       "validationErrors": "Validation Errors",
-      "success": "Dataset imported successfully",
       "parseError": "Failed to parse JSON file"
     }
   },
   "build": {
     "selector": {
       "newBuild": "New Build",
-      "defaultName": "Build {number}",
-      "rename": "Rename",
-      "delete": "Delete",
-      "deleteConfirm": "Are you sure you want to delete build \"{name}\"?"
+      "defaultName": "Build {number}"
     }
   },
   "priceCalculator": {
-    "title": "Price Calculator",
     "config": {
       "skills": "Skills",
       "skillsCount": "Skills ({count})",
@@ -55,7 +45,6 @@
       "upgrade": "Upgrade",
       "costPerMinute": "Cost/Min",
       "options": "Options",
-      "buildName": "Build Name",
       "margins": "Margins",
       "addMargin": "Add Margin",
       "marginName": "Name",
@@ -77,10 +66,8 @@
       "cancel": "Cancel"
     },
     "materials": {
-      "title": "Materials",
-      "titleCount": "Materials ({count})",
-      "search": "Search items...",
-      "detailedTags": "Show tag details",
+      "title": "Materials ({count})",
+      "search": "Search materials...",
       "item": "Item",
       "price": "Price",
       "emptyMessage": "Add recipes to see ingredients",
@@ -92,13 +79,11 @@
         "mirror": "Mirror item",
         "label": "Price mode",
         "modeTooltip": "Price mode: {mode}",
-        "mirrorHint": "Pick which associated item to mirror:",
         "noComputedPrice": "—"
       }
     },
     "products": {
-      "title": "Products",
-      "titleCount": "Products ({count})",
+      "title": "Products ({count})",
       "search": "Search recipes...",
       "costPrice": "Cost",
       "salePrice": "Sale",
@@ -158,15 +143,6 @@
       "skill": "Skill",
       "labor": "Labor",
       "craftTime": "Craft Time",
-      "totalIngredientCost": "Total Cost",
-      "reintegrate": "Reintegrate",
-      "sharePresets": {
-        "honest": "Honest",
-        "firstOnly": "First Only",
-        "equal": "Equal",
-        "equilibrate": "Equilibrate"
-      },
-      "roundFactor": "Round Factor",
       "tabCostComponents": "Cost Components",
       "tabUsedIn": "Used in Recipes",
       "usedInEmpty": "No recipes in this build use this recipe's primary product.",
@@ -187,8 +163,6 @@
     "auto": "Auto",
     "themeColor": "Theme Color",
     "uiScale": "UI Scale",
-    "smaller": "Smaller",
-    "larger": "Larger",
     "colors": {
       "amber": "Amber",
       "blue": "Blue",

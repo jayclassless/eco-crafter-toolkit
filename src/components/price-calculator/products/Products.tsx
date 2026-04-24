@@ -730,9 +730,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
   return (
     <div className="flex flex-column flex-1" style={{ minHeight: 0 }}>
       <div className="flex align-items-center gap-2 mb-2">
-        <h3 className="m-0">
-          {t('priceCalculator.products.titleCount', { count: productRowCount })}
-        </h3>
+        <h3 className="m-0">{t('priceCalculator.products.title', { count: productRowCount })}</h3>
         <DebouncedSearchInput
           onDebouncedChange={setDebouncedSearch}
           placeholder={t('priceCalculator.products.search')}

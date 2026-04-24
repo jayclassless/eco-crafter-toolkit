@@ -337,9 +337,7 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
   return (
     <div className="flex flex-column flex-1" style={{ minHeight: 0 }}>
       <div className="flex align-items-center gap-2 mb-2">
-        <h3 className="m-0">
-          {t('priceCalculator.materials.titleCount', { count: topLevelCount })}
-        </h3>
+        <h3 className="m-0">{t('priceCalculator.materials.title', { count: topLevelCount })}</h3>
         <DebouncedSearchInput
           onDebouncedChange={setDebouncedSearch}
           placeholder={t('priceCalculator.materials.search')}

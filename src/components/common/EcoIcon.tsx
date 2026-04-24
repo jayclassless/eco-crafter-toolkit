@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   name: string
@@ -23,6 +24,7 @@ function getIconPath(name: string): string {
 }
 
 export function EcoIcon({ name, size = 24, className, alt = '' }: Props) {
+  const { t } = useTranslation()
   const [failed, setFailed] = useState(false)
 
   if (failed) {
@@ -39,7 +41,7 @@ export function EcoIcon({ name, size = 24, className, alt = '' }: Props) {
         strokeLinejoin="round"
         className={className}
         role="img"
-        aria-label={alt || 'missing icon'}
+        aria-label={alt || t('common.missingIcon')}
       >
         <circle cx="12" cy="12" r="10" />
         <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />

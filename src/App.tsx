@@ -1,5 +1,6 @@
 import { Button } from 'primereact/button'
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { DatasetSetup } from '@/components/dataset/DatasetSetup'
 import { ImportView } from '@/components/import/ImportView'
@@ -11,6 +12,7 @@ import { StoreProvider, useStores } from '@/stores/providers'
 type View = 'main' | 'import'
 
 function AppInner() {
+  const { t } = useTranslation()
   const { gameDataStore } = useStores()
   const [hasDatasets, setHasDatasets] = useState<boolean | null>(null)
   const [view, setView] = useState<View>('main')
@@ -51,7 +53,7 @@ function AppInner() {
         <DatasetSetup onComplete={checkDatasets} />
         <div className="flex justify-content-center mt-3">
           <Button
-            label="Import Dataset"
+            label={t('dataset.selector.import')}
             icon="pi pi-upload"
             text
             onClick={() => setView('import')}

@@ -2,6 +2,7 @@ import { IconField } from 'primereact/iconfield'
 import { InputIcon } from 'primereact/inputicon'
 import { InputText } from 'primereact/inputtext'
 import { memo, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   placeholder?: string
@@ -21,6 +22,7 @@ function DebouncedSearchInputImpl({
   debounceMs = 200,
   onDebouncedChange,
 }: Props) {
+  const { t } = useTranslation()
   const [value, setValue] = useState('')
   const onChangeRef = useRef(onDebouncedChange)
   onChangeRef.current = onDebouncedChange
@@ -46,7 +48,7 @@ function DebouncedSearchInputImpl({
         className="pi pi-times"
         onClick={hasValue ? () => setValue('') : undefined}
         role={hasValue ? 'button' : undefined}
-        aria-label={hasValue ? 'Clear search' : undefined}
+        aria-label={hasValue ? t('common.clearSearch') : undefined}
         style={{
           visibility: hasValue ? 'visible' : 'hidden',
           cursor: hasValue ? 'pointer' : 'default',
