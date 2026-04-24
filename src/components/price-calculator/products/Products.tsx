@@ -618,7 +618,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
             <RecipeIcon primaryProduct={{ name: p.primaryProductRawName }} />
           )}
           <Button
-            label={p.recipeName}
+            label={p.primaryProductName}
             link
             className="p-0"
             pt={{ label: { style: { textAlign: 'left' } } }}
