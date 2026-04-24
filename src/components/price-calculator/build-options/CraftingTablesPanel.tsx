@@ -2,6 +2,7 @@ import { type AutoCompleteCompleteEvent } from 'primereact/autocomplete'
 import { Button } from 'primereact/button'
 import { Column } from 'primereact/column'
 import { DataTable } from 'primereact/datatable'
+import { Dialog } from 'primereact/dialog'
 import { Dropdown, type DropdownChangeEvent } from 'primereact/dropdown'
 import { Panel } from 'primereact/panel'
 import { useCallback, useState } from 'react'
@@ -56,8 +57,10 @@ export function CraftingTablesPanel({ buildId, datasetId }: Props) {
   const { t } = useTranslation()
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
-  const tableMgmt = useCraftingTableManagement(buildId)
+  const tableMgmt = useCraftingTableManagement(buildId, datasetId)
   const [suggestions, setSuggestions] = useState<TableGroup[]>([])
+  const [pendingDeleteTableId, setPendingDeleteTableId] = useState<string | null>(null)
+  const [pendingDeleteRecipeCount, setPendingDeleteRecipeCount] = useState(0)
   useStoreRevision(buildStore, BUILD_TABLES)
 
   const getUserTables = useCallback((): UserTableRow[] => {
@@ -239,13 +242,33 @@ export function CraftingTablesPanel({ buildId, datasetId }: Props) {
     />
   )
 
+  const requestDelete = (userTableId: string) => {
+    const dependents = tableMgmt.getRecipesUsingTable(userTableId)
+    if (dependents.length === 0) {
+      tableMgmt.removeTableWithRecipes(userTableId)
+      return
+    }
+    setPendingDeleteRecipeCount(dependents.length)
+    setPendingDeleteTableId(userTableId)
+  }
+
+  const cancelDelete = () => {
+    setPendingDeleteTableId(null)
+    setPendingDeleteRecipeCount(0)
+  }
+
+  const confirmDelete = () => {
+    if (pendingDeleteTableId) tableMgmt.removeTableWithRecipes(pendingDeleteTableId)
+    cancelDelete()
+  }
+
   const deleteTemplate = (row: UserTableRow) => (
     <Button
       icon="pi pi-trash"
       severity="danger"
       text
       size="small"
-      onClick={() => tableMgmt.removeTable(row.id)}
+      onClick={() => requestDelete(row.id)}
     />
   )
 
@@ -284,6 +307,24 @@ export function CraftingTablesPanel({ buildId, datasetId }: Props) {
           <Column body={deleteTemplate} style={{ width: '3rem' }} />
         </DataTable>
       )}
+      <Dialog
+        header={t('priceCalculator.config.deleteTableTitle')}
+        visible={pendingDeleteTableId !== null}
+        onHide={cancelDelete}
+        footer={
+          <div className="flex justify-content-end gap-2">
+            <Button label={t('priceCalculator.config.cancel')} text onClick={cancelDelete} />
+            <Button
+              label={t('priceCalculator.config.deleteTable')}
+              severity="danger"
+              icon="pi pi-trash"
+              onClick={confirmDelete}
+            />
+          </div>
+        }
+      >
+        <p>{t('priceCalculator.config.deleteTableMessage', { count: pendingDeleteRecipeCount })}</p>
+      </Dialog>
     </Panel>
   )
 }

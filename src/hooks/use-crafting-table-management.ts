@@ -6,7 +6,8 @@ import { useStores } from '@/stores/providers'
 
 export interface UseCraftingTableManagement {
   addTable: (craftingTableId: string) => string
-  removeTable: (userTableId: string) => void
+  getRecipesUsingTable: (userTableId: string) => string[]
+  removeTableWithRecipes: (userTableId: string) => void
   setPluginModule: (userTableId: string, pluginModuleId: string) => void
   setCostPerMinute: (userTableId: string, cost: number) => void
 }
@@ -43,11 +44,21 @@ export function ensureUserCraftingTable(
 
 export function createCraftingTableManagement(
   buildStore: Store,
-  buildId: string
+  gameDataStore: Store,
+  buildId: string,
+  datasetId: string
 ): UseCraftingTableManagement {
-  return {
-    addTable: (craftingTableId: string) => {
-      const id = generateId()
+  const findDefaultMarginId = (): string => {
+    for (const mId of buildStore.getRowIds('userMargins')) {
+      const m = buildStore.getRow('userMargins', mId)
+      if (m.buildId === buildId && m.isDefault) return mId
+    }
+    return ''
+  }
+
+  const addTable = (craftingTableId: string): string => {
+    const id = generateId()
+    buildStore.transaction(() => {
       buildStore.setRow('userCraftingTables', id, {
         id,
         buildId,
@@ -55,11 +66,101 @@ export function createCraftingTableManagement(
         pluginModuleId: '',
         costPerMinute: 0,
       })
-      return id
-    },
-    removeTable: (userTableId: string) => {
+
+      const userSkillIds = new Set<string>()
+      for (const usId of buildStore.getRowIds('userSkills')) {
+        const us = buildStore.getRow('userSkills', usId)
+        if (us.buildId === buildId) userSkillIds.add(us.skillId as string)
+      }
+      if (userSkillIds.size === 0) return
+
+      const existingRecipeIds = new Set<string>()
+      for (const urId of buildStore.getRowIds('userRecipes')) {
+        const ur = buildStore.getRow('userRecipes', urId)
+        if (ur.buildId === buildId) existingRecipeIds.add(ur.recipeId as string)
+      }
+
+      const defaultMarginId = findDefaultMarginId()
+
+      for (const rId of gameDataStore.getRowIds('recipes')) {
+        const recipe = gameDataStore.getRow('recipes', rId)
+        if (recipe.datasetId !== datasetId) continue
+        if (recipe.craftingTableId !== craftingTableId) continue
+        const skillId = recipe.skillId as string
+        if (!skillId || !userSkillIds.has(skillId)) continue
+        if (existingRecipeIds.has(rId)) continue
+
+        const urId = generateId()
+        buildStore.setRow('userRecipes', urId, {
+          id: urId,
+          buildId,
+          recipeId: rId,
+          roundFactor: 0,
+        })
+        if (defaultMarginId) {
+          const urmId = generateId()
+          buildStore.setRow('userRecipeMargins', urmId, {
+            id: urmId,
+            buildId,
+            userRecipeId: urId,
+            userMarginId: defaultMarginId,
+          })
+        }
+      }
+    })
+    return id
+  }
+
+  const getRecipesUsingTable = (userTableId: string): string[] => {
+    const craftingTableId = buildStore.getCell(
+      'userCraftingTables',
+      userTableId,
+      'craftingTableId'
+    ) as string | undefined
+    if (!craftingTableId) return []
+
+    const result: string[] = []
+    for (const urId of buildStore.getRowIds('userRecipes')) {
+      const ur = buildStore.getRow('userRecipes', urId)
+      if (ur.buildId !== buildId) continue
+      const recipeCtId = gameDataStore.getCell(
+        'recipes',
+        ur.recipeId as string,
+        'craftingTableId'
+      ) as string | undefined
+      if (recipeCtId === craftingTableId) result.push(urId)
+    }
+    return result
+  }
+
+  const removeTableWithRecipes = (userTableId: string) => {
+    const affectedUserRecipeIds = new Set(getRecipesUsingTable(userTableId))
+    buildStore.transaction(() => {
+      if (affectedUserRecipeIds.size > 0) {
+        for (const urmId of buildStore.getRowIds('userRecipeMargins')) {
+          const urm = buildStore.getRow('userRecipeMargins', urmId)
+          if (affectedUserRecipeIds.has(urm.userRecipeId as string)) {
+            buildStore.delRow('userRecipeMargins', urmId)
+          }
+        }
+        for (const upsId of buildStore.getRowIds('userProductShares')) {
+          const ups = buildStore.getRow('userProductShares', upsId)
+          if (affectedUserRecipeIds.has(ups.userRecipeId as string)) {
+            buildStore.delRow('userProductShares', upsId)
+          }
+        }
+        for (const urId of affectedUserRecipeIds) {
+          buildStore.delRow('userRecipes', urId)
+        }
+      }
       buildStore.delRow('userCraftingTables', userTableId)
-    },
+    })
+  }
+
+  return {
+    addTable,
+    getRecipesUsingTable,
+    removeTableWithRecipes,
     setPluginModule: (userTableId: string, pluginModuleId: string) => {
       buildStore.setCell('userCraftingTables', userTableId, 'pluginModuleId', pluginModuleId)
     },
@@ -69,7 +170,13 @@ export function createCraftingTableManagement(
   }
 }
 
-export function useCraftingTableManagement(buildId: string): UseCraftingTableManagement {
-  const { buildStore } = useStores()
-  return useMemo(() => createCraftingTableManagement(buildStore, buildId), [buildStore, buildId])
+export function useCraftingTableManagement(
+  buildId: string,
+  datasetId: string
+): UseCraftingTableManagement {
+  const { buildStore, gameDataStore } = useStores()
+  return useMemo(
+    () => createCraftingTableManagement(buildStore, gameDataStore, buildId, datasetId),
+    [buildStore, gameDataStore, buildId, datasetId]
+  )
 }

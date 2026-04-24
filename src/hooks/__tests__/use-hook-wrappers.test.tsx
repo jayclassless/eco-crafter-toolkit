@@ -85,7 +85,7 @@ describe('hook wrappers (provider-backed)', () => {
 
   it('useCraftingTableManagement returns a working ops object', () => {
     setupBuild()
-    const { result } = renderHook(() => useCraftingTableManagement(BUILD), { wrapper })
+    const { result } = renderHook(() => useCraftingTableManagement(BUILD, DATASET), { wrapper })
     const id = result.current.addTable('ct1')
     expect(stores.buildStore.getCell('userCraftingTables', id, 'craftingTableId')).toBe('ct1')
   })
