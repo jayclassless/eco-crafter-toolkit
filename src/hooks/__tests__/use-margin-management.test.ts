@@ -136,6 +136,39 @@ describe('createMarginManagement', () => {
       expect(buildStore.getCell('userMargins', 'm-other', 'isDefault')).toBe(true)
       expect(buildStore.getCell('userRecipeMargins', 'urm1', 'userMarginId')).toBe('m-other')
     })
+
+    it('reassigns affected userProductMargins to the default margin', () => {
+      buildStore.setRow('userProductMargins', 'upm1', {
+        id: 'upm1',
+        buildId: BUILD_ID,
+        itemOrTagId: 'iron-ingot',
+        userMarginId: 'm-other',
+      })
+      mgmt().deleteMargin('m-other')
+      expect(buildStore.getCell('userProductMargins', 'upm1', 'userMarginId')).toBe('m-default')
+    })
+
+    it('leaves unrelated userProductMargins (other builds, other margins) alone', () => {
+      buildStore.setRow('userProductMargins', 'upm-this', {
+        id: 'upm-this',
+        buildId: BUILD_ID,
+        itemOrTagId: 'iron-ingot',
+        userMarginId: 'm-default',
+      })
+      buildStore.setRow('userProductMargins', 'upm-foreign', {
+        id: 'upm-foreign',
+        buildId: 'other-build',
+        itemOrTagId: 'iron-ingot',
+        userMarginId: 'm-other',
+      })
+      mgmt().deleteMargin('m-other')
+      // This build's default-pointing row is untouched
+      expect(buildStore.getCell('userProductMargins', 'upm-this', 'userMarginId')).toBe('m-default')
+      // Foreign build's row is untouched — still points at a margin that never belonged to this build anyway
+      expect(buildStore.getCell('userProductMargins', 'upm-foreign', 'userMarginId')).toBe(
+        'm-other'
+      )
+    })
   })
 
   describe('countAffectedRecipes', () => {
@@ -153,6 +186,28 @@ describe('createMarginManagement', () => {
         userMarginId: 'm-default',
       })
       expect(mgmt().countAffectedRecipes('m-default')).toBe(1)
+    })
+
+    it('includes userProductMargins assignments in the count', () => {
+      buildStore.setRow('userRecipeMargins', 'urm1', {
+        id: 'urm1',
+        buildId: BUILD_ID,
+        userRecipeId: 'ur1',
+        userMarginId: 'm-default',
+      })
+      buildStore.setRow('userProductMargins', 'upm1', {
+        id: 'upm1',
+        buildId: BUILD_ID,
+        itemOrTagId: 'iron-ingot',
+        userMarginId: 'm-default',
+      })
+      buildStore.setRow('userProductMargins', 'upm-foreign', {
+        id: 'upm-foreign',
+        buildId: 'other-build',
+        itemOrTagId: 'iron-ingot',
+        userMarginId: 'm-default',
+      })
+      expect(mgmt().countAffectedRecipes('m-default')).toBe(2)
     })
   })
 })

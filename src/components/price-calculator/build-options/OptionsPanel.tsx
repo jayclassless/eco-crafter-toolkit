@@ -141,7 +141,7 @@ export function OptionsPanel({ buildId, onDeleteBuild }: Props) {
       severity="danger"
       text
       size="small"
-      disabled={margins.length <= 1}
+      disabled={row.isDefault || margins.length <= 1}
       onClick={() => requestDeleteMargin(row.id)}
     />
   )

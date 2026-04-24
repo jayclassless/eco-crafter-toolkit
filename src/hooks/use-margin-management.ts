@@ -66,6 +66,10 @@ export function createMarginManagement(buildStore: Store, buildId: string): UseM
       const urm = buildStore.getRow('userRecipeMargins', urmId)
       if (urm.buildId === buildId && urm.userMarginId === marginId) count++
     }
+    for (const upmId of buildStore.getRowIds('userProductMargins')) {
+      const upm = buildStore.getRow('userProductMargins', upmId)
+      if (upm.buildId === buildId && upm.userMarginId === marginId) count++
+    }
     return count
   }
 
@@ -88,6 +92,12 @@ export function createMarginManagement(buildStore: Store, buildId: string): UseM
           const urm = buildStore.getRow('userRecipeMargins', urmId)
           if (urm.buildId === buildId && urm.userMarginId === marginId) {
             buildStore.setCell('userRecipeMargins', urmId, 'userMarginId', fallback.id)
+          }
+        }
+        for (const upmId of buildStore.getRowIds('userProductMargins')) {
+          const upm = buildStore.getRow('userProductMargins', upmId)
+          if (upm.buildId === buildId && upm.userMarginId === marginId) {
+            buildStore.setCell('userProductMargins', upmId, 'userMarginId', fallback.id)
           }
         }
       }
