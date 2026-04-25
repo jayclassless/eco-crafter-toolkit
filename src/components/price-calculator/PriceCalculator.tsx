@@ -1,5 +1,6 @@
 import { Button } from 'primereact/button'
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 
 import { DatasetSelector } from '@/components/dataset/DatasetSelector'
 import { SettingsSidebar } from '@/components/settings/SettingsSidebar'
@@ -15,8 +16,10 @@ import { Materials } from './materials/Materials'
 import { Products } from './products/Products'
 
 export function PriceCalculator() {
+  const { datasetId, buildId } = useParams<{ datasetId: string; buildId: string }>()
+  const navigate = useNavigate()
   const { gameDataStore, buildStore, uiStore } = useStores()
-  const { getBuilds, createBuild, deleteBuild } = useBuild()
+  const { deleteBuild } = useBuild()
   const { result, recalculate } = usePriceSolver()
   const { buildSnapshot } = useSolverSnapshot()
   // Holds the latest computed prices in an out-of-React store. ProductsImpl
@@ -25,58 +28,44 @@ export function PriceCalculator() {
   // DataTable never re-renders on a new solver result.
   const priceSignal = usePriceSignal()
 
-  const [activeDatasetId, setActiveDatasetId] = useState('')
-  const [activeBuildId, setActiveBuildId] = useState('')
   const [settingsVisible, setSettingsVisible] = useState(false)
 
-  // Initialize active dataset
+  // URL is the source of truth. Stale or hand-edited segments are caught
+  // here and redirected; the BuildRedirect / RootRedirect routes pick
+  // sensible defaults from there.
+  const datasetValid = !!datasetId && gameDataStore.hasRow('datasets', datasetId)
+  const buildExists = !!buildId && buildStore.hasRow('builds', buildId)
+  const buildDatasetId = buildExists
+    ? (buildStore.getCell('builds', buildId, 'datasetId') as string)
+    : null
+  const buildValid = datasetValid && buildExists && buildDatasetId === datasetId
+
+  // Persist last-used ids. RootRedirect uses activeDatasetId to pick a
+  // landing page next visit; purge-data clears activeBuildId when its
+  // build is deleted (src/lib/purge-data.ts).
   useEffect(() => {
-    const stored = uiStore.getCell('uiState', 'main', 'activeDatasetId') as string
-    const allIds = gameDataStore.getRowIds('datasets')
-    if (stored && allIds.includes(stored)) {
-      setActiveDatasetId(stored)
-    } else if (allIds.length > 0) {
-      setActiveDatasetId(allIds[0])
+    if (buildValid && datasetId) {
+      uiStore.setCell('uiState', 'main', 'activeDatasetId', datasetId)
     }
-  }, [gameDataStore, uiStore])
+  }, [buildValid, datasetId, uiStore])
 
-  // Initialize active build when dataset changes
   useEffect(() => {
-    if (!activeDatasetId) return
-
-    const stored = uiStore.getCell('uiState', 'main', 'activeBuildId') as string
-    const builds = getBuilds(activeDatasetId)
-
-    if (stored && builds.some((b) => b.id === stored)) {
-      setActiveBuildId(stored)
-    } else if (builds.length > 0) {
-      setActiveBuildId(builds[0].id as string)
-    } else {
-      const newId = createBuild(activeDatasetId, 'Build 1')
-      setActiveBuildId(newId)
+    if (buildValid && buildId) {
+      uiStore.setCell('uiState', 'main', 'activeBuildId', buildId)
     }
-  }, [activeDatasetId, getBuilds, createBuild, uiStore])
-
-  // Persist selections
-  useEffect(() => {
-    if (activeDatasetId) uiStore.setCell('uiState', 'main', 'activeDatasetId', activeDatasetId)
-  }, [activeDatasetId, uiStore])
-
-  useEffect(() => {
-    if (activeBuildId) uiStore.setCell('uiState', 'main', 'activeBuildId', activeBuildId)
-  }, [activeBuildId, uiStore])
+  }, [buildValid, buildId, uiStore])
 
   // Trigger solver when build data changes. The snapshot build is expensive
   // (it reads thousands of rows) so we pass a thunk that `recalculate` will
   // invoke *after* its debounce window — collapsing bursts of mutations into
   // a single snapshot build off the click path.
   const triggerSolver = useCallback(() => {
-    if (!activeBuildId || !activeDatasetId) return
-    recalculate(() => buildSnapshot(activeBuildId, activeDatasetId))
-  }, [activeBuildId, activeDatasetId, buildSnapshot, recalculate])
+    if (!buildValid || !buildId || !datasetId) return
+    recalculate(() => buildSnapshot(buildId, datasetId))
+  }, [buildValid, buildId, datasetId, buildSnapshot, recalculate])
 
   useEffect(() => {
-    if (!activeBuildId) return
+    if (!buildValid || !buildId) return
 
     // Only re-run the solver on tables it actually reads. Filter-only tables
     // (`hiddenSkills`, `hiddenCraftingTables`) purely affect which Products
@@ -112,19 +101,13 @@ export function PriceCalculator() {
     return () => {
       for (const id of listenerIds) buildStore.delListener(id)
     }
-  }, [activeBuildId, buildStore, triggerSolver])
+  }, [buildValid, buildId, buildStore, triggerSolver])
 
   const handleDeleteBuild = useCallback(() => {
-    const builds = getBuilds(activeDatasetId)
-    deleteBuild(activeBuildId)
-    const remaining = builds.filter((b) => b.id !== activeBuildId)
-    if (remaining.length > 0) {
-      setActiveBuildId(remaining[0].id as string)
-    } else {
-      const newId = createBuild(activeDatasetId, 'Build 1')
-      setActiveBuildId(newId)
-    }
-  }, [activeBuildId, activeDatasetId, getBuilds, deleteBuild, createBuild])
+    if (!buildId || !datasetId) return
+    deleteBuild(buildId)
+    navigate(`/${datasetId}/calculator`)
+  }, [buildId, datasetId, deleteBuild, navigate])
 
   // Push new solver results into the out-of-React price signal. Cells that
   // subscribe via `usePriceCell` wake up individually; no React re-render
@@ -135,16 +118,20 @@ export function PriceCalculator() {
     priceSignal.setAll(result?.prices ?? {}, result?.recipePrices ?? {}, result?.recipeCosts ?? {})
   }, [result, priceSignal])
 
-  if (!activeDatasetId || !activeBuildId) return null
+  if (!datasetId || !datasetValid) return <Navigate to="/" replace />
+  if (!buildId || !buildValid) return <Navigate to={`/${datasetId}/calculator`} replace />
 
   return (
     <div className="flex flex-column h-screen">
       <div className="flex align-items-center gap-3 p-2 pb-0">
-        <DatasetSelector activeDatasetId={activeDatasetId} onSelect={setActiveDatasetId} />
+        <DatasetSelector
+          activeDatasetId={datasetId}
+          onSelect={(id) => navigate(`/${id}/calculator`)}
+        />
         <BuildSelector
-          datasetId={activeDatasetId}
-          activeBuildId={activeBuildId}
-          onSelect={setActiveBuildId}
+          datasetId={datasetId}
+          activeBuildId={buildId}
+          onSelect={(id) => navigate(`/${datasetId}/calculator/${id}`)}
         />
         <Button
           icon="pi pi-bars"
@@ -156,21 +143,13 @@ export function PriceCalculator() {
 
       <div className="flex flex-1 overflow-hidden">
         <div className="col-3 overflow-y-auto p-3">
-          <ConfigPanel
-            buildId={activeBuildId}
-            datasetId={activeDatasetId}
-            onDeleteBuild={handleDeleteBuild}
-          />
+          <ConfigPanel buildId={buildId} datasetId={datasetId} onDeleteBuild={handleDeleteBuild} />
         </div>
         <div className="col-4 p-3 flex flex-column" style={{ minHeight: 0 }}>
-          <Materials
-            buildId={activeBuildId}
-            datasetId={activeDatasetId}
-            priceSignal={priceSignal}
-          />
+          <Materials buildId={buildId} datasetId={datasetId} priceSignal={priceSignal} />
         </div>
         <div className="col-5 p-3 flex flex-column" style={{ minHeight: 0 }}>
-          <Products buildId={activeBuildId} datasetId={activeDatasetId} priceSignal={priceSignal} />
+          <Products buildId={buildId} datasetId={datasetId} priceSignal={priceSignal} />
         </div>
       </div>
       <SettingsSidebar visible={settingsVisible} onHide={() => setSettingsVisible(false)} />

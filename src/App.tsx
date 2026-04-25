@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
+import { HashRouter } from 'react-router-dom'
 
-import { PriceCalculator } from '@/components/price-calculator/PriceCalculator'
+import { AppRoutes } from '@/components/routing/AppRoutes'
 import { ThemeProvider } from '@/components/settings/ThemeProvider'
 import { markFirstRenderReady } from '@/lib/app-ready'
 import { markLoaderMilestone } from '@/lib/loader-progress'
@@ -15,15 +16,17 @@ function AppInner() {
     markLoaderMilestone('firstRender')
   }, [])
 
-  return <PriceCalculator />
+  return <AppRoutes />
 }
 
 export function App() {
   return (
-    <StoreProvider>
-      <ThemeProvider>
-        <AppInner />
-      </ThemeProvider>
-    </StoreProvider>
+    <HashRouter>
+      <StoreProvider>
+        <ThemeProvider>
+          <AppInner />
+        </ThemeProvider>
+      </StoreProvider>
+    </HashRouter>
   )
 }
