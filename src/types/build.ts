@@ -34,6 +34,7 @@ export interface UserRecipe {
   buildId: string
   recipeId: string
   roundFactor: number
+  favorite: boolean
 }
 
 export interface UserPrice {
@@ -67,6 +68,7 @@ export interface UserSettings {
   showUnskilledRecipes: boolean
   onlyLevelAccessible: boolean
   applyMarginBetweenSkills: boolean
+  showOnlyFavorites: boolean
 }
 
 export interface ComputedPrice {

@@ -40,10 +40,12 @@ import { ItemCostCell } from './ItemCostCell'
 import { ItemSaleCell } from './ItemSaleCell'
 import { MarginCell } from './MarginCell'
 import { MirrorChildCheckbox } from './MirrorChildCheckbox'
+import { ParentFavoriteStar } from './ParentFavoriteStar'
 import { ProductParentName } from './ProductParentName'
 import { ProductsDataTable } from './ProductsDataTable'
 import { RecipeCostCell } from './RecipeCostCell'
 import { RecipeDialog } from './RecipeDialog'
+import { RecipeFavoriteStar } from './RecipeFavoriteStar'
 import { RecipeFilterButton, type TagFilterOption } from './RecipeFilterButton'
 import { RowActionsMenu } from './RowActionsMenu'
 import type { Row } from './types'
@@ -90,6 +92,7 @@ const PRODUCT_MODE_ORDER: PriceMode[] = ['min', 'max', 'avg', 'mirror']
 // 500+ rows on a single skill-level click.
 const EMPTY_LEVEL_MAP: Map<string, number> = new Map()
 const EMPTY_TALENT_SET: Set<string> = new Set()
+const EMPTY_FAVORITE_SET: Set<string> = new Set()
 
 // `buildProductGroups` produces a new array of new objects on every
 // invocation, even when the underlying data hasn't meaningfully changed.
@@ -157,6 +160,11 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
   const isOverrideRev = useCellInTableRevision(buildStore, 'userPrices', 'isOverride')
   const marginsRev = useStoreRevision(buildStore, MARGINS_BUILD_TABLES)
   const filterRev = useStoreRevision(buildStore, FILTER_BUILD_TABLES)
+  // userRecipes.favorite gates the showOnlyFavorites filter. Tracked here on
+  // its own column-level revision so favorite toggles bump only `filterRaw`
+  // (and `childVisible` via the resulting Set) — they don't invalidate the
+  // expensive `buildProductGroups` view-model that GROUPS_BUILD_TABLES feeds.
+  const favoriteCellRev = useCellInTableRevision(buildStore, 'userRecipes', 'favorite')
 
   const rawGroups = useMemo(
     () => buildProductGroups(buildStore, gameDataStore, buildId, getName),
@@ -187,6 +195,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
     let showPartsFlag = true
     let showUntaggedFlag = true
     let levelOnly = false
+    let onlyFavorites = false
     for (const rowId of buildStore.getRowIds('userSettings')) {
       const row = buildStore.getRow('userSettings', rowId)
       if (row.buildId !== buildId) continue
@@ -194,6 +203,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       showPartsFlag = row.showParts as boolean
       showUntaggedFlag = row.showUntagged as boolean
       levelOnly = row.onlyLevelAccessible as boolean
+      onlyFavorites = row.showOnlyFavorites as boolean
       break
     }
     // Skill levels and active talents only feed `childVisible` when
@@ -242,26 +252,44 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       if (row.buildId !== buildId) continue
       hiddenTagSet.add(row.tagId as string)
     }
+    // Skip the userRecipes scan when the favorites filter is off — the empty
+    // sentinel is referentially stable so `childVisible` keeps its identity
+    // across favorite-cell toggles when not filtering.
+    const favoriteUserRecipeIds = onlyFavorites
+      ? (() => {
+          const s = new Set<string>()
+          for (const rowId of buildStore.getRowIds('userRecipes')) {
+            const row = buildStore.getRow('userRecipes', rowId)
+            if (row.buildId !== buildId) continue
+            if (row.favorite) s.add(rowId)
+          }
+          return s
+        })()
+      : EMPTY_FAVORITE_SET
     return {
       showUnskilledRecipes: showUnskilled,
       showParts: showPartsFlag,
       showUntagged: showUntaggedFlag,
       onlyLevelAccessible: levelOnly,
+      showOnlyFavorites: onlyFavorites,
       userSkillLevels: skillLevels,
       activeTalentIds: activeTalents,
       hiddenSkills: hidden,
       hiddenCraftingTables: hiddenTables,
       hiddenTags: hiddenTagSet,
+      favoriteUserRecipeIds,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildStore, buildId, filterRev])
+  }, [buildStore, buildId, filterRev, favoriteCellRev])
 
-  const { showUnskilledRecipes, showParts, showUntagged, onlyLevelAccessible } = filterRaw
+  const { showUnskilledRecipes, showParts, showUntagged, onlyLevelAccessible, showOnlyFavorites } =
+    filterRaw
   const userSkillLevels = useStableContent(filterRaw.userSkillLevels, mapEquals)
   const activeTalentIds = useStableContent(filterRaw.activeTalentIds, setEquals)
   const hiddenSkills = useStableContent(filterRaw.hiddenSkills, setEquals)
   const hiddenCraftingTables = useStableContent(filterRaw.hiddenCraftingTables, setEquals)
   const hiddenTags = useStableContent(filterRaw.hiddenTags, setEquals)
+  const favoriteUserRecipeIds = useStableContent(filterRaw.favoriteUserRecipeIds, setEquals)
 
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [addDialogVisible, setAddDialogVisible] = useState(false)
@@ -336,6 +364,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
 
   const childVisible = useCallback(
     (c: Product): boolean => {
+      if (showOnlyFavorites && !favoriteUserRecipeIds.has(c.userRecipeId)) return false
       if (!showUnskilledRecipes && !c.skillId) return false
       if (onlyLevelAccessible && c.skillId) {
         const level = userSkillLevels.get(c.skillId) ?? 0
@@ -367,6 +396,8 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       return true
     },
     [
+      showOnlyFavorites,
+      favoriteUserRecipeIds,
       showUnskilledRecipes,
       onlyLevelAccessible,
       userSkillLevels,
@@ -402,6 +433,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
           rowKey: `parent::${parent.primaryProductId}`,
           parent,
           childCount: visibleChildren.length,
+          childUserRecipeIds: visibleChildren.map((c) => c.userRecipeId),
         })
         for (const c of visibleChildren) {
           out.push({
@@ -433,6 +465,8 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
   const setRecipeMargin = recipeMgmt.setRecipeMargin
   const setProductMargin = recipeMgmt.setProductMargin
   const removeRecipe = recipeMgmt.removeRecipe
+  const setRecipeFavorite = recipeMgmt.setRecipeFavorite
+  const setRecipesFavorite = recipeMgmt.setRecipesFavorite
   const setPriceMode = priceMgmt.setPriceMode
   const setPrimaryItem = priceMgmt.setPrimaryItem
   const setOverrideAsMaterial = priceMgmt.setOverrideAsMaterial
@@ -459,6 +493,15 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
     (productId: string, userPriceId: string) =>
       setOverrideAsMaterial(productId, true, userPriceId || undefined),
     [setOverrideAsMaterial]
+  )
+  const handleToggleFavorite = useCallback(
+    (userRecipeId: string, favorite: boolean) => setRecipeFavorite(userRecipeId, favorite),
+    [setRecipeFavorite]
+  )
+  const handleToggleAllFavorites = useCallback(
+    (userRecipeIds: readonly string[], favorite: boolean) =>
+      setRecipesFavorite(userRecipeIds, favorite),
+    [setRecipesFavorite]
   )
 
   const handleToggleSkill = useCallback(
@@ -601,19 +644,31 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
     (row: Row) => {
       if (row.kind === 'parent') {
         return (
-          <ProductParentName
-            parent={row.parent}
-            userPriceId={row.parent.userPriceId}
-            buildStore={buildStore}
-            signal={priceSignal}
-            onOpenRecipe={setSelectedRecipeId}
-          />
+          <div className="flex align-items-center gap-2">
+            <ParentFavoriteStar
+              buildStore={buildStore}
+              childUserRecipeIds={row.childUserRecipeIds}
+              onToggleAll={handleToggleAllFavorites}
+            />
+            <ProductParentName
+              parent={row.parent}
+              userPriceId={row.parent.userPriceId}
+              buildStore={buildStore}
+              signal={priceSignal}
+              onOpenRecipe={setSelectedRecipeId}
+            />
+          </div>
         )
       }
       if (row.kind === 'child') {
         const p = row.product
         return (
           <div className="flex align-items-center gap-2" style={{ paddingLeft: '1.5rem' }}>
+            <RecipeFavoriteStar
+              buildStore={buildStore}
+              userRecipeId={p.userRecipeId}
+              onToggle={handleToggleFavorite}
+            />
             {p.recipePrimaryProductRawName && (
               <RecipeIcon primaryProduct={{ name: p.recipePrimaryProductRawName }} />
             )}
@@ -631,6 +686,11 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       const p = row.product
       return (
         <div className="flex align-items-center gap-2">
+          <RecipeFavoriteStar
+            buildStore={buildStore}
+            userRecipeId={p.userRecipeId}
+            onToggle={handleToggleFavorite}
+          />
           {p.primaryProductRawName && (
             <RecipeIcon primaryProduct={{ name: p.primaryProductRawName }} />
           )}
@@ -644,7 +704,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
         </div>
       )
     },
-    [buildStore, priceSignal]
+    [buildStore, priceSignal, handleToggleFavorite, handleToggleAllFavorites]
   )
 
   const costTemplate = useCallback(
@@ -783,6 +843,23 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
           onToggleOnlyLevelAccessible={() =>
             settingsMgmt.setSetting('onlyLevelAccessible', !onlyLevelAccessible)
           }
+        />
+        <Button
+          icon={showOnlyFavorites ? 'pi pi-star-fill' : 'pi pi-star'}
+          text={!showOnlyFavorites}
+          size="small"
+          aria-label={
+            showOnlyFavorites
+              ? t('priceCalculator.products.favoritesFilter.toggleOff')
+              : t('priceCalculator.products.favoritesFilter.toggleOn')
+          }
+          tooltip={
+            showOnlyFavorites
+              ? t('priceCalculator.products.favoritesFilter.toggleOff')
+              : t('priceCalculator.products.favoritesFilter.toggleOn')
+          }
+          tooltipOptions={{ position: 'bottom' }}
+          onClick={() => settingsMgmt.setSetting('showOnlyFavorites', !showOnlyFavorites)}
         />
         <Button
           icon="pi pi-plus"

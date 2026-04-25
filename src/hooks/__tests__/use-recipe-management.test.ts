@@ -415,4 +415,61 @@ describe('createRecipeManagement', () => {
       expect(sharesFor(ur)).toEqual({})
     })
   })
+
+  describe('setRecipeFavorite', () => {
+    it('flips the favorite cell from false to true', () => {
+      const id = mgmt().addRecipe('recipe-iron')
+      expect(buildStore.getCell('userRecipes', id, 'favorite')).toBe(false)
+      mgmt().setRecipeFavorite(id, true)
+      expect(buildStore.getCell('userRecipes', id, 'favorite')).toBe(true)
+    })
+
+    it('flips the favorite cell from true to false', () => {
+      const id = mgmt().addRecipe('recipe-iron')
+      mgmt().setRecipeFavorite(id, true)
+      mgmt().setRecipeFavorite(id, false)
+      expect(buildStore.getCell('userRecipes', id, 'favorite')).toBe(false)
+    })
+
+    it('does not affect other recipes', () => {
+      const a = mgmt().addRecipe('recipe-iron')
+      const b = mgmt().addRecipe('recipe-copper')
+      mgmt().setRecipeFavorite(a, true)
+      expect(buildStore.getCell('userRecipes', a, 'favorite')).toBe(true)
+      expect(buildStore.getCell('userRecipes', b, 'favorite')).toBe(false)
+    })
+  })
+
+  describe('setRecipesFavorite', () => {
+    it('sets all listed ids to true', () => {
+      const a = mgmt().addRecipe('recipe-iron')
+      const b = mgmt().addRecipe('recipe-copper')
+      mgmt().setRecipesFavorite([a, b], true)
+      expect(buildStore.getCell('userRecipes', a, 'favorite')).toBe(true)
+      expect(buildStore.getCell('userRecipes', b, 'favorite')).toBe(true)
+    })
+
+    it('sets all listed ids to false', () => {
+      const a = mgmt().addRecipe('recipe-iron')
+      const b = mgmt().addRecipe('recipe-copper')
+      mgmt().setRecipesFavorite([a, b], true)
+      mgmt().setRecipesFavorite([a, b], false)
+      expect(buildStore.getCell('userRecipes', a, 'favorite')).toBe(false)
+      expect(buildStore.getCell('userRecipes', b, 'favorite')).toBe(false)
+    })
+
+    it('is a no-op when given an empty list', () => {
+      const a = mgmt().addRecipe('recipe-iron')
+      mgmt().setRecipesFavorite([], true)
+      expect(buildStore.getCell('userRecipes', a, 'favorite')).toBe(false)
+    })
+
+    it('does not affect ids not in the list', () => {
+      const a = mgmt().addRecipe('recipe-iron')
+      const b = mgmt().addRecipe('recipe-copper')
+      mgmt().setRecipesFavorite([a], true)
+      expect(buildStore.getCell('userRecipes', a, 'favorite')).toBe(true)
+      expect(buildStore.getCell('userRecipes', b, 'favorite')).toBe(false)
+    })
+  })
 })

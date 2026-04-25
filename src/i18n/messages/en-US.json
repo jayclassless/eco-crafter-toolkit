@@ -114,6 +114,16 @@
         "unskilled": "Unskilled",
         "part": "Part",
         "untagged": "Untagged"
+      },
+      "favorite": {
+        "toggleOn": "Mark as favorite",
+        "toggleOff": "Remove from favorites",
+        "toggleAllOn": "Mark all as favorite",
+        "toggleAllOff": "Remove all from favorites"
+      },
+      "favoritesFilter": {
+        "toggleOn": "Show only favorites",
+        "toggleOff": "Show all recipes"
       }
     },
     "addRecipeDialog": {

@@ -11,6 +11,8 @@ export interface ParentRow {
   parent: ProductParent
   /** Child count — kept for potential future use (count badge etc.). */
   childCount: number
+  /** userRecipeIds of the visible children — drives the parent favorite toggle. */
+  childUserRecipeIds: readonly string[]
 }
 
 export interface ChildRow {

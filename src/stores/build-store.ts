@@ -36,6 +36,7 @@ export function createBuildStore() {
       buildId: { type: 'string' },
       recipeId: { type: 'string' },
       roundFactor: { type: 'number', default: 0 },
+      favorite: { type: 'boolean', default: false },
     },
     userPrices: {
       id: { type: 'string' },
@@ -82,6 +83,7 @@ export function createBuildStore() {
       applyMarginBetweenSkills: { type: 'boolean', default: false },
       showParts: { type: 'boolean', default: true },
       showUntagged: { type: 'boolean', default: true },
+      showOnlyFavorites: { type: 'boolean', default: false },
     },
     computedPrices: {
       id: { type: 'string' },

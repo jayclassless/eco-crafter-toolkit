@@ -36,6 +36,7 @@ export function createBuildOps(buildStore: Store, gameDataStore: Store) {
         applyMarginBetweenSkills: false,
         showParts: true,
         showUntagged: true,
+        showOnlyFavorites: false,
       })
 
       // Default margin — must exist before addSkill runs, because addSkill

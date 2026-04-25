@@ -13,6 +13,8 @@ export interface UseRecipeManagement {
   setProductMargin: (productId: string, marginId: string) => void
   setRoundFactor: (userRecipeId: string, factor: number) => void
   setProductShare: (userRecipeId: string, productItemOrTagId: string, percent: number) => void
+  setRecipeFavorite: (userRecipeId: string, favorite: boolean) => void
+  setRecipesFavorite: (userRecipeIds: readonly string[], favorite: boolean) => void
 }
 
 export function createRecipeManagement(
@@ -252,6 +254,19 @@ export function createRecipeManagement(
     })
   }
 
+  const setRecipeFavorite = (userRecipeId: string, favorite: boolean) => {
+    buildStore.setCell('userRecipes', userRecipeId, 'favorite', favorite)
+  }
+
+  const setRecipesFavorite = (userRecipeIds: readonly string[], favorite: boolean) => {
+    if (userRecipeIds.length === 0) return
+    buildStore.transaction(() => {
+      for (const id of userRecipeIds) {
+        buildStore.setCell('userRecipes', id, 'favorite', favorite)
+      }
+    })
+  }
+
   return {
     addRecipe,
     removeRecipe,
@@ -259,6 +274,8 @@ export function createRecipeManagement(
     setProductMargin,
     setRoundFactor,
     setProductShare,
+    setRecipeFavorite,
+    setRecipesFavorite,
   }
 }
 

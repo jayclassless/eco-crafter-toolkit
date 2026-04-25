@@ -15,6 +15,7 @@ import { TagLabel } from '@/components/common/TagLabel'
 import { AppliedBonuses } from '@/components/price-calculator/products/AppliedBonuses'
 import { IngredientPriceCell } from '@/components/price-calculator/products/IngredientPriceCell'
 import { ProductItemName } from '@/components/price-calculator/products/ProductItemName'
+import { RecipeFavoriteStar } from '@/components/price-calculator/products/RecipeFavoriteStar'
 import { UsedInRecipesTable } from '@/components/price-calculator/UsedInRecipesTable'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { usePriceManagement } from '@/hooks/use-price-management'
@@ -97,7 +98,7 @@ export function RecipeDialog({
   const { t } = useTranslation()
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
-  const { setProductShare } = useRecipeManagement(buildId)
+  const { setProductShare, setRecipeFavorite } = useRecipeManagement(buildId)
   const { setPrice } = usePriceManagement(buildId)
 
   // Resolved modifier context for the current recipe. Rebuilt only when the
@@ -760,10 +761,19 @@ export function RecipeDialog({
 
   const additionalCostNameTemplate = (row: AdditionalCostRow) => <span>{row.label}</span>
 
+  const headerUserRecipeId = findUserRecipeId()
+
   const headerNode = (
     <div className="flex align-items-center gap-2">
       {headerRawName && <ItemIcon item={{ name: headerRawName }} size={48} />}
-      <span className="mr-3">{recipeName}</span>
+      <span>{recipeName}</span>
+      {headerUserRecipeId && (
+        <RecipeFavoriteStar
+          buildStore={buildStore}
+          userRecipeId={headerUserRecipeId}
+          onToggle={setRecipeFavorite}
+        />
+      )}
       {skillRawName && (
         <span
           className="flex align-items-center"
@@ -781,7 +791,7 @@ export function RecipeDialog({
         </span>
       )}
       {(isPrimaryProductPart || productTagIds.length > 0) && (
-        <div className="flex align-items-center gap-3 ml-3">
+        <div className="flex align-items-center gap-3">
           {isPrimaryProductPart && <PartLabel title={partLabelTitle} />}
           {productTagIds.map((tagId) => {
             const tagName = getName('item', tagId)
@@ -801,6 +811,7 @@ export function RecipeDialog({
       modal
       dismissableMask
       maximizable
+      focusOnShow={false}
     >
       <div
         ref={tabContentRef}
