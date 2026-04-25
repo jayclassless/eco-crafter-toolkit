@@ -7,6 +7,7 @@ import { ImportView } from '@/components/import/ImportView'
 import { PriceCalculator } from '@/components/price-calculator/PriceCalculator'
 import { ThemeProvider } from '@/components/settings/ThemeProvider'
 import { markFirstRenderReady } from '@/lib/app-ready'
+import { markLoaderMilestone } from '@/lib/loader-progress'
 import { StoreProvider, useStores } from '@/stores/providers'
 
 type View = 'main' | 'import'
@@ -32,6 +33,7 @@ function AppInner() {
   useEffect(() => {
     if (hasDatasets !== null) {
       markFirstRenderReady()
+      markLoaderMilestone('firstRender')
     }
   }, [hasDatasets])
 

@@ -4,6 +4,7 @@ import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-d
 
 import { defaultLocale } from '@/i18n/config'
 import { markStoresReady } from '@/lib/app-ready'
+import { markLoaderMilestone } from '@/lib/loader-progress'
 
 import { createPersistedBuildStore } from './build-store'
 import { createPersistedGameDataStore } from './game-data-store'
@@ -28,11 +29,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     let cancelled = false
 
     async function init() {
-      const [gameData, build, ui] = await Promise.all([
-        createPersistedGameDataStore(),
-        createPersistedBuildStore(),
-        createPersistedUIStore(),
-      ])
+      markLoaderMilestone('storeProviderMounted')
+
+      // Each persister announces its own completion so the loader bar
+      // advances at three discrete points instead of one big jump after
+      // Promise.all. The gameData store dominates total time (~3.9 MB from
+      // IDB), so giving it its own milestone is what makes the bar feel
+      // honest rather than stalling at "stores: 0/1".
+      const gameDataPromise = createPersistedGameDataStore().then((s) => {
+        markLoaderMilestone('persisterGameData')
+        return s
+      })
+      const buildPromise = createPersistedBuildStore()
+      const uiPromise = createPersistedUIStore()
+      void Promise.all([buildPromise, uiPromise]).then(() => {
+        markLoaderMilestone('persistersSmall')
+      })
+
+      const [gameData, build, ui] = await Promise.all([gameDataPromise, buildPromise, uiPromise])
 
       // Warm the localized-name cache for the dataset the app will show first.
       // Without this, every component that calls `useLocalizedName` kicks off
@@ -50,6 +64,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           // Non-fatal: fall back to the hook's on-mount load path.
         }
       }
+      // Fire even on first-run (no dataset yet) so the bar doesn't stall at
+      // the localized-names slot — there's simply no work to do in that case.
+      markLoaderMilestone('localizedNames')
 
       if (!cancelled) {
         const value: StoreContextValue = {

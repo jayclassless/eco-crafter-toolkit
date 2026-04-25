@@ -1,6 +1,7 @@
 import { useEffect, useCallback, type ReactNode } from 'react'
 
 import { markThemeReady } from '@/lib/app-ready'
+import { markLoaderMilestone } from '@/lib/loader-progress'
 import { useStores } from '@/stores/providers'
 
 function resolveMode(themeMode: string): 'light' | 'dark' {
@@ -31,8 +32,14 @@ function ensureThemeLink(href: string): void {
     // Only the very first successful load gates the app-ready signal.
     // Subsequent theme swaps (user changing themes) are best-effort.
     if (created) {
-      const onload = () => markThemeReady()
-      const onerror = () => markThemeReady()
+      const onload = () => {
+        markThemeReady()
+        markLoaderMilestone('theme')
+      }
+      const onerror = () => {
+        markThemeReady()
+        markLoaderMilestone('theme')
+      }
       link.addEventListener('load', onload, { once: true })
       link.addEventListener('error', onerror, { once: true })
     }
@@ -41,6 +48,7 @@ function ensureThemeLink(href: string): void {
     // Defensive: link already pointed at the right href (shouldn't happen
     // on first mount, but don't hang the loader if it does).
     markThemeReady()
+    markLoaderMilestone('theme')
   }
 }
 

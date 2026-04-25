@@ -12,6 +12,8 @@
  * loading screen forever.
  */
 
+import { snapLoaderTo100 } from './loader-progress'
+
 const WATCHDOG_MS = 10000
 const FADE_MS = 150
 
@@ -54,6 +56,10 @@ function reveal(): void {
     clearTimeout(watchdog)
     watchdog = null
   }
+  // Snap the progress bar to 100 before the fade kicks in. Covers both the
+  // happy path (all gates fired) and the watchdog path (some gate stalled,
+  // bar may still be mid-tween).
+  snapLoaderTo100()
   if (typeof document === 'undefined') return
   const loader = document.getElementById('app-loader')
   if (!loader) return
