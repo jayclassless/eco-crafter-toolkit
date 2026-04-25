@@ -2,6 +2,7 @@ import { memo } from 'react'
 import type { Store } from 'tinybase'
 
 import { ManualPriceCell } from '@/components/price-calculator/materials/ManualPriceCell'
+import { useLocalization } from '@/hooks/use-localization'
 import { useCellValue } from '@/hooks/use-store-revision'
 
 interface Props {
@@ -29,6 +30,7 @@ export const IngredientPriceCell = memo(function IngredientPriceCell({
   // Called unconditionally to keep hook order stable; harmless when the row
   // is non-tag or has no userPrices row yet (useCellValue returns null).
   const priceMode = useCellValue<string>(buildStore, 'userPrices', userPriceId, 'priceMode')
+  const { formatPrice } = useLocalization()
 
   const readOnly = isProduced || (isTag && priceMode !== 'manual')
   if (readOnly) {
@@ -46,7 +48,7 @@ export const IngredientPriceCell = memo(function IngredientPriceCell({
           lineHeight: 1.2,
         }}
       >
-        {unitPrice != null ? unitPrice.toFixed(2) : '-'}
+        {unitPrice != null ? formatPrice(unitPrice) : '-'}
       </div>
     )
   }

@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { useLocalization } from '@/hooks/use-localization'
 import { usePriceCell, type PriceSignal } from '@/hooks/use-prices-signal'
 
 interface Props {
@@ -18,6 +19,7 @@ export const ComputedPriceCell = memo(function ComputedPriceCell({
 }: Props) {
   const { t } = useTranslation()
   const value = usePriceCell(signal, itemOrTagId, 'costPrice')
+  const { formatPrice } = useLocalization()
   // Match PrimeReact .p-inputtext box model (0.75rem padding, 1px border,
   // 1rem font-size) so produced-item rows are the same height as rows with
   // an editable PriceField input.
@@ -36,7 +38,7 @@ export const ComputedPriceCell = memo(function ComputedPriceCell({
         }}
       >
         {value != null
-          ? value.toFixed(2)
+          ? formatPrice(value)
           : t('priceCalculator.materials.priceMode.noComputedPrice')}
       </div>
       {showIcon && (

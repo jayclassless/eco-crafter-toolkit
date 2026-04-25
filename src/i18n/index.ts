@@ -2,7 +2,7 @@ import i18n from 'i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 import { initReactI18next } from 'react-i18next'
 
-import { defaultLocale } from './config'
+import { defaultLocale, locales } from './config'
 import enUS from './messages/en-US.json'
 
 void i18n
@@ -10,10 +10,10 @@ void i18n
   .use(initReactI18next)
   .init({
     resources: {
-      'en-US': { translation: enUS },
+      [defaultLocale]: { translation: enUS },
     },
     fallbackLng: defaultLocale,
-    supportedLngs: ['en-US'],
+    supportedLngs: [...locales],
     interpolation: {
       escapeValue: false,
       prefix: '{',

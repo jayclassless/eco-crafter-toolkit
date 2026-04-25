@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
+import { defaultLocale } from '@/i18n/config'
 import { loadIndex, peekIndex, type LocalizedNameIndex } from '@/stores/localized-name-store'
 
 const EMPTY: LocalizedNameIndex = new Map()
@@ -13,7 +14,7 @@ export interface LocalizedNameLookup {
 function peekState(datasetId: string, locale: string) {
   if (!datasetId) return { primary: EMPTY, fallback: EMPTY, ready: false }
   const p = peekIndex(datasetId, locale)
-  const f = locale === 'en-US' ? p : peekIndex(datasetId, 'en-US')
+  const f = locale === defaultLocale ? p : peekIndex(datasetId, defaultLocale)
   if (p && f) return { primary: p, fallback: f, ready: true }
   return { primary: p ?? EMPTY, fallback: f ?? EMPTY, ready: false }
 }
@@ -26,7 +27,10 @@ function peekState(datasetId: string, locale: string) {
  * Before the indexes are ready `getName()` returns '' — consumers handle
  * that the same way they handle genuinely-missing names.
  */
-export function useLocalizedName(datasetId: string, locale: string = 'en-US'): LocalizedNameLookup {
+export function useLocalizedName(
+  datasetId: string,
+  locale: string = defaultLocale
+): LocalizedNameLookup {
   const [primary, setPrimary] = useState<LocalizedNameIndex>(
     () => peekState(datasetId, locale).primary
   )
@@ -45,7 +49,8 @@ export function useLocalizedName(datasetId: string, locale: string = 'en-US'): L
     // Sync cache hit: update state directly (React bails on Object.is-equal
     // values, so a hit-on-first-mount is a no-op) and skip the async path.
     const cachedPrimary = peekIndex(datasetId, locale)
-    const cachedFallback = locale === 'en-US' ? cachedPrimary : peekIndex(datasetId, 'en-US')
+    const cachedFallback =
+      locale === defaultLocale ? cachedPrimary : peekIndex(datasetId, defaultLocale)
     if (cachedPrimary && cachedFallback) {
       setPrimary(cachedPrimary)
       setFallback(cachedFallback)
@@ -57,10 +62,10 @@ export function useLocalizedName(datasetId: string, locale: string = 'en-US'): L
       const primaryIdx = await loadIndex(datasetId, locale)
       if (cancelled) return
       setPrimary(primaryIdx)
-      if (locale === 'en-US') {
+      if (locale === defaultLocale) {
         setFallback(primaryIdx)
       } else {
-        const fallbackIdx = await loadIndex(datasetId, 'en-US')
+        const fallbackIdx = await loadIndex(datasetId, defaultLocale)
         if (cancelled) return
         setFallback(fallbackIdx)
       }

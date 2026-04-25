@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { Store } from 'tinybase'
 import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
 
+import { defaultLocale } from '@/i18n/config'
 import { markStoresReady } from '@/lib/app-ready'
 
 import { createPersistedBuildStore } from './build-store'
@@ -44,7 +45,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         gameData.store.getRowIds('datasets')[0]
       if (activeDatasetId) {
         try {
-          await loadIndex(activeDatasetId, 'en-US')
+          await loadIndex(activeDatasetId, defaultLocale)
         } catch {
           // Non-fatal: fall back to the hook's on-mount load path.
         }

@@ -17,6 +17,7 @@ import { IngredientPriceCell } from '@/components/price-calculator/products/Ingr
 import { ProductItemName } from '@/components/price-calculator/products/ProductItemName'
 import { RecipeFavoriteStar } from '@/components/price-calculator/products/RecipeFavoriteStar'
 import { UsedInRecipesTable } from '@/components/price-calculator/UsedInRecipesTable'
+import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { usePriceManagement } from '@/hooks/use-price-management'
 import {
@@ -77,15 +78,6 @@ interface AdditionalCostRow {
   totalPrice: number
 }
 
-function formatCraftTime(minutes: number): string {
-  const totalSeconds = Math.round(minutes * 60)
-  const m = Math.floor(totalSeconds / 60)
-  const s = totalSeconds % 60
-  if (m === 0) return `${s}sec`
-  if (s === 0) return `${m}min`
-  return `${m}min ${s}sec`
-}
-
 export function RecipeDialog({
   recipeId,
   buildId,
@@ -98,6 +90,7 @@ export function RecipeDialog({
   const { t } = useTranslation()
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
+  const { formatPrice, formatDuration } = useLocalization()
   const { setProductShare, setRecipeFavorite } = useRecipeManagement(buildId)
   const { setPrice } = usePriceManagement(buildId)
 
@@ -581,11 +574,11 @@ export function RecipeDialog({
         {
           id: 'craftTime',
           label: t('priceCalculator.recipe.craftTime'),
-          baseQuantity: formatCraftTime(baseCraftTime),
-          modifiedQuantity: formatCraftTime(recipeCost.craftTime),
+          baseQuantity: formatDuration(baseCraftTime),
+          modifiedQuantity: formatDuration(recipeCost.craftTime),
           unitSuffix: '',
           hasModifiers: craftTimeChanged,
-          unitPriceLabel: `${recipeCost.costPerMinute.toFixed(2)} $/min`,
+          unitPriceLabel: `${formatPrice(recipeCost.costPerMinute)} $/min`,
           totalPrice: recipeCost.craftTimeCost,
         },
         {
@@ -595,7 +588,7 @@ export function RecipeDialog({
           modifiedQuantity: recipeCost.laborAmount.toFixed(0),
           unitSuffix: 'cal',
           hasModifiers: laborChanged,
-          unitPriceLabel: `${recipeCost.calorieCost.toFixed(2)} $/1k cal`,
+          unitPriceLabel: `${formatPrice(recipeCost.calorieCost)} $/1k cal`,
           totalPrice: recipeCost.laborCost,
         },
       ]
@@ -688,7 +681,7 @@ export function RecipeDialog({
 
   const priceTemplate = (row: ElementRow) => (
     <span className="text-right block">
-      {row.unitPrice != null ? row.unitPrice.toFixed(2) : '-'}
+      {row.unitPrice != null ? formatPrice(row.unitPrice) : '-'}
     </span>
   )
 
@@ -708,13 +701,13 @@ export function RecipeDialog({
 
   const totalTemplate = (row: ElementRow) => (
     <span className="text-right block font-semibold">
-      {row.totalPrice != null ? row.totalPrice.toFixed(2) : '-'}
+      {row.totalPrice != null ? formatPrice(row.totalPrice) : '-'}
     </span>
   )
 
   const deductedTotalTemplate = (row: ElementRow) => (
     <span className="text-right block font-semibold text-color-secondary">
-      {row.totalPrice != null ? `−${row.totalPrice.toFixed(2)}` : '-'}
+      {row.totalPrice != null ? `−${formatPrice(row.totalPrice)}` : '-'}
     </span>
   )
 
@@ -738,13 +731,13 @@ export function RecipeDialog({
   const totalFooter = (value: number | null) => (
     <div className="flex align-items-center justify-content-between px-2 py-2 font-semibold surface-100 border-round">
       <span>{t('priceCalculator.recipe.totalCost')}</span>
-      <span>{value != null ? value.toFixed(2) : '-'}</span>
+      <span>{value != null ? formatPrice(value) : '-'}</span>
     </div>
   )
 
   const subtotalValueFooter = (value: number | null, deducted = false) => (
     <span className={`text-right block font-semibold${deducted ? ' text-color-secondary' : ''}`}>
-      {value != null ? (deducted ? `−${value.toFixed(2)}` : value.toFixed(2)) : '-'}
+      {value != null ? (deducted ? `−${formatPrice(value)}` : formatPrice(value)) : '-'}
     </span>
   )
   const subtotalLabelFooter = (
@@ -752,7 +745,7 @@ export function RecipeDialog({
   )
 
   const additionalCostTotalTemplate = (row: AdditionalCostRow) => (
-    <span className="text-right block font-semibold">{row.totalPrice.toFixed(2)}</span>
+    <span className="text-right block font-semibold">{formatPrice(row.totalPrice)}</span>
   )
 
   const additionalCostUnitTemplate = (row: AdditionalCostRow) => (

@@ -1,5 +1,6 @@
 import { memo } from 'react'
 
+import { useLocalization } from '@/hooks/use-localization'
 import { useRecipePriceCell, type PriceSignal } from '@/hooks/use-prices-signal'
 
 interface Props {
@@ -11,5 +12,6 @@ interface Props {
 // so each child shows its own producer's cost.
 export const RecipeCostCell = memo(function RecipeCostCell({ signal, recipeId }: Props) {
   const value = useRecipePriceCell(signal, recipeId, 'costPrice')
-  return <span className="text-right block">{value != null ? value.toFixed(2) : '-'}</span>
+  const { formatPrice } = useLocalization()
+  return <span className="text-right block">{value != null ? formatPrice(value) : '-'}</span>
 })
