@@ -10,18 +10,11 @@
   },
   "dataset": {
     "selector": {
-      "label": "Dataset",
-      "import": "Import Dataset",
-      "noDatasets": "No datasets installed. Please select at least one to get started.",
-      "bundledDatasets": "Bundled Datasets"
+      "label": "Dataset"
     },
-    "importer": {
-      "title": "Import Dataset",
-      "upload": "Upload JSON file",
-      "name": "Dataset Name",
-      "import": "Import",
-      "validationErrors": "Validation Errors",
-      "parseError": "Failed to parse JSON file"
+    "autoImport": {
+      "errorTitle": "Could not load dataset",
+      "retry": "Retry"
     }
   },
   "build": {

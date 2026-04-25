@@ -1,69 +1,19 @@
-import { Button } from 'primereact/button'
-import { useState, useEffect, useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useEffect } from 'react'
 
-import { DatasetSetup } from '@/components/dataset/DatasetSetup'
-import { ImportView } from '@/components/import/ImportView'
 import { PriceCalculator } from '@/components/price-calculator/PriceCalculator'
 import { ThemeProvider } from '@/components/settings/ThemeProvider'
 import { markFirstRenderReady } from '@/lib/app-ready'
 import { markLoaderMilestone } from '@/lib/loader-progress'
-import { StoreProvider, useStores } from '@/stores/providers'
-
-type View = 'main' | 'import'
+import { StoreProvider } from '@/stores/providers'
 
 function AppInner() {
-  const { t } = useTranslation()
-  const { gameDataStore } = useStores()
-  const [hasDatasets, setHasDatasets] = useState<boolean | null>(null)
-  const [view, setView] = useState<View>('main')
-
-  const checkDatasets = useCallback(() => {
-    const rowIds = gameDataStore.getRowIds('datasets')
-    setHasDatasets(rowIds.length > 0)
-  }, [gameDataStore])
-
+  // StoreProvider gates rendering on a populated game-data store, so by the
+  // time AppInner mounts the app has real content to show. Hand off the
+  // splash loader's firstRender gate now.
   useEffect(() => {
-    checkDatasets()
-  }, [checkDatasets])
-
-  // Signal app-ready once real content is about to paint. Firing on the
-  // transition from `hasDatasets === null` (the transient blank state)
-  // ensures the loader stays up through that beat.
-  useEffect(() => {
-    if (hasDatasets !== null) {
-      markFirstRenderReady()
-      markLoaderMilestone('firstRender')
-    }
-  }, [hasDatasets])
-
-  if (view === 'import') {
-    return (
-      <ImportView
-        onDone={() => {
-          checkDatasets()
-          setView('main')
-        }}
-      />
-    )
-  }
-
-  if (hasDatasets === null) return null
-  if (!hasDatasets) {
-    return (
-      <>
-        <DatasetSetup onComplete={checkDatasets} />
-        <div className="flex justify-content-center mt-3">
-          <Button
-            label={t('dataset.selector.import')}
-            icon="pi pi-upload"
-            text
-            onClick={() => setView('import')}
-          />
-        </div>
-      </>
-    )
-  }
+    markFirstRenderReady()
+    markLoaderMilestone('firstRender')
+  }, [])
 
   return <PriceCalculator />
 }

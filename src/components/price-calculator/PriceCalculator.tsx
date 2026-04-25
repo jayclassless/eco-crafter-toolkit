@@ -32,11 +32,11 @@ export function PriceCalculator() {
   // Initialize active dataset
   useEffect(() => {
     const stored = uiStore.getCell('uiState', 'main', 'activeDatasetId') as string
-    if (stored) {
+    const allIds = gameDataStore.getRowIds('datasets')
+    if (stored && allIds.includes(stored)) {
       setActiveDatasetId(stored)
-    } else {
-      const firstDataset = gameDataStore.getRowIds('datasets')[0]
-      if (firstDataset) setActiveDatasetId(firstDataset)
+    } else if (allIds.length > 0) {
+      setActiveDatasetId(allIds[0])
     }
   }, [gameDataStore, uiStore])
 
