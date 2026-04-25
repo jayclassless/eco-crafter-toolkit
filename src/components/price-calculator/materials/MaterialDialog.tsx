@@ -9,9 +9,11 @@ import { useTranslation } from 'react-i18next'
 import { ItemIcon } from '@/components/common/ItemIcon'
 import { RecipeIcon } from '@/components/common/RecipeIcon'
 import { SkillIcon } from '@/components/common/SkillIcon'
+import { TagLabel } from '@/components/common/TagLabel'
 import { UsedInRecipesTable } from '@/components/price-calculator/UsedInRecipesTable'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useStoreRevision } from '@/hooks/use-store-revision'
+import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { computeUsedInRecipes } from '@/lib/used-in-recipes'
 import { useStores } from '@/stores/providers'
 
@@ -150,11 +152,23 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
 
   if (!itemId || !itemRow) return null
 
+  const itemTagIds = isTag
+    ? []
+    : (getGameDataIndexes(gameDataStore).tagIdsByItemId.get(itemId) ?? [])
+
   const headerNode = (
     <div className="flex align-items-center gap-2">
       {itemRawName && <ItemIcon item={{ name: itemRawName }} size={48} />}
       <span className="mr-2">{itemName}</span>
       {isTag && <i className="pi pi-tag text-sm" />}
+      {itemTagIds.length > 0 && (
+        <div className="flex align-items-center gap-3 ml-3">
+          {itemTagIds.map((tagId) => {
+            const tagName = getName('item', tagId)
+            return tagName ? <TagLabel key={tagId} tagName={tagName} /> : null
+          })}
+        </div>
+      )}
     </div>
   )
 
