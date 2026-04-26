@@ -1,13 +1,9 @@
 import { useMemo } from 'react'
 
+import { SELF_IMPROVEMENT_SKILL_NAME } from '@/lib/game-constants'
 import { useStores } from '@/stores/providers'
 
 import { useStoreRevision } from './use-store-revision'
-
-// Self Improvement is always free and never counts toward SKILL_COST in v13-mode,
-// nor toward the simple skill count used in pre-v13 datasets. Matches the raw
-// name used by `use-build.ts` when auto-adding the skill to new builds.
-const SELF_IMPROVEMENT_NAME = 'SelfImprovementSkill'
 
 const BUILD_TABLES = ['userSkills', 'userTalents'] as const
 
@@ -45,7 +41,7 @@ export function useStarCost(buildId: string, datasetId: string): StarCost {
       if (row.buildId !== buildId) continue
       const skill = gameDataStore.getRow('skills', row.skillId as string)
       if (!skill || !skill.name) continue
-      if (skill.name === SELF_IMPROVEMENT_NAME) continue
+      if (skill.name === SELF_IMPROVEMENT_SKILL_NAME) continue
       skillCount += 1
       specialtySum += (skill.specialtyCost as number) ?? 1
     }

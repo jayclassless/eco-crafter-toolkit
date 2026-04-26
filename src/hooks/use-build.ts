@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { Row, Store } from 'tinybase'
 
+import { SELF_IMPROVEMENT_SKILL_NAME } from '@/lib/game-constants'
 import { generateId } from '@/lib/ids'
 import { useStores } from '@/stores/providers'
 
@@ -90,7 +91,7 @@ export function createBuildOps(buildStore: Store, gameDataStore: Store) {
       // matching what happens when a user adds a skill from the UI.
       for (const rowId of gameDataStore.getRowIds('skills')) {
         const skill = gameDataStore.getRow('skills', rowId)
-        if (skill.datasetId === datasetId && skill.name === 'SelfImprovementSkill') {
+        if (skill.datasetId === datasetId && skill.name === SELF_IMPROVEMENT_SKILL_NAME) {
           createSkillManagement(buildStore, gameDataStore, buildId, datasetId).addSkill(rowId)
           break
         }
