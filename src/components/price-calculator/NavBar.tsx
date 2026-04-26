@@ -1,6 +1,8 @@
 import { Button } from 'primereact/button'
 import { useTranslation } from 'react-i18next'
 
+import { useStores } from '@/stores/providers'
+
 import { BuildSelector } from './BuildSelector'
 
 interface Props {
@@ -19,6 +21,8 @@ export function NavBar({
   onOpenSettings,
 }: Props) {
   const { t } = useTranslation()
+  const { gameDataStore } = useStores()
+  const datasetName = (gameDataStore.getCell('datasets', datasetId, 'name') as string) ?? ''
 
   return (
     <div className="flex align-items-center gap-3 p-2 pb-0">
@@ -29,6 +33,7 @@ export function NavBar({
         className="block"
         style={{ height: '2rem', width: 'auto' }}
       />
+      <span className="font-semibold text-color-secondary">{datasetName}</span>
       <BuildSelector
         datasetId={datasetId}
         activeBuildId={buildId}

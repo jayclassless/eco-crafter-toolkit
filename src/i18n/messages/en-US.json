@@ -174,7 +174,7 @@
     }
   },
   "settings": {
-    "title": "Settings",
+    "title": "Eco Crafter Toolkit",
     "mode": "Theme Mode",
     "light": "Light",
     "dark": "Dark",
@@ -191,29 +191,39 @@
       "purple": "Purple",
       "teal": "Teal"
     },
-    "purge": {
-      "button": "Purge Data…",
-      "dialogTitle": "Purge Data",
-      "confirmTitle": "Confirm Purge",
-      "datasetsSection": "Datasets",
-      "buildsSection": "Builds",
-      "selectAllDatasets": "Purge all datasets",
-      "purgeAllBuildsOne": "Purge all builds (1 total)",
-      "purgeAllBuildsMany": "Purge all builds ({count} total)",
-      "tiedBuildsWarningOne": "1 build tied to this dataset will also be purged",
-      "tiedBuildsWarningMany": "{count} builds tied to this dataset will also be purged",
-      "noDatasets": "No datasets to purge",
+    "menu": {
+      "datasets": "Game Datasets",
+      "uiSettings": "UI Settings"
+    },
+    "ui": {
+      "title": "UI Settings",
+      "back": "Back"
+    },
+    "datasets": {
+      "dialogTitle": "Game Datasets",
+      "columnName": "Name",
+      "columnUpdated": "Last Update",
+      "columnBuilds": "# of Builds",
+      "download": "Download",
+      "delete": "Delete",
+      "switch": "Switch",
+      "activeBadge": "Active",
+      "loadFailed": "Could not load dataset list.",
+      "retry": "Retry",
+      "noBuilds": "—",
+      "downloadErrorSummary": "Download failed",
+      "downloadErrorDetail": "Could not download {name}. Please try again."
+    },
+    "deleteDataset": {
+      "title": "Delete dataset?",
+      "confirmBody": "Delete \"{name}\"?",
       "cannotBeUndone": "This cannot be undone.",
-      "summaryDatasets": "{count} datasets: {names}",
-      "summaryDatasetOne": "1 dataset: {names}",
-      "summaryBuildsOne": "1 build",
-      "summaryBuildsMany": "{count} builds",
+      "tiedBuildsWarningOne": "1 build tied to this dataset will also be deleted",
+      "tiedBuildsWarningMany": "{count} builds tied to this dataset will also be deleted",
       "cancel": "Cancel",
-      "continue": "Continue",
-      "back": "Back",
-      "purge": "Purge",
-      "errorSummary": "Purge failed",
-      "errorDetail": "Could not purge data. Please try again."
+      "delete": "Delete",
+      "errorSummary": "Delete failed",
+      "errorDetail": "Could not delete the dataset. Please try again."
     }
   }
 }

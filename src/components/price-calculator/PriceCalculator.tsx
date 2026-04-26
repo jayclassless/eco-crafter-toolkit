@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 
+import { DatasetsDialog } from '@/components/settings/datasets/DatasetsDialog'
 import { SettingsSidebar } from '@/components/settings/SettingsSidebar'
 import { usePriceSolver } from '@/hooks/use-price-solver'
 import { usePriceSignal } from '@/hooks/use-prices-signal'
@@ -25,6 +26,7 @@ export function PriceCalculator() {
   const priceSignal = usePriceSignal()
 
   const [settingsVisible, setSettingsVisible] = useState(false)
+  const [datasetsDialogVisible, setDatasetsDialogVisible] = useState(false)
 
   // URL is the source of truth. Stale or hand-edited segments are caught
   // here and redirected; the BuildRedirect / RootRedirect routes pick
@@ -141,7 +143,20 @@ export function PriceCalculator() {
           <Products buildId={buildId} datasetId={datasetId} priceSignal={priceSignal} />
         </div>
       </div>
-      <SettingsSidebar visible={settingsVisible} onHide={() => setSettingsVisible(false)} />
+      <SettingsSidebar
+        visible={settingsVisible}
+        onHide={() => setSettingsVisible(false)}
+        onOpenDatasets={() => setDatasetsDialogVisible(true)}
+      />
+      <DatasetsDialog
+        visible={datasetsDialogVisible}
+        onHide={() => setDatasetsDialogVisible(false)}
+        activeDatasetId={datasetId}
+        onSwitch={(id) => {
+          setDatasetsDialogVisible(false)
+          navigate(`/${id}/calculator`)
+        }}
+      />
     </div>
   )
 }

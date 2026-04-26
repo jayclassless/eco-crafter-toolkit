@@ -3,6 +3,7 @@ export interface ManifestEntry {
   name: string
   file: string
   revision: number
+  updatedAt: string
   default?: boolean
 }
 
