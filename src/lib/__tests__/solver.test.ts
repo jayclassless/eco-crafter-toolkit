@@ -193,6 +193,199 @@ describe('solve', () => {
     })
   })
 
+  describe('user-priced ingredients', () => {
+    // Regression: a recipe that produces an ingredient with a user-set price
+    // (input.prices) used to clobber that price in the cost flow, so a
+    // downstream recipe consuming the ingredient saw the recipe-derived value
+    // instead. Reproduces the SmeltIron/IronConcentrate divergence: dialog
+    // shows ingredient unit prices from the user value (5.30 total) while the
+    // product's Unit Price was computed from the clobbered value (~1.72/bar
+    // instead of ~0.88/bar).
+    const ironConcRecipe = (): SolverRecipe =>
+      makeRecipe({
+        id: 'iron-conc',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'crushed-ore', baseQuantity: -5, modifiers: [] }],
+        products: [
+          {
+            itemOrTagId: 'iron-conc',
+            baseQuantity: 1,
+            share: 1,
+            isReintegrated: false,
+            modifiers: [],
+          },
+        ],
+      })
+    const smeltIron = (): SolverRecipe =>
+      makeRecipe({
+        id: 'smelt-iron',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [
+          { itemOrTagId: 'iron-conc', baseQuantity: -2, modifiers: [] },
+          { itemOrTagId: 'clay-mold', baseQuantity: -6, modifiers: [] },
+        ],
+        products: [
+          {
+            itemOrTagId: 'iron-bar',
+            baseQuantity: 6,
+            share: 1,
+            isReintegrated: false,
+            modifiers: [],
+          },
+          { itemOrTagId: 'slag', baseQuantity: 2, share: 0, isReintegrated: false, modifiers: [] },
+          {
+            itemOrTagId: 'clay-mold',
+            baseQuantity: 3,
+            share: 0,
+            isReintegrated: true,
+            modifiers: [],
+          },
+        ],
+      })
+
+    it('user-set price wins over a recipe that also produces the ingredient', () => {
+      const result = solve(
+        makeInput({
+          recipes: [ironConcRecipe(), smeltIron()],
+          prices: { 'iron-conc': 2.5, 'crushed-ore': 1 },
+          overrides: { 'clay-mold': 0.1 },
+        })
+      )
+      // With user iron-conc=2.5: 2*2.5 + 6*0.1 - 3*0.1 = 5.30; per bar = 0.8833
+      expect(result.prices['iron-bar'].costPrice).toBeCloseTo(0.8833, 3)
+      expect(result.recipePrices['smelt-iron::iron-bar'].costPrice).toBeCloseTo(0.8833, 3)
+      // The user's price is what's emitted; the recipe-derived 5.0 is not.
+      expect(result.prices['iron-conc'].costPrice).toBeCloseTo(2.5)
+    })
+
+    it('order-independent: user-set price wins regardless of recipe iteration order', () => {
+      // Reverse the array — IronConcentrate would have been resolved first
+      // under the old logic, clobbering the seeded 2.5 before SmeltIron ran.
+      const result = solve(
+        makeInput({
+          recipes: [smeltIron(), ironConcRecipe()],
+          prices: { 'iron-conc': 2.5, 'crushed-ore': 1 },
+          overrides: { 'clay-mold': 0.1 },
+        })
+      )
+      expect(result.prices['iron-bar'].costPrice).toBeCloseTo(0.8833, 3)
+      expect(result.prices['iron-conc'].costPrice).toBeCloseTo(2.5)
+    })
+
+    it('still records the recipe-keyed cost so the dialog can show what the recipe would charge', () => {
+      const result = solve(
+        makeInput({
+          recipes: [ironConcRecipe(), smeltIron()],
+          prices: { 'iron-conc': 2.5, 'crushed-ore': 1 },
+          overrides: { 'clay-mold': 0.1 },
+        })
+      )
+      // IronConcentrateRecipe's per-recipe cost still reflects what producing
+      // it would actually cost (5.0), even though it doesn't drive cost flow.
+      expect(result.recipePrices['iron-conc::iron-conc'].costPrice).toBeCloseTo(5)
+    })
+
+    it('per-recipe Unit Price reflects the final resolved ingredient cost, not the mid-iteration value', () => {
+      // Reproduces the v13 SmeltIron bug: when an ingredient (Iron Concentrate)
+      // is produced by multiple recipes in the build, the iterative solver
+      // used to write `recipePrices[consumer::product]` based on whichever
+      // producer ran first. Later (cheaper) producers updated the resolved
+      // costPrice but never re-ran the consumer's recipe, so the dialog's
+      // per-recipe Unit Price stayed at the stale, more-expensive value.
+      const expensiveProducer = makeRecipe({
+        id: 'iron-conc-expensive',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'crushed-ore', baseQuantity: -5, modifiers: [] }],
+        products: [
+          {
+            itemOrTagId: 'iron-conc',
+            baseQuantity: 1,
+            share: 1,
+            isReintegrated: false,
+            modifiers: [],
+          },
+        ],
+      })
+      const cheapProducer = makeRecipe({
+        id: 'iron-conc-cheap',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'crushed-ore', baseQuantity: -2, modifiers: [] }],
+        products: [
+          {
+            itemOrTagId: 'iron-conc',
+            baseQuantity: 1,
+            share: 1,
+            isReintegrated: false,
+            modifiers: [],
+          },
+        ],
+      })
+      const consumer = makeRecipe({
+        id: 'smelt-iron',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [
+          { itemOrTagId: 'iron-conc', baseQuantity: -2, modifiers: [] },
+          { itemOrTagId: 'clay-mold', baseQuantity: -6, modifiers: [] },
+        ],
+        products: [
+          {
+            itemOrTagId: 'iron-bar',
+            baseQuantity: 6,
+            share: 1,
+            isReintegrated: false,
+            modifiers: [],
+          },
+          {
+            itemOrTagId: 'clay-mold',
+            baseQuantity: 3,
+            share: 0,
+            isReintegrated: true,
+            modifiers: [],
+          },
+        ],
+      })
+      // Order matters: the expensive producer comes first so it would set
+      // costPrices[iron-conc]=5 before the consumer ran under the old single-
+      // pass logic.
+      const result = solve(
+        makeInput({
+          recipes: [expensiveProducer, consumer, cheapProducer],
+          prices: { 'crushed-ore': 1, 'clay-mold': 0.1 },
+        })
+      )
+      // Final resolved iron-conc cost: min(5, 2) = 2.
+      expect(result.prices['iron-conc'].costPrice).toBeCloseTo(2)
+      // Smelt Iron's per-recipe IronBar Unit Price uses the final iron-conc
+      // price: (2*2 + 6*0.1 - 3*0.1) / 6 = 4.30/6 ≈ 0.7166 — NOT (2*5 + 6*0.1
+      // - 3*0.1) / 6 = 1.7166, which was the buggy mid-iteration value.
+      expect(result.recipePrices['smelt-iron::iron-bar'].costPrice).toBeCloseTo(0.7166, 3)
+    })
+
+    it('applies productMargin to the user price when emitting salePrice', () => {
+      const result = solve(
+        makeInput({
+          recipes: [ironConcRecipe(), smeltIron()],
+          prices: { 'iron-conc': 2.5, 'crushed-ore': 1 },
+          overrides: { 'clay-mold': 0.1 },
+          productMargins: { 'iron-conc': 'm1' },
+          margins: { m1: { name: 'std', percent: 20 } },
+        })
+      )
+      // markup: cost * (1 + 0.2) = 3
+      expect(result.prices['iron-conc'].salePrice).toBeCloseTo(3)
+    })
+  })
+
   describe('recipe chains', () => {
     it('resolves a two-step chain', () => {
       const recipe1 = makeRecipe({
@@ -514,11 +707,11 @@ describe('solve', () => {
           overrides: { plank: 42 },
         })
       )
-      // recipe shouldn't overwrite the override; costPrice for the recipe-derived
-      // plank entry is computed from wood=5 → 5, but override seeds the maps to 42
-      // so downstream consumers see 42. The recipe still resolves and stores its
-      // computed value in `computed`, which is what's returned.
-      expect(result.prices['plank'].costPrice).toBeCloseTo(5)
+      // override (42) wins over the non-override seed (999) and over the
+      // recipe-derived value (5). The recipe still records its per-recipe
+      // cost via recipePrices for the dialog.
+      expect(result.prices['plank'].costPrice).toBeCloseTo(42)
+      expect(result.recipePrices['recipe-1::plank'].costPrice).toBeCloseTo(5)
     })
 
     it('resolves a deep chain across many iterations', () => {
@@ -929,10 +1122,7 @@ describe('solve — additional scenarios', () => {
   })
 
   describe('product quantities and shares', () => {
-    it('returns recipe-derived cost even when overrides seed the same id', () => {
-      // Verifies that a downstream consumer that depends on the override sees
-      // the override price, while the overridden product's own recipe entry
-      // still computes its own cost from ingredients.
+    it('downstream consumer sees the override price, not the producer recipe price', () => {
       const producer = makeRecipe({
         id: 'p1',
         baseLaborCost: 0,
@@ -961,10 +1151,12 @@ describe('solve — additional scenarios', () => {
           overrides: { plank: 50 },
         })
       )
-      // plank candidate from producer = 1, but override seeds 50 so consumer
-      // sees 50; the table cost should reflect that.
-      expect(result.prices['plank'].costPrice).toBeCloseTo(1)
+      // Override wins everywhere: outputPrices, downstream consumer cost, and
+      // producer's own item-keyed price. Producer recipe still records its
+      // own per-recipe cost via recipePrices (=1) for dialog comparison.
+      expect(result.prices['plank'].costPrice).toBeCloseTo(50)
       expect(result.prices['table'].costPrice).toBeCloseTo(100)
+      expect(result.recipePrices['p1::plank'].costPrice).toBeCloseTo(1)
     })
 
     it('skips products with quantity 0 (no price emitted, no division by zero)', () => {

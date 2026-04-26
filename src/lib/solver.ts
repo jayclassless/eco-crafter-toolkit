@@ -67,6 +67,17 @@ export function solve(input: SolverInput): SolverOutput {
   const recipeCosts: Record<string, RecipeCostBreakdown> = {}
   const errors: SolverError[] = []
 
+  // Items the user has supplied a price for (typed manual price OR moved-to-
+  // materials override). These are authoritative — recipes that also produce
+  // them still record per-recipe candidates / recipePrices for the dialog,
+  // but must not clobber the cost flow. Without this, a downstream recipe
+  // that consumes a user-priced item gets the recipe-derived price instead of
+  // the user's, and the dialog's product Unit Price diverges from its Cost
+  // Components total (which displays the user's typed value).
+  const userPricedItems = new Set<string>()
+  for (const id in input.prices) userPricedItems.add(id)
+  for (const id in input.overrides) userPricedItems.add(id)
+
   // ---- Precompute per-recipe, price-independent data ----
   const prepared: PreparedRecipe[] = Array.from<PreparedRecipe>({ length: recipes.length })
   for (let i = 0; i < recipes.length; i++) {
@@ -74,14 +85,38 @@ export function solve(input: SolverInput): SolverOutput {
     recipeCosts[recipes[i].id] = prepared[i].costBreakdown
   }
 
-  // ---- Iterative resolution over a shrinking unresolved list ----
-  let unresolved = prepared
-  while (unresolved.length > 0) {
-    const next: PreparedRecipe[] = []
-    let handledCount = 0
+  // ---- Fixed-point resolution ----
+  // Each pass walks every recipe whose ingredients are currently resolvable,
+  // recomputes its product costs from the current `costPrices`, and updates
+  // (replaces) that recipe's entry in `candidates`. After each pass we re-
+  // aggregate `costPrices`/`salePrices` from the candidates. Repeat until a
+  // pass produces no costPrices change.
+  //
+  // Why iterate to a fixed point: a product can be made by several recipes
+  // (e.g. Iron Concentrate has 4 producers in v13). The first producer
+  // processed in a pass writes one candidate; downstream consumers run with
+  // *that* one candidate as the resolved price. When later producers add
+  // cheaper candidates, the resolved price falls — but the consumer already
+  // computed its own products against the stale value. A second pass picks up
+  // the new ingredient price and rewrites the consumer's candidate / recipe-
+  // keyed price. Without this, the consumer's per-recipe Unit Price in the
+  // dialog disagrees with the same recipe's ingredient totals.
+  const handledIds = new Set<string>()
+  // Index of each recipe's candidate within `candidates[productId]`, keyed by
+  // `${recipeId}::${productId}` — lets us replace in O(1) on subsequent
+  // passes instead of pushing duplicates or doing findIndex.
+  const candidateIndex = new Map<string, number>()
+  // Bound passes defensively. Convergence depth is the longest dependency
+  // chain in the build; 2N is well above that even pathologically.
+  const maxPasses = prepared.length * 2 + 8
+  let pass = 0
+  let changed = true
+  while (changed && pass < maxPasses) {
+    changed = false
+    pass++
 
-    for (let i = 0; i < unresolved.length; i++) {
-      const p = unresolved[i]
+    for (let i = 0; i < prepared.length; i++) {
+      const p = prepared[i]
       const recipe = p.recipe
       const recipeSkillId = recipe.skillId
 
@@ -97,10 +132,7 @@ export function solve(input: SolverInput): SolverOutput {
         applyMarginBetweenSkills,
         -1
       )
-      if (ingredientTotal === null) {
-        next.push(p)
-        continue
-      }
+      if (ingredientTotal === null) continue
 
       const reintegratedTotal = sumElementCost(
         p.reintegrated,
@@ -114,12 +146,10 @@ export function solve(input: SolverInput): SolverOutput {
         applyMarginBetweenSkills,
         1
       )
-      if (reintegratedTotal === null) {
-        next.push(p)
-        continue
-      }
+      if (reintegratedTotal === null) continue
 
       const totalCost = p.fixedCost + ingredientTotal - reintegratedTotal
+      handledIds.add(recipe.id)
 
       for (let pi = 0; pi < p.products.length; pi++) {
         const prod = p.products[pi]
@@ -141,41 +171,64 @@ export function solve(input: SolverInput): SolverOutput {
           list = []
           candidates[prod.itemOrTagId] = list
         }
-        list.push({ costPrice, salePrice, recipeId: recipe.id, skillId: recipeSkillId })
+        const candidateKey = `${recipe.id}::${prod.itemOrTagId}`
+        const existingIdx = candidateIndex.get(candidateKey)
+        const newCandidate: Candidate = {
+          costPrice,
+          salePrice,
+          recipeId: recipe.id,
+          skillId: recipeSkillId,
+        }
+        if (existingIdx !== undefined) {
+          list[existingIdx] = newCandidate
+        } else {
+          candidateIndex.set(candidateKey, list.length)
+          list.push(newCandidate)
+        }
         // Key per-recipe-per-product — a single recipe can have multiple
         // products, and each child UI row wants its own specific price.
-        recipePrices[`${recipe.id}::${prod.itemOrTagId}`] = { costPrice, salePrice }
+        recipePrices[candidateKey] = { costPrice, salePrice }
 
-        // Collapse the current candidates per mode so downstream recipes that
-        // consume this product see the mode-resolved price during iteration.
-        // This replaces the old "first-producer wins" short-circuit.
-        const mode = priceModes[prod.itemOrTagId] ?? 'min'
-        const primaryRecipeId = primaryRecipeIds[prod.itemOrTagId] ?? ''
-        const resolved = resolveProductCost(list, mode, primaryRecipeId)
-        costPrices[prod.itemOrTagId] = resolved.costPrice
-        salePrices[prod.itemOrTagId] = resolved.salePrice
-        producingSkills[prod.itemOrTagId] = resolved.skillId
+        // Re-aggregate costPrices/salePrices for this product. User-priced
+        // items keep their seeded value (see userPricedItems comment above).
+        if (!userPricedItems.has(prod.itemOrTagId)) {
+          const mode = priceModes[prod.itemOrTagId] ?? 'min'
+          const primaryRecipeId = primaryRecipeIds[prod.itemOrTagId] ?? ''
+          const resolved = resolveProductCost(list, mode, primaryRecipeId)
+          if (costPrices[prod.itemOrTagId] !== resolved.costPrice) changed = true
+          costPrices[prod.itemOrTagId] = resolved.costPrice
+          salePrices[prod.itemOrTagId] = resolved.salePrice
+          producingSkills[prod.itemOrTagId] = resolved.skillId
+        }
       }
-
-      handledCount++
     }
-
-    if (handledCount === 0) {
-      unresolved = next
-      break
-    }
-    unresolved = next
   }
 
-  for (let i = 0; i < unresolved.length; i++) {
-    errors.push({
-      recipeId: unresolved[i].recipe.id,
-      message: 'Could not resolve all ingredient prices',
-    })
+  for (let i = 0; i < prepared.length; i++) {
+    if (!handledIds.has(prepared[i].recipe.id)) {
+      errors.push({
+        recipeId: prepared[i].recipe.id,
+        message: 'Could not resolve all ingredient prices',
+      })
+    }
   }
 
   const outputPrices: Record<string, SolverPrice> = {}
   for (const productId in candidates) {
+    if (userPricedItems.has(productId)) {
+      // User's typed price wins over any recipe candidate. Sale follows the
+      // product-level margin (recipe margin doesn't apply — there's no single
+      // recipe attribution for a user-set price).
+      const userCost = costPrices[productId]
+      const marginId = productMargins[productId]
+      const marginPercent = marginId ? (margins[marginId]?.percent ?? null) : null
+      const userSale =
+        marginPercent !== null
+          ? applyMargin(userCost, marginPercent, settings.marginType)
+          : userCost
+      outputPrices[productId] = { costPrice: userCost, salePrice: userSale, recipeId: '' }
+      continue
+    }
     const list = candidates[productId]
     const mode = priceModes[productId] ?? 'min'
     const primaryRecipeId = primaryRecipeIds[productId] ?? ''
