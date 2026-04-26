@@ -8,7 +8,7 @@ import { hideBin } from 'yargs/helpers'
 import type { DatasetJson } from '../src/types/dataset-json'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const ICONS_ROOT = path.join(ROOT, 'public/assets/eco-icons')
+const ICONS_ROOT = path.join(ROOT, 'public/eco-icons')
 const DATA_DIR = path.join(ROOT, 'public/data')
 const MANIFEST_PATH = path.join(DATA_DIR, 'datasets-manifest.json')
 

@@ -88,10 +88,10 @@ mise exec -- aube exec tsx scripts/extract-eco-icons.ts \
 ```
 
 `--output` is the **root** icon directory; the script creates and writes
-into four sub-directories matching `public/assets/eco-icons/`:
+into four sub-directories matching `public/eco-icons/`:
 `items/`, `skills/`, `talents/`, `misc/`. `_FG` sprite variants are skipped.
 
-The script never writes into `public/assets/eco-icons/` automatically —
+The script never writes into `public/eco-icons/` automatically —
 point `--output` there explicitly to overwrite.
 
 #### Compare-only mode
@@ -101,7 +101,7 @@ extraction and just audit an existing `--output` tree against a dataset:
 
 ```sh
 mise exec -- aube exec tsx scripts/extract-eco-icons.ts \
-  --output  public/assets/eco-icons \
+  --output  public/eco-icons \
   --compare public/data/eco-v12.json
 ```
 

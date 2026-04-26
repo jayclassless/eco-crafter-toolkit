@@ -17,10 +17,10 @@ const CATEGORY_SUFFIXES: [string, string][] = [
 function getIconPath(name: string): string {
   for (const [suffix, dir] of CATEGORY_SUFFIXES) {
     if (name.endsWith(suffix)) {
-      return `/assets/eco-icons/${dir}/${name}.png`
+      return `/eco-icons/${dir}/${name}.png`
     }
   }
-  return `/assets/eco-icons/misc/${name}.png`
+  return `/eco-icons/misc/${name}.png`
 }
 
 export function EcoIcon({ name, size = 24, className, alt = '' }: Props) {

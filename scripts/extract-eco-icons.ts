@@ -5,7 +5,7 @@
  * Usage:
  *   aube exec tsx scripts/extract-eco-icons.ts \
  *     --eco-root     /path/to/EcoServer \
- *     --output       public/assets/eco-icons \
+ *     --output       public/eco-icons \
  *     --asset-ripper /path/to/AssetRipper.GUI.Free \
  *     [--compare     public/data/eco-vN.json]
  *
@@ -29,7 +29,7 @@
  *   6. For every sprite (skipping *_FG — the app doesn't use foreground
  *      variants) look at m_Rect + m_RD.m_Texture.m_PathID, map to a
  *      tileset, flip Y, and crop via sharp into one of four sub-dirs
- *      matching the existing public/assets/eco-icons/ layout:
+ *      matching the existing public/eco-icons/ layout:
  *
  *        *Item.png          -> items/
  *        *Skill.png         -> skills/
