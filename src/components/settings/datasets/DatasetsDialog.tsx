@@ -16,6 +16,7 @@ import type { DatasetManifest } from '@/types/dataset-manifest'
 import { DeleteDatasetConfirmDialog } from './DeleteDatasetConfirmDialog'
 import { DownloadDatasetButton } from './DownloadDatasetButton'
 import type { DatasetRow } from './types'
+import { UpdateDatasetButton } from './UpdateDatasetButton'
 
 interface Props {
   visible: boolean
@@ -66,13 +67,29 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
     const buildsByDataset = countBuildsByDataset(buildStore)
     return manifest.datasets.map((entry) => {
       const loadedDatasetId = idsByBundled.get(entry.id) ?? null
+      const installedRevision =
+        loadedDatasetId !== null
+          ? ((gameDataStore.getCell('datasets', loadedDatasetId, 'installedRevision') as number) ??
+            0)
+          : 0
+      const availableRevision =
+        loadedDatasetId !== null && entry.revision > installedRevision ? entry.revision : undefined
+      // Show the locally-installed name when the dataset is installed; the
+      // manifest name reflects the latest revision and may differ (e.g. minor
+      // version bump). Fall back to the manifest name for not-yet-installed
+      // datasets.
+      const localName =
+        loadedDatasetId !== null
+          ? (gameDataStore.getCell('datasets', loadedDatasetId, 'name') as string) || entry.name
+          : entry.name
       return {
         manifestId: entry.id,
-        name: entry.name,
+        name: localName,
         updatedAt: entry.updatedAt,
         loadedDatasetId,
         isActive: loadedDatasetId !== null && loadedDatasetId === activeDatasetId,
         buildCount: loadedDatasetId ? (buildsByDataset[loadedDatasetId] ?? 0) : 0,
+        availableRevision,
         entry,
       }
     })
@@ -85,6 +102,30 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
         summary: t('settings.datasets.downloadErrorSummary'),
         detail: t('settings.datasets.downloadErrorDetail', { name }),
         life: 5000,
+      })
+    },
+    [t]
+  )
+
+  const handleUpdateError = useCallback(
+    (name: string) => {
+      toastRef.current?.show({
+        severity: 'error',
+        summary: t('settings.datasets.updateErrorSummary'),
+        detail: t('settings.datasets.updateErrorDetail', { name }),
+        life: 5000,
+      })
+    },
+    [t]
+  )
+
+  const handleUpdateSuccess = useCallback(
+    (name: string, rev: number) => {
+      toastRef.current?.show({
+        severity: 'success',
+        summary: t('settings.datasets.updateSuccessSummary'),
+        detail: t('settings.datasets.updateSuccessDetail', { name, rev }),
+        life: 3000,
       })
     },
     [t]
@@ -106,6 +147,13 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
         <DownloadDatasetButton entry={row.entry} onError={handleDownloadError} />
       ) : (
         <>
+          {row.availableRevision !== undefined && (
+            <UpdateDatasetButton
+              entry={row.entry}
+              onError={handleUpdateError}
+              onSuccess={handleUpdateSuccess}
+            />
+          )}
           {!row.isActive && (
             <Button
               label={t('settings.datasets.switch')}
@@ -132,7 +180,7 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
       header={t('settings.datasets.dialogTitle')}
       visible={visible}
       onHide={onHide}
-      style={{ width: '48rem' }}
+      style={{ width: '58rem' }}
       modal
     >
       <Toast ref={toastRef} />
@@ -164,7 +212,7 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
             body={buildsTemplate}
             style={{ width: '7rem' }}
           />
-          <Column body={actionTemplate} style={{ width: '15rem' }} />
+          <Column body={actionTemplate} style={{ width: '20rem' }} />
         </DataTable>
       )}
       <DeleteDatasetConfirmDialog target={deleteTarget} onHide={() => setDeleteTarget(null)} />

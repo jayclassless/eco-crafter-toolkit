@@ -212,7 +212,14 @@
       "retry": "Retry",
       "noBuilds": "—",
       "downloadErrorSummary": "Download failed",
-      "downloadErrorDetail": "Could not download {name}. Please try again."
+      "downloadErrorDetail": "Could not download {name}. Please try again.",
+      "update": "Update Now",
+      "updateToastSummary": "Dataset update available",
+      "updateToastDetail": "{name} has a newer revision available.",
+      "updateSuccessSummary": "Update complete",
+      "updateSuccessDetail": "{name} updated to revision {rev}.",
+      "updateErrorSummary": "Update failed",
+      "updateErrorDetail": "Could not update {name}. Please try again."
     },
     "deleteDataset": {
       "title": "Delete dataset?",

@@ -7,5 +7,8 @@ export type DatasetRow = {
   loadedDatasetId: string | null
   isActive: boolean
   buildCount: number
+  // Set when the manifest's revision is greater than the installed revision;
+  // surfaces the per-row "Update Now" affordance.
+  availableRevision?: number
   entry: ManifestEntry
 }
