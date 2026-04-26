@@ -9,6 +9,8 @@ import { useTranslation } from 'react-i18next'
 import { useBuild } from '@/hooks/use-build'
 import { useStores } from '@/stores/providers'
 
+import './BuildSelector.css'
+
 interface Props {
   datasetId: string
   activeBuildId: string

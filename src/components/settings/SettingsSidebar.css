@@ -1,0 +1,9 @@
+.settings-mode-selector {
+  display: flex;
+  width: 100%;
+}
+
+.settings-mode-selector > .p-button {
+  flex: 1 1 0;
+  justify-content: center;
+}

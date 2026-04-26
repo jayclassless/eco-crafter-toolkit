@@ -49,7 +49,7 @@
       "margins": "Margins",
       "addMargin": "Add Margin",
       "marginName": "Name",
-      "marginPercent": "Margin %",
+      "marginPercent": "Percent",
       "deleteMarginTitle": "Delete Margin",
       "deleteMarginMessage_one": "This margin is assigned to {count} recipe. That recipe will be reassigned to your default margin. Continue?",
       "deleteMarginMessage_other": "This margin is assigned to {count} recipes. Those recipes will be reassigned to your default margin. Continue?",

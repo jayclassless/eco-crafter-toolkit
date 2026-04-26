@@ -8,6 +8,8 @@ import { useStores } from '@/stores/providers'
 
 import { PurgeDataDialog } from './PurgeDataDialog'
 
+import './SettingsSidebar.css'
+
 interface Props {
   visible: boolean
   onHide: () => void

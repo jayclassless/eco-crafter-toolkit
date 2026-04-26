@@ -1,0 +1,10 @@
+.build-selector-split .p-button:focus,
+.build-selector-split .p-button:focus-visible {
+  box-shadow: none;
+  outline: none;
+}
+
+.build-selector-split .p-splitbutton-menubutton {
+  width: 1.5rem;
+  padding: 0;
+}

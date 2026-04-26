@@ -49,19 +49,3 @@ body {
   min-height: 0;
   height: auto;
 }
-
-.build-selector-split .p-button:focus,
-.build-selector-split .p-button:focus-visible {
-  box-shadow: none;
-  outline: none;
-}
-
-.settings-mode-selector {
-  display: flex;
-  width: 100%;
-}
-
-.settings-mode-selector > .p-button {
-  flex: 1 1 0;
-  justify-content: center;
-}
