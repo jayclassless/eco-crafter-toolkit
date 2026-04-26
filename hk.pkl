@@ -8,7 +8,7 @@ local linters = new Mapping<String, Step> {
         fix = "aube exec oxlint --fix {{ files }}"
     }
     ["oxfmt"] {
-        glob = List("**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx")
+        glob = List("**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.yaml", "**/*.yml")
         check = "aube exec oxfmt --check {{ files }}"
         fix = "aube exec oxfmt {{ files }}"
     }
