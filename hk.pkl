@@ -1,0 +1,37 @@
+amends "package://github.com/jdx/hk/releases/download/v1.44.1/hk@1.44.1#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.44.1/hk@1.44.1#/Builtins.pkl"
+
+local linters = new Mapping<String, Step> {
+    ["mise"] = Builtins.mise
+    ["oxlint"] = (Builtins.ox_lint) {
+        check = "aube exec oxlint {{ files }}"
+        fix = "aube exec oxlint --fix {{ files }}"
+    }
+    ["oxfmt"] {
+        glob = List("**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx")
+        check = "aube exec oxfmt --check {{ files }}"
+        fix = "aube exec oxfmt {{ files }}"
+    }
+    ["tsc"] = (Builtins.tsc) {
+        stomp = true
+        check = "aube exec tsc --noEmit -p {{ workspace_indicator }}"
+    }
+}
+
+hooks {
+    ["pre-commit"] {
+        fix = true
+        stash = "git"
+        steps = linters
+    }
+    ["pre-push"] {
+        steps = linters
+    }
+    ["check"] {
+        steps = linters
+    }
+    ["fix"] {
+        fix = true
+        steps = linters
+    }
+}

@@ -11,7 +11,7 @@ matching `src/types/dataset-json.ts`.
 #### Prerequisites
 
 - A local Eco server install (the directory containing `Eco_Data/`).
-- `mise exec -- pnpm install` (the script's deps `tsx` and
+- `mise exec -- aube install` (the script's deps `tsx` and
   `@crowdin/crowdin-api-client` live in root `devDependencies`).
 - Optional: a Crowdin API token for translations
   (https://crowdin.com/settings#api-key). Without it, only `en-US` is populated.
@@ -19,7 +19,7 @@ matching `src/types/dataset-json.ts`.
 #### Usage
 
 ```sh
-mise exec -- pnpm tsx scripts/extract-eco-dataset.ts \
+mise exec -- aube exec tsx scripts/extract-eco-dataset.ts \
   --eco-root /path/to/EcoServer \
   --output   /path/to/eco-vN.json \
   --version  1 \
@@ -74,13 +74,13 @@ sprite into `items/`, `skills/`, `talents/`, or `misc/` under `--output`.
 - A local Eco install (the directory containing `Eco_Data/`). A full client
   install yields more icons than a server-only install.
 - A built `AssetRipper.GUI.Free` binary (Linux build works).
-- `mise exec -- pnpm install` (the script's only extra dep is `sharp`,
+- `mise exec -- aube install` (the script's only extra dep is `sharp`,
   already in `devDependencies`).
 
 #### Usage
 
 ```sh
-mise exec -- pnpm tsx scripts/extract-eco-icons.ts \
+mise exec -- aube exec tsx scripts/extract-eco-icons.ts \
   --eco-root     /path/to/EcoServer \
   --output       /path/to/eco-icons \
   --asset-ripper /path/to/AssetRipper.GUI.Free \
@@ -100,7 +100,7 @@ Pass `--compare` **without** `--eco-root`/`--asset-ripper` to skip
 extraction and just audit an existing `--output` tree against a dataset:
 
 ```sh
-mise exec -- pnpm tsx scripts/extract-eco-icons.ts \
+mise exec -- aube exec tsx scripts/extract-eco-icons.ts \
   --output  public/assets/eco-icons \
   --compare public/data/eco-v12.json
 ```

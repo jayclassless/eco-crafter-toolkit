@@ -13,7 +13,7 @@
     "lint": "oxlint .",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "fullcheck": "pnpm run lint && pnpm run typecheck && pnpm run format && pnpm run test:coverage"
+    "fullcheck": "aube run lint && aube run typecheck && aube run format && aube run test:coverage"
   },
   "dependencies": {
     "i18next": "^26.0.7",
@@ -50,10 +50,13 @@
     "vitest": "^4.1.5",
     "yargs": "^18.0.0"
   },
-  "packageManager": "pnpm@10.32.1",
-  "pnpm": {
+  "aube": {
     "overrides": {
       "axios": "1.15.1"
+    },
+    "allowBuilds": {
+      "esbuild": true,
+      "sharp": true
     }
   }
 }

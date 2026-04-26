@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "ignorePatterns": ["public/primereact-themes", "public/data"],
+  "ignorePatterns": ["public/primereact-themes", "public/data", "aube-lock.yaml"],
   "semi": false,
   "singleQuote": true,
   "tabWidth": 2,

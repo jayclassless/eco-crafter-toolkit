@@ -3,7 +3,7 @@
  * Extract an Eco game dataset (DatasetJson) from a local Eco server install.
  *
  * Usage:
- *   pnpm tsx scripts/extract-eco-dataset.ts \
+ *   aube exec tsx scripts/extract-eco-dataset.ts \
  *     --eco-root /path/to/EcoServer \
  *     --output   /path/to/eco-vN.json \
  *     [--version  1] \

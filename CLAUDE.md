@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Requirements
 
-- Changes to the project are not complete unless it has been checked for quality. This involves running the following `pnpm` scripts in this order: `typecheck`, `lint`, `format`, `test:coverage`. All must be successful. Resolve issues that they surface.
+- Changes to the project are not complete unless it has been checked for quality. This involves running the following `aube run` scripts in this order: `typecheck`, `lint`, `format`, `test:coverage`. All must be successful. Resolve issues that they surface.
 - When implementing features and changes, keep in mind the following order of priorities:
   1. Correctness: It is absolutely critical that the data and mathematics presented to the user is correct. Flaws in calculations are not acceptable.
   2. Performance: Aim to make the UI as responsive and quick as possible for the users.
@@ -17,22 +17,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-Runtime is pinned via `mise.toml` (Node 24, pnpm 10). Always prefix pnpm commands with `mise exec --`.
+Runtime is pinned via `mise.toml` (Node 24, aube, hk, pkl). Always prefix aube commands with `mise exec --`. Note `aube run <script>` is required for non-default scripts (only `test`, `start`, `stop`, `restart` are bare shortcuts).
 
-- `mise exec -- pnpm dev` — Vite dev server on port 3000 (the user usually has this running; don't start it yourself)
-- `mise exec -- pnpm build` — `tsc --noEmit` gate, then `vite build`
-- `mise exec -- pnpm typecheck` — TypeScript check only
-- `mise exec -- pnpm lint` — oxlint
-- `mise exec -- pnpm format` — oxfmt (single quotes, no semi, 2-space)
-- `mise exec -- pnpm test` — vitest run (jsdom, `src/**/*.test.{ts,tsx}`)
-- `mise exec -- pnpm test:coverage` — vitest with v8 coverage
-- `mise exec -- pnpm fullcheck` — lint + typecheck + format + coverage
-- Single test: `mise exec -- pnpm vitest run path/to/file.test.ts -t "name pattern"`
+- `mise exec -- aube run dev` — Vite dev server on port 3000 (the user usually has this running; don't start it yourself)
+- `mise exec -- aube run build` — `tsc --noEmit` gate, then `vite build`
+- `mise exec -- aube run typecheck` — TypeScript check only
+- `mise exec -- aube run lint` — oxlint
+- `mise exec -- aube run format` — oxfmt (single quotes, no semi, 2-space)
+- `mise exec -- aube test` — vitest run (jsdom, `src/**/*.test.{ts,tsx}`)
+- `mise exec -- aube run test:coverage` — vitest with v8 coverage
+- `mise exec -- aube run fullcheck` — lint + typecheck + format + coverage
+- Single test: `mise exec -- aube exec vitest run path/to/file.test.ts -t "name pattern"`
+
+Git hooks are managed by [hk](https://hk.jdx.dev/) and installed automatically by mise's `postinstall` hook (`hk install --mise`). Pre-commit runs oxlint, oxfmt, and `tsc --noEmit`. Config lives in `hk.pkl`.
 
 Data-extraction scripts (run against a local Eco install, not normal dev flow — see `README.md` for arg details):
 
-- `mise exec -- pnpm tsx scripts/extract-eco-dataset.ts --eco-root ... --output ...` — generate a `DatasetJson`
-- `mise exec -- pnpm tsx scripts/extract-eco-icons.ts --eco-root ... --output ... --asset-ripper ...` — extract sprite PNGs
+- `mise exec -- aube exec tsx scripts/extract-eco-dataset.ts --eco-root ... --output ...` — generate a `DatasetJson`
+- `mise exec -- aube exec tsx scripts/extract-eco-icons.ts --eco-root ... --output ... --asset-ripper ...` — extract sprite PNGs
 
 Neither script writes into `public/` automatically; move files and update `public/data/datasets-manifest.json` by hand.
 

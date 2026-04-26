@@ -3,7 +3,7 @@
  * Extract Eco game icons from a local Eco install's Unity icon bundle.
  *
  * Usage:
- *   pnpm tsx scripts/extract-eco-icons.ts \
+ *   aube exec tsx scripts/extract-eco-icons.ts \
  *     --eco-root     /path/to/EcoServer \
  *     --output       public/assets/eco-icons \
  *     --asset-ripper /path/to/AssetRipper.GUI.Free \
