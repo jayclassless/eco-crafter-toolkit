@@ -108,3 +108,14 @@ mise exec -- aube exec tsx scripts/extract-eco-icons.ts \
 The report enumerates Items / Skills / Talents / Tags coverage and prints
 every missing entry name in full (sorted). Exit code is always 0 — this is
 a report, not a gate.
+
+## Deployment
+
+Production hosting (S3 + CloudFront on `eco-crafter.classless.net`) is
+defined as a CDK app under `infra/`. Pushes to the `production` branch
+trigger `.github/workflows/deploy.yml`, which builds the site and uploads
+to the S3 bucket provisioned by the stack, then invalidates CloudFront.
+
+See `infra/README.md` for first-time setup, the IAM policy used by the
+deploy workflow, and instructions for adding a future Lambda API behind
+the same distribution.

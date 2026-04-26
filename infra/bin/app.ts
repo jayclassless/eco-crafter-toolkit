@@ -1,0 +1,13 @@
+#!/usr/bin/env node
+import { App } from 'aws-cdk-lib'
+
+import { EcoCrafterStack } from '../lib/eco-crafter-stack'
+
+const app = new App()
+
+new EcoCrafterStack(app, 'EcoCrafterStack', {
+  env: {
+    region: 'us-east-1',
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+  },
+})

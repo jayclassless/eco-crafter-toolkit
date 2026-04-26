@@ -1,0 +1,225 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+time:
+  '@aws-cdk/asset-awscli-v1@2.2.273': 2026-03-30T16:58:13.125Z
+  '@aws-cdk/asset-node-proxy-agent-v6@2.1.1': 2026-02-26T16:22:44.728Z
+  '@aws-cdk/cloud-assembly-schema@53.18.0': 2026-04-23T07:38:24.281Z
+  '@esbuild/darwin-arm64@0.27.7': 2026-04-02T16:41:35.638Z
+  '@esbuild/linux-arm64@0.27.7': 2026-04-02T16:42:03.486Z
+  '@esbuild/linux-x64@0.27.7': 2026-04-02T16:42:42.543Z
+  '@esbuild/win32-arm64@0.27.7': 2026-04-02T16:43:29.208Z
+  '@esbuild/win32-x64@0.27.7': 2026-04-02T16:43:41.245Z
+  '@types/node@22.19.17': 2026-04-03T11:15:07.859Z
+  aws-cdk-lib@2.251.0: 2026-04-24T23:21:54.546Z
+  aws-cdk@2.1119.0: 2026-04-23T07:37:51.100Z
+  constructs@10.6.0: 2026-03-23T09:00:21.433Z
+  esbuild@0.27.7: 2026-04-02T16:43:44.831Z
+  fsevents@2.3.3: 2023-08-21T16:24:22.854Z
+  get-tsconfig@4.14.0: 2026-04-15T02:51:47.332Z
+  resolve-pkg-maps@1.0.0: 2022-12-14T15:37:46.218Z
+  tsx@4.21.0: 2025-11-30T15:56:09.488Z
+  typescript@5.9.3: 2025-09-30T21:19:38.784Z
+  undici-types@6.21.0: 2024-11-13T13:37:09.135Z
+
+importers:
+
+  .:
+    dependencies:
+      aws-cdk-lib:
+        specifier: ^2.180.0
+        version: 2.251.0(constructs@10.6.0)
+      constructs:
+        specifier: ^10.4.0
+        version: 10.6.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.19.17
+      aws-cdk:
+        specifier: ^2.180.0
+        version: 2.1119.0
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+packages:
+
+  '@aws-cdk/asset-awscli-v1@2.2.273':
+    resolution: {integrity: sha512-X57HYUtHt9BQrlrzUNcMyRsDUCoakYNnY6qh5lNwRCHPtQoTfXmuISkfLk0AjLkcbS5lw1LLTQFiQhTDXfiTvg==}
+
+  '@aws-cdk/asset-node-proxy-agent-v6@2.1.1':
+    resolution: {integrity: sha512-We4bmHaowOPHr+IQR4/FyTGjRfjgBj4ICMjtqmJeBDWad3Q/6St12NT07leNtyuukv2qMhtSZJQorD8KpKTwRA==}
+
+  '@aws-cdk/cloud-assembly-schema@53.18.0':
+    resolution: {integrity: sha512-/fa6rOpokkfa5tVIdhsaexQq5MVVTSsZSD1Tu45YcrdyGRusGrM9RlPMCPrwvMS1UfdVFBhcgO9dl9ODWAWOeQ==}
+    engines: {node: '>= 18.0.0'}
+
+  '@esbuild/darwin-arm64@0.27.7':
+    resolution: {integrity: sha512-5lckdqeuBPlKUwvoCXIgI2D9/ABmPq3Rdp7IfL70393YgaASt7tbju3Ac+ePVi3KDH6N2RqePfHnXkaDtY9fkw==}
+    engines: {node: '>=18'}
+    os:
+    - darwin
+    cpu:
+    - arm64
+
+  '@esbuild/linux-arm64@0.27.7':
+    resolution: {integrity: sha512-RZPHBoxXuNnPQO9rvjh5jdkRmVizktkT7TCDkDmQ0W2SwHInKCAV95GRuvdSvA7w4VMwfCjUiPwDi0ZO6Nfe9A==}
+    engines: {node: '>=18'}
+    os:
+    - linux
+    cpu:
+    - arm64
+
+  '@esbuild/linux-x64@0.27.7':
+    resolution: {integrity: sha512-hzznmADPt+OmsYzw1EE33ccA+HPdIqiCRq7cQeL1Jlq2gb1+OyWBkMCrYGBJ+sxVzve2ZJEVeePbLM2iEIZSxA==}
+    engines: {node: '>=18'}
+    os:
+    - linux
+    cpu:
+    - x64
+
+  '@esbuild/win32-arm64@0.27.7':
+    resolution: {integrity: sha512-7yRhbHvPqSpRUV7Q20VuDwbjW5kIMwTHpptuUzV+AA46kiPze5Z7qgt6CLCK3pWFrHeNfDd1VKgyP4O+ng17CA==}
+    engines: {node: '>=18'}
+    os:
+    - win32
+    cpu:
+    - arm64
+
+  '@esbuild/win32-x64@0.27.7':
+    resolution: {integrity: sha512-56hiAJPhwQ1R4i+21FVF7V8kSD5zZTdHcVuRFMW0hn753vVfQN8xlx4uOPT4xoGH0Z/oVATuR82AiqSTDIpaHg==}
+    engines: {node: '>=18'}
+    os:
+    - win32
+    cpu:
+    - x64
+
+  '@types/node@22.19.17':
+    resolution: {integrity: sha512-wGdMcf+vPYM6jikpS/qhg6WiqSV/OhG+jeeHT/KlVqxYfD40iYJf9/AE1uQxVWFvU7MipKRkRv8NSHiCGgPr8Q==}
+
+  aws-cdk-lib@2.251.0:
+    resolution: {integrity: sha512-H1Jfz2Oyejn+yG24i+By9fZpYfg+E3h1XnFCF2wnt/MyGOTIePRph7MRGkX73ap10ERSpmd0Ly58OLVykFoSQA==}
+    engines: {node: '>= 20.0.0'}
+    peerDependencies:
+      constructs: ^10.5.0
+
+  aws-cdk@2.1119.0:
+    resolution: {integrity: sha512-XBxZEKH3BY4M1EX6x0qBkmOAj8viErjpww14iH6Z3z6nI0YzjZeJ05eEl7eJwzUgv7NTGagWBS9m/eDJW5+dAg==}
+    engines: {node: '>= 18.0.0'}
+    hasBin: true
+
+  constructs@10.6.0:
+    resolution: {integrity: sha512-TxHOnBO5zMo/G76ykzGF/wMpEHu257TbWiIxP9K0Yv/+t70UzgBQiTqjkAsWOPC6jW91DzJI0+ehQV6xDRNBuQ==}
+
+  esbuild@0.27.7:
+    resolution: {integrity: sha512-IxpibTjyVnmrIQo5aqNpCgoACA/dTKLTlhMHihVHhdkxKyPO1uBBthumT0rdHmcsk9uMonIWS0m4FljWzILh3w==}
+    engines: {node: '>=18'}
+    hasBin: true
+
+  fsevents@2.3.3:
+    resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
+    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
+    os:
+    - darwin
+
+  get-tsconfig@4.14.0:
+    resolution: {integrity: sha512-yTb+8DXzDREzgvYmh6s9vHsSVCHeC0G3PI5bEXNBHtmshPnO+S5O7qgLEOn0I5QvMy6kpZN8K1NKGyilLb93wA==}
+
+  resolve-pkg-maps@1.0.0:
+    resolution: {integrity: sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==}
+
+  tsx@4.21.0:
+    resolution: {integrity: sha512-5C1sg4USs1lfG0GFb2RLXsdpXqBSEhAaA/0kPL01wxzpMqLILNxIxIOKiILz+cdg/pLnOUxFYOR5yhHU666wbw==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
+
+  typescript@5.9.3:
+    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
+  undici-types@6.21.0:
+    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
+
+snapshots:
+
+  '@aws-cdk/asset-awscli-v1@2.2.273': {}
+
+  '@aws-cdk/asset-node-proxy-agent-v6@2.1.1': {}
+
+  '@aws-cdk/cloud-assembly-schema@53.18.0':
+    bundledDependencies:
+    - jsonschema
+    - semver
+
+  '@esbuild/darwin-arm64@0.27.7': {}
+
+  '@esbuild/linux-arm64@0.27.7': {}
+
+  '@esbuild/linux-x64@0.27.7': {}
+
+  '@esbuild/win32-arm64@0.27.7': {}
+
+  '@esbuild/win32-x64@0.27.7': {}
+
+  '@types/node@22.19.17':
+    dependencies:
+      undici-types: 6.21.0
+
+  aws-cdk-lib@2.251.0(constructs@10.6.0):
+    dependencies:
+      '@aws-cdk/asset-awscli-v1': 2.2.273
+      '@aws-cdk/asset-node-proxy-agent-v6': 2.1.1
+      '@aws-cdk/cloud-assembly-schema': 53.18.0
+      constructs: 10.6.0
+    bundledDependencies:
+    - '@aws-cdk/cloud-assembly-api'
+    - '@balena/dockerignore'
+    - case
+    - fs-extra
+    - ignore
+    - jsonschema
+    - mime-types
+    - minimatch
+    - punycode
+    - semver
+    - table
+    - yaml
+
+  aws-cdk@2.1119.0: {}
+
+  constructs@10.6.0: {}
+
+  esbuild@0.27.7:
+    optionalDependencies:
+      '@esbuild/darwin-arm64': 0.27.7
+      '@esbuild/linux-arm64': 0.27.7
+      '@esbuild/linux-x64': 0.27.7
+      '@esbuild/win32-arm64': 0.27.7
+      '@esbuild/win32-x64': 0.27.7
+
+  fsevents@2.3.3: {}
+
+  get-tsconfig@4.14.0:
+    dependencies:
+      resolve-pkg-maps: 1.0.0
+
+  resolve-pkg-maps@1.0.0: {}
+
+  tsx@4.21.0:
+    dependencies:
+      esbuild: 0.27.7
+      get-tsconfig: 4.14.0
+    optionalDependencies:
+      fsevents: 2.3.3
+
+  typescript@5.9.3: {}
+
+  undici-types@6.21.0: {}

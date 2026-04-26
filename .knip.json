@@ -1,4 +1,5 @@
 {
   "entry": ["scripts/*.ts"],
+  "ignore": ["infra/**"],
   "ignoreBinaries": ["aube"]
 }
