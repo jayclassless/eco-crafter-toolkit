@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -246,5 +246,41 @@ describe('RecipeDialog', () => {
     })
     // No InputNumber in the dialog since there's only one non-reintegrated product.
     expect(screen.queryAllByRole('spinbutton')).toHaveLength(0)
+  })
+
+  it('does not render the dialog when recipeId is null', () => {
+    const { container } = render(
+      <StoreContext.Provider
+        value={{
+          ...stores,
+          gameDataPersister: stubPersister(),
+          buildPersister: stubPersister(),
+          uiPersister: stubPersister(),
+        }}
+      >
+        <RecipeDialog
+          recipeId={null}
+          buildId={BUILD_ID}
+          datasetId={DS}
+          priceSignal={stubPriceSignal()}
+          onHide={() => {}}
+        />
+      </StoreContext.Provider>
+    )
+    expect(container.querySelector('.p-dialog')).toBeNull()
+  })
+
+  it('toggling the recipe favorite star writes through useRecipeManagement', async () => {
+    renderDialog(stores)
+    await waitFor(() => {
+      expect(screen.getAllByRole('row').length).toBeGreaterThan(0)
+    })
+    const star = document.body
+      .querySelector('.pi-star, .pi-star-fill')!
+      .closest('button') as HTMLButtonElement
+    fireEvent.click(star)
+    await waitFor(() => {
+      expect(stores.buildStore.getCell('userRecipes', UR_ID, 'favorite')).toBe(true)
+    })
   })
 })

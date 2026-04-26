@@ -1,0 +1,148 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import type { Store } from 'tinybase'
+import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { createBuildStore } from '@/stores/build-store'
+import { createGameDataStore } from '@/stores/game-data-store'
+import { StoreContext } from '@/stores/providers'
+import { createUIStore } from '@/stores/ui-store'
+
+import { PriceCalculator } from '../PriceCalculator'
+
+import '@/i18n'
+
+// jsdom can't actually run a Web Worker, so we replace `globalThis.Worker`
+// with a no-op stub that keeps the onmessage hook idle. The component then
+// renders without crashing on `new Worker(...)`.
+class FakeWorker {
+  onmessage: ((e: MessageEvent) => void) | null = null
+  postMessage = vi.fn()
+  terminate = vi.fn()
+}
+
+const DS = 'ds1'
+const BUILD = 'b1'
+
+function stubPersister(): IndexedDbPersister {
+  return { save: async () => {}, schedule: async () => {} } as unknown as IndexedDbPersister
+}
+
+function makeStores() {
+  const gameDataStore = createGameDataStore()
+  const buildStore = createBuildStore()
+  const uiStore = createUIStore()
+
+  gameDataStore.setRow('datasets', DS, {
+    id: DS,
+    name: 'Eco vTest',
+    version: 1,
+    bundledId: 'eco-vtest',
+    installedRevision: 1,
+    importedAt: '2026-01-01',
+    updatedAt: '2026-01-01',
+    isCustom: false,
+  })
+  gameDataStore.setRow('skills', 'sk-self', {
+    id: 'sk-self',
+    datasetId: DS,
+    name: 'SelfImprovementSkill',
+    profession: '',
+    maxLevel: 7,
+    laborReducePercent: '[1,1,1,1,1,1,1,1]',
+  })
+  buildStore.setRow('builds', BUILD, {
+    id: BUILD,
+    datasetId: DS,
+    name: 'Build A',
+    createdAt: '2026-01-01',
+  })
+  buildStore.setRow('userSettings', 'st1', {
+    id: 'st1',
+    buildId: BUILD,
+    marginType: 'markup',
+    calorieCost: 0,
+  })
+
+  return { gameDataStore, buildStore, uiStore }
+}
+
+function renderApp(
+  stores: { gameDataStore: Store; buildStore: Store; uiStore: Store },
+  path: string
+) {
+  return render(
+    <StoreContext.Provider
+      value={{
+        ...stores,
+        gameDataPersister: stubPersister(),
+        buildPersister: stubPersister(),
+        uiPersister: stubPersister(),
+      }}
+    >
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/:datasetId/calculator/:buildId" element={<PriceCalculator />} />
+          {/* Sink route absorbs PriceCalculator's redirect targets ('/' and
+              '/:datasetId/calculator') so react-router doesn't warn about
+              "no routes matched" in the redirect-validation tests. */}
+          <Route path="*" element={null} />
+        </Routes>
+      </MemoryRouter>
+    </StoreContext.Provider>
+  )
+}
+
+beforeEach(() => {
+  vi.stubGlobal('Worker', FakeWorker)
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+describe('PriceCalculator (smoke)', () => {
+  it('renders the navbar, build name, and the three column panels', async () => {
+    const stores = makeStores()
+    renderApp(stores, `/${DS}/calculator/${BUILD}`)
+    // Build name is shown in the SplitButton in the NavBar.
+    await waitFor(() => expect(screen.getByText('Build A')).toBeInTheDocument())
+    // Three columns: ConfigPanel, Materials, Products. Look for headers.
+    expect(document.body.querySelector('.col-3')).toBeInTheDocument()
+    expect(document.body.querySelector('.col-4')).toBeInTheDocument()
+    expect(document.body.querySelector('.col-5')).toBeInTheDocument()
+  })
+
+  it('persists activeDatasetId and activeBuildId in uiStore on mount', async () => {
+    const stores = makeStores()
+    renderApp(stores, `/${DS}/calculator/${BUILD}`)
+    await waitFor(() => {
+      expect(stores.uiStore.getCell('uiState', 'main', 'activeDatasetId')).toBe(DS)
+      expect(stores.uiStore.getCell('uiState', 'main', 'activeBuildId')).toBe(BUILD)
+    })
+  })
+
+  it('redirects to / when the datasetId in the URL is not installed', () => {
+    const stores = makeStores()
+    const { container } = renderApp(stores, '/missing-dataset/calculator/foo')
+    expect(container.querySelector('.col-3')).toBeNull()
+  })
+
+  it('redirects to /:datasetId/calculator when the build id is missing', () => {
+    const stores = makeStores()
+    const { container } = renderApp(stores, `/${DS}/calculator/missing-build`)
+    expect(container.querySelector('.col-3')).toBeNull()
+  })
+
+  it('opens the settings sidebar when the menu icon is clicked', async () => {
+    const stores = makeStores()
+    renderApp(stores, `/${DS}/calculator/${BUILD}`)
+    await waitFor(() => expect(screen.getByText('Build A')).toBeInTheDocument())
+    const menuBtn = document.body.querySelector('.pi-bars')!.closest('button') as HTMLButtonElement
+    fireEvent.click(menuBtn)
+    await waitFor(() => {
+      expect(screen.getByText(/Settings/i)).toBeInTheDocument()
+    })
+  })
+})

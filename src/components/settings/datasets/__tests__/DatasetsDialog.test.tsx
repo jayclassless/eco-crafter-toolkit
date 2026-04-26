@@ -202,4 +202,53 @@ describe('DatasetsDialog', () => {
     fireEvent.click(within(v12Row).getByRole('button', { name: /switch/i }))
     expect(onSwitch).toHaveBeenCalledWith('ds-random-2')
   })
+
+  it('shows an Update button when the manifest revision is newer than the installed one', async () => {
+    const stores = makeStores({ withLoadedV13: true })
+    // Bump the manifest revision so the row gets an availableRevision.
+    vi.unstubAllGlobals()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.endsWith('datasets-manifest.json')) {
+          const newer = {
+            datasets: manifest.datasets.map((d) =>
+              d.id === 'eco-v13' ? { ...d, revision: 5 } : d
+            ),
+          }
+          return { ok: true, json: async () => newer } as Response
+        }
+        return { ok: false, json: async () => ({}) } as Response
+      })
+    )
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getByText('Eco v13.0.2')).toBeInTheDocument())
+    const v13Row = screen.getByText('Eco v13.0.2').closest('tr')!
+    expect(within(v13Row).getByRole('button', { name: /update/i })).toBeInTheDocument()
+  })
+
+  it('clicking Download on an unloaded row triggers an import', async () => {
+    const stores = makeStores()
+    vi.unstubAllGlobals()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.endsWith('datasets-manifest.json')) {
+          return { ok: true, json: async () => manifest } as Response
+        }
+        return {
+          ok: true,
+          json: async () =>
+            ({ Version: 1, Skills: [], Items: [], Tags: [], Recipes: [] }) as unknown as object,
+        } as Response
+      })
+    )
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getByText('Eco v13.0.2')).toBeInTheDocument())
+    const v13Row = screen.getByText('Eco v13.0.2').closest('tr')!
+    fireEvent.click(within(v13Row).getByRole('button', { name: /download/i }))
+    await waitFor(() => {
+      expect(stores.gameDataStore.getRowIds('datasets').length).toBe(1)
+    })
+  })
 })

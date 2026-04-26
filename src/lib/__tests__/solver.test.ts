@@ -838,3 +838,695 @@ describe('solve', () => {
     })
   })
 })
+
+describe('solve — additional scenarios', () => {
+  describe('margin types', () => {
+    it('applies grossMargin formula to derive sale price', () => {
+      const recipe = makeRecipe({
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'wood', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'plank', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(
+        makeInput({
+          recipes: [recipe],
+          prices: { wood: 100 },
+          margins: { m1: { name: 'GM', percent: 25 } },
+          recipeMargins: { 'recipe-1': 'm1' },
+          settings: { marginType: 'grossMargin', calorieCost: 0, applyMarginBetweenSkills: false },
+        })
+      )
+      // grossMargin: 100 / (1 - 0.25) = 133.333…
+      expect(result.prices['plank'].costPrice).toBeCloseTo(100)
+      expect(result.prices['plank'].salePrice).toBeCloseTo(133.333333, 4)
+    })
+
+    it('produces 0 sale price when cost is 0 even with a markup margin', () => {
+      const recipe = makeRecipe({
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        products: [
+          { itemOrTagId: 'free', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(
+        makeInput({
+          recipes: [recipe],
+          margins: { m1: { name: 'M', percent: 50 } },
+          recipeMargins: { 'recipe-1': 'm1' },
+        })
+      )
+      expect(result.prices['free'].costPrice).toBeCloseTo(0)
+      expect(result.prices['free'].salePrice).toBeCloseTo(0)
+    })
+
+    it('uses the recipeMargin when no productMargin is set', () => {
+      const recipe = makeRecipe({
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'wood', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'plank', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(
+        makeInput({
+          recipes: [recipe],
+          prices: { wood: 50 },
+          margins: { rm: { name: 'R', percent: 30 } },
+          recipeMargins: { 'recipe-1': 'rm' },
+        })
+      )
+      expect(result.prices['plank'].salePrice).toBeCloseTo(65)
+    })
+
+    it('treats a missing margin id as no margin (sale equals cost)', () => {
+      const recipe = makeRecipe({
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'wood', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'plank', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(
+        makeInput({
+          recipes: [recipe],
+          prices: { wood: 7 },
+          recipeMargins: { 'recipe-1': 'phantom' },
+        })
+      )
+      expect(result.prices['plank'].costPrice).toBeCloseTo(7)
+      expect(result.prices['plank'].salePrice).toBeCloseTo(7)
+    })
+  })
+
+  describe('product quantities and shares', () => {
+    it('returns recipe-derived cost even when overrides seed the same id', () => {
+      // Verifies that a downstream consumer that depends on the override sees
+      // the override price, while the overridden product's own recipe entry
+      // still computes its own cost from ingredients.
+      const producer = makeRecipe({
+        id: 'p1',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'wood', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'plank', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const consumer = makeRecipe({
+        id: 'c1',
+        skillId: 'skill-c',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'plank', baseQuantity: -2, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'table', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(
+        makeInput({
+          recipes: [consumer, producer],
+          prices: { wood: 1 },
+          overrides: { plank: 50 },
+        })
+      )
+      // plank candidate from producer = 1, but override seeds 50 so consumer
+      // sees 50; the table cost should reflect that.
+      expect(result.prices['plank'].costPrice).toBeCloseTo(1)
+      expect(result.prices['table'].costPrice).toBeCloseTo(100)
+    })
+
+    it('skips products with quantity 0 (no price emitted, no division by zero)', () => {
+      const recipe = makeRecipe({
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'rock', baseQuantity: -2, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'gold', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+          { itemOrTagId: 'dust', baseQuantity: 0, share: 0, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(makeInput({ recipes: [recipe], prices: { rock: 10 } }))
+      expect(result.prices['gold'].costPrice).toBeCloseTo(20)
+      expect(result.prices['dust']).toBeUndefined()
+    })
+
+    it('keys recipePrices per (recipe, product) for multi-product recipes', () => {
+      const recipe = makeRecipe({
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'rock', baseQuantity: -10, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'a', baseQuantity: 1, share: 0.7, isReintegrated: false, modifiers: [] },
+          { itemOrTagId: 'b', baseQuantity: 1, share: 0.3, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(makeInput({ recipes: [recipe], prices: { rock: 1 } }))
+      expect(result.recipePrices['recipe-1::a'].costPrice).toBeCloseTo(7)
+      expect(result.recipePrices['recipe-1::b'].costPrice).toBeCloseTo(3)
+    })
+  })
+
+  describe('recipeCosts breakdown', () => {
+    it('exposes per-recipe craftTime, laborAmount, costPerMinute and calorieCost', () => {
+      const recipe = makeRecipe({
+        baseCraftTime: 4,
+        baseLaborCost: 500,
+        costPerMinute: 0.25,
+        skillLevel: 4, // 0.65 reduction in default array
+        laborModifiers: [{ dynamicType: 'Skill', refName: 'skill-1' }],
+        ingredients: [],
+        products: [
+          { itemOrTagId: 'item', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(
+        makeInput({
+          recipes: [recipe],
+          settings: { marginType: 'markup', calorieCost: 200, applyMarginBetweenSkills: false },
+        })
+      )
+      const breakdown = result.recipeCosts['recipe-1']
+      expect(breakdown.craftTime).toBeCloseTo(4)
+      expect(breakdown.craftTimeCost).toBeCloseTo(1)
+      expect(breakdown.laborAmount).toBeCloseTo(500 * 0.65)
+      expect(breakdown.laborCost).toBeCloseTo((500 * 0.65 * 200) / 1000)
+      expect(breakdown.costPerMinute).toBeCloseTo(0.25)
+      expect(breakdown.calorieCost).toBe(200)
+    })
+  })
+
+  describe('reintegrated products + multi-product cost shares', () => {
+    it('subtracts a reintegrated by-product priced via a tag', () => {
+      const recipe = makeRecipe({
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'rock', baseQuantity: -10, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'iron', baseQuantity: 2, share: 1, isReintegrated: false, modifiers: [] },
+          {
+            itemOrTagId: 'tag-slag',
+            baseQuantity: 1,
+            share: 0,
+            isReintegrated: true,
+            modifiers: [],
+          },
+        ],
+      })
+      const result = solve(
+        makeInput({
+          recipes: [recipe],
+          prices: { rock: 1, slag: 2 },
+          tagItems: { 'tag-slag': ['slag'] },
+        })
+      )
+      // 10 - 2 = 8 → 8 / 2 = 4 per iron
+      expect(result.prices['iron'].costPrice).toBeCloseTo(4)
+    })
+
+    it('shares cost across non-reintegrated products in proportion to share, regardless of quantity', () => {
+      const recipe = makeRecipe({
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'wood', baseQuantity: -10, modifiers: [] }],
+        products: [
+          {
+            itemOrTagId: 'plank',
+            baseQuantity: 4,
+            share: 0.5,
+            isReintegrated: false,
+            modifiers: [],
+          },
+          {
+            itemOrTagId: 'chip',
+            baseQuantity: 1,
+            share: 0.5,
+            isReintegrated: false,
+            modifiers: [],
+          },
+        ],
+      })
+      const result = solve(makeInput({ recipes: [recipe], prices: { wood: 4 } }))
+      // total = 40, plank gets 40*0.5=20 over 4 -> 5 each; chip gets 20 over 1 -> 20 each.
+      expect(result.prices['plank'].costPrice).toBeCloseTo(5)
+      expect(result.prices['chip'].costPrice).toBeCloseTo(20)
+    })
+  })
+
+  describe('apply margin between skills with tags + multi-recipe', () => {
+    it('does not apply a sale-side margin when ingredient comes via a tag (producingSkill is unknown)', () => {
+      // tag-wood expands to {birch, oak}; both produced in different skills.
+      // The tag itself isn't tracked in producingSkills, so the consumer
+      // (different skill) currently uses the cost price. This documents the
+      // intentional behavior so a future fix can update the test.
+      const birchRecipe = makeRecipe({
+        id: 'birch-r',
+        skillId: 'lumber',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'log', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'birch', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const consumer = makeRecipe({
+        id: 'c-r',
+        skillId: 'mason',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'tag-wood', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'frame', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(
+        makeInput({
+          recipes: [birchRecipe, consumer],
+          prices: { log: 10 },
+          tagItems: { 'tag-wood': ['birch'] },
+          margins: { m: { name: 'M', percent: 50 } },
+          recipeMargins: { 'birch-r': 'm', 'c-r': 'm' },
+          settings: { marginType: 'markup', calorieCost: 0, applyMarginBetweenSkills: true },
+        })
+      )
+      // birch sale = 15 (with 50% markup), but tag lookup uses cost = 10.
+      expect(result.prices['birch'].costPrice).toBeCloseTo(10)
+      expect(result.prices['birch'].salePrice).toBeCloseTo(15)
+      expect(result.prices['frame'].costPrice).toBeCloseTo(10)
+    })
+
+    it('uses cost price (no margin) when applyMarginBetweenSkills is true but no margin exists', () => {
+      const r1 = makeRecipe({
+        id: 'r1',
+        skillId: 'a',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'log', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'plank', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const r2 = makeRecipe({
+        id: 'r2',
+        skillId: 'b',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'plank', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'frame', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(
+        makeInput({
+          recipes: [r1, r2],
+          prices: { log: 10 },
+          settings: { marginType: 'markup', calorieCost: 0, applyMarginBetweenSkills: true },
+        })
+      )
+      // No margin → sale === cost on plank → consumer uses cost.
+      expect(result.prices['plank'].salePrice).toBeCloseTo(10)
+      expect(result.prices['frame'].costPrice).toBeCloseTo(10)
+    })
+  })
+
+  describe('multi-recipe products with downstream consumption', () => {
+    it('chooses min by default but downstream consumer reflects current min after each candidate', () => {
+      const a = makeRecipe({
+        id: 'a',
+        skillId: 'sa',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'iA', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'mid', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const b = makeRecipe({
+        id: 'b',
+        skillId: 'sb',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'iB', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'mid', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const c = makeRecipe({
+        id: 'c',
+        skillId: 'sc',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'mid', baseQuantity: -2, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'final', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(
+        makeInput({
+          recipes: [a, b, c],
+          prices: { iA: 7, iB: 3 },
+        })
+      )
+      expect(result.prices['mid'].costPrice).toBeCloseTo(3)
+      expect(result.prices['final'].costPrice).toBeCloseTo(6)
+    })
+
+    it('mirror with a primaryRecipeId matching the more-expensive producer flows through to consumers', () => {
+      const cheap = makeRecipe({
+        id: 'cheap',
+        skillId: 'sa',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'iA', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'mid', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const pricey = makeRecipe({
+        id: 'pricey',
+        skillId: 'sb',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'iB', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'mid', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const consumer = makeRecipe({
+        id: 'cons',
+        skillId: 'sc',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'mid', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'final', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(
+        makeInput({
+          recipes: [cheap, pricey, consumer],
+          prices: { iA: 5, iB: 20 },
+          priceModes: { mid: 'mirror' },
+          primaryRecipeIds: { mid: 'pricey' },
+        })
+      )
+      expect(result.prices['mid'].costPrice).toBeCloseTo(20)
+      expect(result.prices['final'].costPrice).toBeCloseTo(20)
+    })
+  })
+
+  describe('tag price modes — additional', () => {
+    const recipeForTag = (tagId = 'tag-x', productId = 'out') =>
+      makeRecipe({
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: tagId, baseQuantity: -1, modifiers: [] }],
+        products: [
+          {
+            itemOrTagId: productId,
+            baseQuantity: 1,
+            share: 1,
+            isReintegrated: false,
+            modifiers: [],
+          },
+        ],
+      })
+
+    it('falls back to min when mode=mirror but the primaryItemId is unpriced', () => {
+      const result = solve(
+        makeInput({
+          recipes: [recipeForTag()],
+          prices: { c: 5 },
+          tagItems: { 'tag-x': ['a', 'b', 'c'] },
+          primaryTagItems: { 'tag-x': 'a' },
+          priceModes: { 'tag-x': 'mirror' },
+        })
+      )
+      expect(result.prices['out'].costPrice).toBeCloseTo(5)
+    })
+
+    it('mode=avg only emits sale price when ALL children have a sale price', () => {
+      // Producer1 produces "a" and gets a sale via margin.
+      // Producer2 produces "b" with no margin → sale === cost — so all are
+      // sale-priced and the tag avg sale should match.
+      const ra = makeRecipe({
+        id: 'ra',
+        skillId: 'sa',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'log', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'a', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const rb = makeRecipe({
+        id: 'rb',
+        skillId: 'sb',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'log', baseQuantity: -2, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'b', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const consumer = makeRecipe({
+        id: 'cons',
+        skillId: 'sc',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'tag', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'frame', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(
+        makeInput({
+          recipes: [ra, rb, consumer],
+          prices: { log: 5 },
+          tagItems: { tag: ['a', 'b'] },
+          priceModes: { tag: 'avg' },
+        })
+      )
+      // a cost=5, b cost=10, avg=7.5
+      expect(result.prices['frame'].costPrice).toBeCloseTo(7.5)
+    })
+
+    it('mode=avg returns null sale price when some tag children have no sale (raw seed price only)', () => {
+      // Seed price for 'a' (no sale), recipe-derived 'b' (sale exists).
+      const rb = makeRecipe({
+        id: 'rb',
+        skillId: 'sb',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'log', baseQuantity: -2, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'b', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const consumer = makeRecipe({
+        id: 'cons',
+        skillId: 'sc',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'tag', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'frame', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(
+        makeInput({
+          recipes: [rb, consumer],
+          prices: { log: 5, a: 100 },
+          tagItems: { tag: ['a', 'b'] },
+          priceModes: { tag: 'avg' },
+          margins: { m: { name: 'M', percent: 100 } },
+          recipeMargins: { rb: 'm', cons: 'm' },
+          settings: { marginType: 'markup', calorieCost: 0, applyMarginBetweenSkills: true },
+        })
+      )
+      // tag cost = avg(100, 10) = 55; frame cost = 55 (no sale on tag because
+      // 'a' has no sale entry → applyMarginBetweenSkills can't use sale).
+      expect(result.prices['frame'].costPrice).toBeCloseTo(55)
+    })
+
+    it('emits a tag price entry alongside item prices in the output', () => {
+      const recipe = makeRecipe({
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'tag', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'frame', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(
+        makeInput({
+          recipes: [recipe],
+          prices: { a: 8, b: 3 },
+          tagItems: { tag: ['a', 'b'] },
+        })
+      )
+      expect(result.prices['tag']).toMatchObject({
+        costPrice: 3,
+        salePrice: 3,
+        recipeId: '',
+      })
+    })
+
+    it('does not error when an unused tag has no priced items (no consumer references it)', () => {
+      const result = solve(
+        makeInput({
+          recipes: [],
+          tagItems: { 'tag-orphan': ['x', 'y'] },
+        })
+      )
+      expect(result.prices['tag-orphan']).toBeUndefined()
+      expect(result.errors).toHaveLength(0)
+    })
+  })
+
+  describe('Skill modifier edge cases', () => {
+    it('clamps skill level to the last laborReducePercent entry', () => {
+      const recipe = makeRecipe({
+        baseLaborCost: 100,
+        baseCraftTime: 0,
+        skillLevel: 99,
+        laborReducePercent: [1, 0.5],
+        laborModifiers: [{ dynamicType: 'Skill', refName: 'skill-1' }],
+        products: [
+          { itemOrTagId: 'item', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(
+        makeInput({
+          recipes: [recipe],
+          settings: { marginType: 'markup', calorieCost: 1000, applyMarginBetweenSkills: false },
+        })
+      )
+      expect(result.prices['item'].costPrice).toBeCloseTo(50)
+    })
+
+    it('falls back to base percent when modifier has skillId but no plugin module is fitted', () => {
+      const recipe = makeRecipe({
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [
+          {
+            itemOrTagId: 'wood',
+            baseQuantity: -2,
+            modifiers: [{ dynamicType: 'Module', refName: 'CookingSkill', skillId: 'cooking' }],
+          },
+        ],
+        products: [
+          { itemOrTagId: 'plank', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(makeInput({ recipes: [recipe], prices: { wood: 5 } }))
+      expect(result.prices['plank'].costPrice).toBeCloseTo(10)
+    })
+  })
+
+  describe('error reporting', () => {
+    it('reports one error per unresolved recipe', () => {
+      const r1 = makeRecipe({
+        id: 'r1',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'unknown', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'p1', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const r2 = makeRecipe({
+        id: 'r2',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'unknown', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'p2', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(makeInput({ recipes: [r1, r2] }))
+      expect(result.errors).toHaveLength(2)
+      const ids = result.errors.map((e) => e.recipeId).sort()
+      expect(ids).toEqual(['r1', 'r2'])
+    })
+
+    it('treats a self-referencing recipe as unresolvable', () => {
+      const recipe = makeRecipe({
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'thing', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'thing', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(makeInput({ recipes: [recipe] }))
+      expect(result.errors).toHaveLength(1)
+      expect(result.prices['thing']).toBeUndefined()
+    })
+
+    it('returns no errors for empty input', () => {
+      const result = solve(makeInput())
+      expect(result.errors).toHaveLength(0)
+      expect(result.prices).toEqual({})
+    })
+  })
+
+  describe('resolveProductCost — additional edge cases', () => {
+    const cand = (recipeId: string, costPrice: number, salePrice = costPrice) => ({
+      recipeId,
+      costPrice,
+      salePrice,
+      skillId: `skill-${recipeId}`,
+    })
+
+    it('manual mode with multiple candidates falls through to min', () => {
+      const r = resolveProductCost([cand('a', 5), cand('b', 1)], 'manual', '')
+      expect(r.costPrice).toBe(1)
+      expect(r.recipeId).toBe('b')
+    })
+
+    it('avg with single candidate returns that candidate intact (skill preserved)', () => {
+      const r = resolveProductCost([cand('a', 4)], 'avg', '')
+      expect(r.costPrice).toBe(4)
+      expect(r.recipeId).toBe('a')
+      expect(r.skillId).toBe('skill-a')
+    })
+  })
+})

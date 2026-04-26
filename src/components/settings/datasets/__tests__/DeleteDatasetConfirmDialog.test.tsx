@@ -136,6 +136,19 @@ describe('DeleteDatasetConfirmDialog — execution', () => {
     expect(stores.gameDataStore.getRowIds('datasets')).toEqual([])
   })
 
+  it('does not render when target is null', () => {
+    const { container } = renderDialog({ target: null })
+    // Dialog should not be visible.
+    expect(container.querySelector('.p-dialog')).toBeNull()
+  })
+
+  it('cancel button closes the dialog without purging', () => {
+    const onHide = vi.fn()
+    renderDialog({ target: makeRow(), onHide })
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+    expect(onHide).toHaveBeenCalled()
+  })
+
   it('keeps the dialog open and shows a toast when purgeData throws', async () => {
     const { purgeData: mockedPurgeData } = await import('@/lib/purge-data')
     ;(mockedPurgeData as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(

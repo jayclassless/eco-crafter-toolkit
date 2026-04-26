@@ -21,7 +21,10 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     coverage: {
       include: ['src/**/*.{ts,tsx}'],
-      exclude: ['src/types/*', '**/__tests__/**'],
+      // src/main.tsx is the Vite entry — pure side effects (CSS imports,
+      // i18n init, root mount). It can't run in jsdom and there's nothing
+      // worth asserting against, so it's excluded from coverage.
+      exclude: ['src/types/*', 'src/main.tsx', '**/__tests__/**'],
     },
   },
 })
