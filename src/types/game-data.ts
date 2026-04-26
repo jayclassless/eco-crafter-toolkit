@@ -1,14 +1,3 @@
-export interface Dataset {
-  id: string
-  name: string
-  version: number
-  bundledId?: string
-  installedRevision?: number
-  importedAt: string
-  updatedAt: string
-  isCustom: boolean
-}
-
 export interface Skill {
   id: string
   datasetId: string

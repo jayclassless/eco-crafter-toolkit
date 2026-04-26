@@ -6,7 +6,7 @@ import { useStores } from '@/stores/providers'
 
 import { ensureUserCraftingTable } from './use-crafting-table-management'
 
-export interface UseRecipeManagement {
+interface UseRecipeManagement {
   addRecipe: (recipeId: string) => string
   removeRecipe: (userRecipeId: string) => void
   setRecipeMargin: (userRecipeId: string, marginId: string) => void

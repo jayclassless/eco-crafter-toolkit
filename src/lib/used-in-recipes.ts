@@ -12,7 +12,7 @@ export interface UsedInRecipe {
   viaTag: { tagId: string; tagName: string; tagRawName: string } | null
 }
 
-export interface ComputeUsedInRecipesParams {
+interface ComputeUsedInRecipesParams {
   itemId: string
   buildId: string
   datasetId: string

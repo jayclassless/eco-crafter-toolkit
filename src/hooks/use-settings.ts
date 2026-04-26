@@ -3,7 +3,7 @@ import type { Cell, Store } from 'tinybase'
 
 import { useStores } from '@/stores/providers'
 
-export interface UseSettings {
+interface UseSettings {
   /**
    * Returns the row id of the singleton settings row for this build, or
    * empty string if it doesn't exist yet.

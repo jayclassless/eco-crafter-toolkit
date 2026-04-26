@@ -5,7 +5,7 @@ import { findInstalledDatasetsByBundledId } from '@/lib/dataset-utils'
 import { importDatasetFromManifestEntry } from '@/lib/import-dataset-from-manifest'
 import type { ManifestEntry } from '@/types/dataset-manifest'
 
-export class DatasetNotInstalledError extends Error {
+class DatasetNotInstalledError extends Error {
   constructor(bundledId: string) {
     super(`Dataset "${bundledId}" is not installed`)
     this.name = 'DatasetNotInstalledError'

@@ -54,13 +54,13 @@ export interface SolverPluginModule {
   pluginType?: string
 }
 
-export interface SolverElement {
+interface SolverElement {
   itemOrTagId: string
   baseQuantity: number
   modifiers: SolverModifier[]
 }
 
-export interface SolverProduct {
+interface SolverProduct {
   itemOrTagId: string
   baseQuantity: number
   share: number
@@ -115,7 +115,7 @@ export interface SolverPrice {
   recipeId: string
 }
 
-export interface SolverElementPrice {
+interface SolverElementPrice {
   recipeId: string
   itemOrTagId: string
   unitPrice: number

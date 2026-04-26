@@ -5,7 +5,7 @@ import { loadIndex, peekIndex, type LocalizedNameIndex } from '@/stores/localize
 
 const EMPTY: LocalizedNameIndex = new Map()
 
-export interface LocalizedNameLookup {
+interface LocalizedNameLookup {
   getName: (entityType: string, entityId: string) => string
   /** True once the primary locale's index has loaded. */
   ready: boolean

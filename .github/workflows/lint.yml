@@ -20,3 +20,7 @@ jobs:
 
       - run: aube run format:check
         if: always()
+
+      - run: aube run knip
+        if: always()
+

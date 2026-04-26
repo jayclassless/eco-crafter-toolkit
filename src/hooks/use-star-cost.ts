@@ -7,7 +7,7 @@ import { useStoreRevision } from './use-store-revision'
 
 const BUILD_TABLES = ['userSkills', 'userTalents'] as const
 
-export interface StarCost {
+interface StarCost {
   total: number
   skillCost: number
   talentCost: number

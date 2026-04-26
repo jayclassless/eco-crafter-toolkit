@@ -1,20 +1,6 @@
 {
   "name": "eco-crafter-toolkit",
   "version": "0.1.0",
-  "private": true,
-  "license": "MIT",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit",
-    "lint": "oxlint .",
-    "format": "oxfmt .",
-    "format:check": "oxfmt --check .",
-    "fullcheck": "aube run lint && aube run typecheck && aube run format && aube run test:coverage"
-  },
   "dependencies": {
     "i18next": "^26.0.7",
     "i18next-browser-languagedetector": "^8.2.1",
@@ -25,7 +11,6 @@
     "react-dom": "19.2.5",
     "react-i18next": "^17.0.4",
     "react-router-dom": "^7.14.2",
-    "rxjs": "^7.8.2",
     "tinybase": "^8.2.0",
     "uuid": "^14.0.0"
   },
@@ -41,6 +26,7 @@
     "@vitest/coverage-v8": "^4.1.5",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.0.2",
+    "knip": "^6.7.0",
     "oxfmt": "^0.46.0",
     "oxlint": "^1.61.0",
     "sharp": "^0.34.5",
@@ -50,6 +36,19 @@
     "vitest": "^4.1.5",
     "yargs": "^18.0.0"
   },
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "dev": "vite",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "fullcheck": "aube run lint && aube run knip && aube run typecheck && aube run format && aube run test:coverage",
+    "lint": "oxlint .",
+    "knip": "knip",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit"
+  },
   "aube": {
     "overrides": {
       "axios": "1.15.1"
@@ -58,5 +57,7 @@
       "esbuild": true,
       "sharp": true
     }
-  }
+  },
+  "license": "MIT",
+  "private": true
 }

@@ -3,7 +3,7 @@ import { useRef, useState } from 'react'
 
 import { EcoIcon } from '@/components/common/EcoIcon'
 
-export interface GroupedAutoCompleteItem {
+interface GroupedAutoCompleteItem {
   id: string
   name: string
   rawName: string

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 
 import type { RecipeCostBreakdown } from '@/types/solver'
 
-export interface PriceEntry {
+interface PriceEntry {
   costPrice: number
   salePrice: number
   /**

@@ -37,7 +37,7 @@ function getZeroDurationFormatter(locale: string): Intl.DurationFormat {
   return fmt
 }
 
-export interface Localization {
+interface Localization {
   /**
    * Format a numeric price for read-only display. Always renders exactly 2
    * fraction digits in the active locale.

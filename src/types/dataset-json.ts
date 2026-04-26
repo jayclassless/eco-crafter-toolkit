@@ -47,7 +47,7 @@ export interface TalentBonusScopeJson {
   ItemTags?: string[]
 }
 
-export interface PartRequirementJson {
+interface PartRequirementJson {
   Name: string
   Quantity: number
 }

@@ -6,7 +6,7 @@ import { useStores } from '@/stores/providers'
 
 import { ensureUserCraftingTable } from './use-crafting-table-management'
 
-export interface UseSkillManagement {
+interface UseSkillManagement {
   addSkill: (skillId: string) => void
   removeSkill: (userSkillId: string, skillId: string) => void
   setSkillLevel: (userSkillId: string, level: number) => void

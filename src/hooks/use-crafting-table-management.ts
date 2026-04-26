@@ -4,7 +4,7 @@ import type { Store } from 'tinybase'
 import { generateId } from '@/lib/ids'
 import { useStores } from '@/stores/providers'
 
-export interface UseCraftingTableManagement {
+interface UseCraftingTableManagement {
   addTable: (craftingTableId: string) => string
   getRecipesUsingTable: (userTableId: string) => string[]
   removeTableWithRecipes: (userTableId: string) => void

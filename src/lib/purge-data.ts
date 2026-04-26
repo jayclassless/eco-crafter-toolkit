@@ -3,14 +3,14 @@ import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-d
 
 import { deleteLocalizedNamesForDataset } from '@/stores/localized-name-store'
 
-export type PurgeSelection = {
+type PurgeSelection = {
   /** Dataset ids to purge. May be empty. */
   datasetIds: string[]
   /** If true, purge every build regardless of dataset. */
   purgeAllBuilds: boolean
 }
 
-export type PurgeStores = {
+type PurgeStores = {
   gameDataStore: Store
   buildStore: Store
   uiStore: Store

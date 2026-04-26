@@ -4,7 +4,7 @@ import type { Cell, Store } from 'tinybase'
 import { generateId } from '@/lib/ids'
 import { useStores } from '@/stores/providers'
 
-export interface UseMarginManagement {
+interface UseMarginManagement {
   createMargin: (name?: string, percent?: number) => string
   updateMargin: (marginId: string, field: 'name' | 'percent', value: Cell) => void
   setDefaultMargin: (marginId: string) => void

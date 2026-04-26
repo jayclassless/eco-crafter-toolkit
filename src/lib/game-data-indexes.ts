@@ -13,7 +13,7 @@ import {
   type TalentIndexEntry,
 } from '@/hooks/use-solver-snapshot'
 
-export interface TalentDetails {
+interface TalentDetails {
   id: string
   name: string
   talentGroupName: string
@@ -22,7 +22,7 @@ export interface TalentDetails {
   maxTalentLevel: number
 }
 
-export interface GameDataIndexes {
+interface GameDataIndexes {
   productItemIdsByRecipeId: Map<string, string[]>
   ingredientItemIdsByRecipeId: Map<string, Set<string>>
   unlockingTalentsByRecipeId: Map<string, string[]>

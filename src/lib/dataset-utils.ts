@@ -23,7 +23,7 @@ export function getDatasetIdsByBundledId(gameDataStore: Store): Map<string, stri
   return map
 }
 
-export interface InstalledDatasetMatch {
+interface InstalledDatasetMatch {
   datasetId: string
   installedRevision: number
 }

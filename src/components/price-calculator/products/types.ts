@@ -5,7 +5,7 @@ export interface MarginOption {
   name: string
 }
 
-export interface ParentRow {
+interface ParentRow {
   kind: 'parent'
   rowKey: string
   parent: ProductParent
@@ -15,14 +15,14 @@ export interface ParentRow {
   childUserRecipeIds: readonly string[]
 }
 
-export interface ChildRow {
+interface ChildRow {
   kind: 'child'
   rowKey: string
   product: Product
   parent: ProductParent
 }
 
-export interface FlatRow {
+interface FlatRow {
   kind: 'flat'
   rowKey: string
   product: Product

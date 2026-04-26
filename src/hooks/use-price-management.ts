@@ -5,7 +5,7 @@ import { generateId } from '@/lib/ids'
 import { useStores } from '@/stores/providers'
 import type { PriceMode } from '@/types/solver'
 
-export interface UsePriceManagement {
+interface UsePriceManagement {
   /**
    * Sets the user-entered price for an item or tag. Creates the row if it
    * doesn't exist yet. A null price is normalized to 0. Typing a price

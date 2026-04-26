@@ -13,14 +13,14 @@ import {
 } from '@/lib/dynamic-values'
 import type { SolverModifier, SolverRecipe } from '@/types/solver'
 
-export type MetricKind = 'labor' | 'craftTime' | 'ingredients' | 'products'
+type MetricKind = 'labor' | 'craftTime' | 'ingredients' | 'products'
 
 export interface AppliedEffect {
   metric: MetricKind
   signedPercent: number
 }
 
-export type BonusIcon =
+type BonusIcon =
   | { kind: 'skill'; rawName: string }
   | { kind: 'talent'; talentGroupName: string }
   | { kind: 'module'; rawName: string }
@@ -32,7 +32,7 @@ export interface AppliedBonus {
   effects: AppliedEffect[]
 }
 
-export interface ResolvedRecipeModifiers {
+interface ResolvedRecipeModifiers {
   solverRecipe: SolverRecipe
   context: ModifierContext
   /** Per-element multiplier (raw, pre-rounding), keyed by recipeElement row id. */

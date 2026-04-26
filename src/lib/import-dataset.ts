@@ -31,7 +31,7 @@ export function computeMaxTalentLevel(value: number, cap: number): number {
   return 20
 }
 
-export interface ValidationResult {
+interface ValidationResult {
   valid: boolean
   errors: string[]
 }
