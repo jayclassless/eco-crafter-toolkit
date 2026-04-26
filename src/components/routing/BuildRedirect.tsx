@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Navigate, useParams } from 'react-router-dom'
 
@@ -11,6 +11,10 @@ export function BuildRedirect() {
   const { gameDataStore } = useStores()
   const { getBuilds, createBuild } = useBuild()
   const [createdBuildId, setCreatedBuildId] = useState<string | null>(null)
+  // Ref guard so StrictMode's dev double-invoke of effects can't create a
+  // second build: the setState write isn't visible to the second invocation
+  // (same closure), but a ref write is.
+  const creatingRef = useRef(false)
 
   const datasetExists = !!datasetId && gameDataStore.hasRow('datasets', datasetId)
   const builds = datasetExists ? getBuilds(datasetId!) : []
@@ -20,10 +24,11 @@ export function BuildRedirect() {
   // (existing builds) is resolved synchronously below — no effect, no blank
   // frame between mount and redirect.
   useEffect(() => {
-    if (!needsCreate || !datasetId || createdBuildId) return
+    if (!needsCreate || !datasetId || creatingRef.current) return
+    creatingRef.current = true
     const id = createBuild(datasetId, t('build.selector.defaultName', { number: 1 }))
     setCreatedBuildId(id)
-  }, [needsCreate, datasetId, createBuild, createdBuildId, t])
+  }, [needsCreate, datasetId, createBuild, t])
 
   if (!datasetExists) return <Navigate to="/" replace />
 

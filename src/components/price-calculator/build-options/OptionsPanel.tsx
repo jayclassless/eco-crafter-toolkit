@@ -21,7 +21,6 @@ const BUILD_TABLES = ['userMargins', 'userSettings', 'builds'] as const
 
 interface Props {
   buildId: string
-  onDeleteBuild: () => void
 }
 
 interface MarginRow {
@@ -39,12 +38,11 @@ interface UserSettings {
   applyMarginBetweenSkills: boolean
 }
 
-export function OptionsPanel({ buildId, onDeleteBuild }: Props) {
+export function OptionsPanel({ buildId }: Props) {
   const { t } = useTranslation()
   const { buildStore } = useStores()
   const marginMgmt = useMarginManagement(buildId)
   const settingsMgmt = useSettings(buildId)
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [marginToDelete, setMarginToDelete] = useState<string | null>(null)
   const [affectedRecipeCount, setAffectedRecipeCount] = useState(0)
   useStoreRevision(buildStore, BUILD_TABLES)
@@ -83,7 +81,6 @@ export function OptionsPanel({ buildId, onDeleteBuild }: Props) {
 
   const settings = getSettings()
   const margins = getMargins()
-  const buildName = (buildStore.getCell('builds', buildId, 'name') as string) ?? ''
 
   const marginTypeOptions = useMemo(
     () => [
@@ -246,41 +243,6 @@ export function OptionsPanel({ buildId, onDeleteBuild }: Props) {
           </div>
         </div>
 
-        {/* Delete build */}
-        <Button
-          icon="pi pi-trash"
-          label={t('priceCalculator.config.deleteBuild')}
-          severity="danger"
-          outlined
-          size="small"
-          className="w-full"
-          onClick={() => setShowDeleteDialog(true)}
-        />
-        <Dialog
-          header={t('priceCalculator.config.deleteBuildConfirmTitle')}
-          visible={showDeleteDialog}
-          onHide={() => setShowDeleteDialog(false)}
-          footer={
-            <div className="flex justify-content-end gap-2">
-              <Button
-                label={t('priceCalculator.config.cancel')}
-                text
-                onClick={() => setShowDeleteDialog(false)}
-              />
-              <Button
-                label={t('priceCalculator.config.deleteBuild')}
-                severity="danger"
-                icon="pi pi-trash"
-                onClick={() => {
-                  setShowDeleteDialog(false)
-                  onDeleteBuild()
-                }}
-              />
-            </div>
-          }
-        >
-          <p>{t('priceCalculator.config.deleteBuildConfirmMessage', { name: buildName })}</p>
-        </Dialog>
         <Dialog
           header={t('priceCalculator.config.deleteMarginTitle')}
           visible={marginToDelete !== null}

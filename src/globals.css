@@ -50,8 +50,10 @@ body {
   height: auto;
 }
 
-.p-tabmenu .p-tabmenu-nav {
-  gap: 0.25rem;
+.build-selector-split .p-button:focus,
+.build-selector-split .p-button:focus-visible {
+  box-shadow: none;
+  outline: none;
 }
 
 .settings-mode-selector {

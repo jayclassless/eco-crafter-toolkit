@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import type { Store } from 'tinybase'
 import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
@@ -102,6 +103,37 @@ describe('BuildRedirect', () => {
     addDataset(stores.gameDataStore, 'ds1')
 
     renderAt('/ds1/calculator', stores)
+
+    await waitFor(() => {
+      const path = screen.getByTestId('location').textContent ?? ''
+      expect(path).toMatch(/^\/ds1\/calculator\/.+$/)
+    })
+
+    expect(stores.buildStore.getRowIds('builds')).toHaveLength(1)
+  })
+
+  it('creates exactly one build under StrictMode (regression: dev double-invoke)', async () => {
+    addDataset(stores.gameDataStore, 'ds1')
+
+    render(
+      <StrictMode>
+        <StoreContext.Provider
+          value={{
+            ...stores,
+            gameDataPersister: stubPersister(),
+            buildPersister: stubPersister(),
+            uiPersister: stubPersister(),
+          }}
+        >
+          <MemoryRouter initialEntries={['/ds1/calculator']}>
+            <Routes>
+              <Route path="/:datasetId/calculator" element={<BuildRedirect />} />
+              <Route path="*" element={<LocationProbe />} />
+            </Routes>
+          </MemoryRouter>
+        </StoreContext.Provider>
+      </StrictMode>
+    )
 
     await waitFor(() => {
       const path = screen.getByTestId('location').textContent ?? ''

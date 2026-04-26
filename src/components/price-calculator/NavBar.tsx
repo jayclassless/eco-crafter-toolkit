@@ -1,0 +1,41 @@
+import { Button } from 'primereact/button'
+import { useTranslation } from 'react-i18next'
+
+import { BuildSelector } from './BuildSelector'
+
+interface Props {
+  datasetId: string
+  buildId: string
+  onSelectBuild: (buildId: string) => void
+  onDeletedBuild: (buildId: string) => void
+  onOpenSettings: () => void
+}
+
+export function NavBar({
+  datasetId,
+  buildId,
+  onSelectBuild,
+  onDeletedBuild,
+  onOpenSettings,
+}: Props) {
+  const { t } = useTranslation()
+
+  return (
+    <div className="flex align-items-center gap-3 p-2 pb-0">
+      <img
+        src="/icons/favicon-256x256.png"
+        alt={t('common.title')}
+        title={t('common.title')}
+        className="block"
+        style={{ height: '2rem', width: 'auto' }}
+      />
+      <BuildSelector
+        datasetId={datasetId}
+        activeBuildId={buildId}
+        onSelect={onSelectBuild}
+        onDeleted={onDeletedBuild}
+      />
+      <Button icon="pi pi-bars" text className="ml-auto" onClick={onOpenSettings} />
+    </div>
+  )
+}

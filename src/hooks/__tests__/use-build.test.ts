@@ -190,4 +190,111 @@ describe('createBuildOps', () => {
       expect(buildStore.getRowIds('hiddenSkills')).toEqual(['csg2'])
     })
   })
+
+  describe('cloneBuild', () => {
+    it('returns null when the source build does not exist', () => {
+      expect(ops().cloneBuild('nonexistent')).toBeNull()
+    })
+
+    it('preserves datasetId and suffixes name with " (Copy)"', () => {
+      const sourceId = ops().createBuild('ds1', 'Original')
+      const newId = ops().cloneBuild(sourceId)
+
+      expect(newId).not.toBeNull()
+      expect(newId).not.toBe(sourceId)
+      expect(buildStore.getCell('builds', newId!, 'datasetId')).toBe('ds1')
+      expect(buildStore.getCell('builds', newId!, 'name')).toBe('Original (Copy)')
+    })
+
+    it('duplicates every per-build row under the new buildId and leaves source untouched', () => {
+      const sourceId = ops().createBuild('ds1', 'Source')
+
+      // Add custom rows across several per-build tables to verify they all copy.
+      buildStore.setRow('userPrices', 'up1', {
+        id: 'up1',
+        buildId: sourceId,
+        itemOrTagId: 'item-x',
+        price: 42,
+        isOverride: true,
+      })
+      buildStore.setRow('hiddenCraftingTables', 'hct1', {
+        buildId: sourceId,
+        craftingTableId: 'ct-anvil',
+      })
+      buildStore.setRow('hiddenTags', 'ht1', {
+        buildId: sourceId,
+        tagId: 'tag-foo',
+      })
+
+      // A foreign-build row in the same tables must not be copied.
+      buildStore.setRow('userPrices', 'up-foreign', {
+        id: 'up-foreign',
+        buildId: 'other-build',
+        itemOrTagId: 'item-y',
+        price: 99,
+        isOverride: false,
+      })
+
+      const sourceRecipeCount = buildStore
+        .getRowIds('userRecipes')
+        .filter((r) => buildStore.getCell('userRecipes', r, 'buildId') === sourceId).length
+
+      const newId = ops().cloneBuild(sourceId)!
+
+      // Source rows untouched
+      expect(buildStore.getCell('builds', sourceId, 'name')).toBe('Source')
+      expect(buildStore.getCell('userPrices', 'up1', 'buildId')).toBe(sourceId)
+      expect(buildStore.getCell('userPrices', 'up-foreign', 'buildId')).toBe('other-build')
+
+      // Cloned rows present in each table we wrote to, and recipe count matches.
+      const clonedRecipeCount = buildStore
+        .getRowIds('userRecipes')
+        .filter((r) => buildStore.getCell('userRecipes', r, 'buildId') === newId).length
+      expect(clonedRecipeCount).toBe(sourceRecipeCount)
+
+      const clonedPrice = buildStore
+        .getRowIds('userPrices')
+        .map((r) => buildStore.getRow('userPrices', r))
+        .find((r) => r.buildId === newId)
+      expect(clonedPrice?.itemOrTagId).toBe('item-x')
+      expect(clonedPrice?.price).toBe(42)
+
+      const clonedHiddenCt = buildStore
+        .getRowIds('hiddenCraftingTables')
+        .filter((r) => buildStore.getCell('hiddenCraftingTables', r, 'buildId') === newId)
+      expect(clonedHiddenCt).toHaveLength(1)
+
+      const clonedHiddenTag = buildStore
+        .getRowIds('hiddenTags')
+        .filter((r) => buildStore.getCell('hiddenTags', r, 'buildId') === newId)
+      expect(clonedHiddenTag).toHaveLength(1)
+
+      // Default margin is duplicated (createBuild creates one) and remains marked default.
+      const clonedMargins = buildStore
+        .getRowIds('userMargins')
+        .map((r) => buildStore.getRow('userMargins', r))
+        .filter((r) => r.buildId === newId)
+      expect(clonedMargins).toHaveLength(1)
+      expect(clonedMargins[0].isDefault).toBe(true)
+    })
+
+    it('skips computedPrices to avoid copying a stale solver cache', () => {
+      const sourceId = ops().createBuild('ds1', 'Source')
+      buildStore.setRow('computedPrices', 'cp1', {
+        id: 'cp1',
+        buildId: sourceId,
+        itemOrTagId: 'item-x',
+        costPrice: 1,
+        salePrice: 2,
+        recipeId: 'recipe-x',
+      })
+
+      const newId = ops().cloneBuild(sourceId)!
+
+      const clonedComputed = buildStore
+        .getRowIds('computedPrices')
+        .filter((r) => buildStore.getCell('computedPrices', r, 'buildId') === newId)
+      expect(clonedComputed).toHaveLength(0)
+    })
+  })
 })

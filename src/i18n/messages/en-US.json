@@ -1,5 +1,6 @@
 {
   "common": {
+    "title": "Eco Crafter Toolkit",
     "otherProfession": "Other",
     "none": "None",
     "notApplicable": "N/A",
@@ -20,7 +21,10 @@
   "build": {
     "selector": {
       "newBuild": "New Build",
-      "defaultName": "Build {number}"
+      "defaultName": "Build {number}",
+      "rename": "Rename",
+      "clone": "Clone",
+      "delete": "Delete"
     }
   },
   "priceCalculator": {
@@ -58,7 +62,6 @@
       "calorieCostTooltip": "Cost per 1000 calories of labor. Converts labor into a currency cost.",
       "applyMarginBetweenSkills": "Apply margin between skills",
       "applyMarginBetweenSkillsTooltip": "When an ingredient is produced by a different skill than the recipe using it, use the margin-adjusted price instead of the base cost price.",
-      "deleteBuild": "Delete Build",
       "deleteBuildConfirmTitle": "Delete Build",
       "deleteBuildConfirmMessage": "Are you sure you want to delete \"{name}\"? This action cannot be undone.",
       "cancel": "Cancel"

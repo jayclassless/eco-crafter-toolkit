@@ -1,25 +1,21 @@
-import { Button } from 'primereact/button'
 import { useCallback, useEffect, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 
-import { DatasetSelector } from '@/components/dataset/DatasetSelector'
 import { SettingsSidebar } from '@/components/settings/SettingsSidebar'
-import { useBuild } from '@/hooks/use-build'
 import { usePriceSolver } from '@/hooks/use-price-solver'
 import { usePriceSignal } from '@/hooks/use-prices-signal'
 import { useSolverSnapshot } from '@/hooks/use-solver-snapshot'
 import { useStores } from '@/stores/providers'
 
 import { ConfigPanel } from './build-options/ConfigPanel'
-import { BuildSelector } from './BuildSelector'
 import { Materials } from './materials/Materials'
+import { NavBar } from './NavBar'
 import { Products } from './products/Products'
 
 export function PriceCalculator() {
   const { datasetId, buildId } = useParams<{ datasetId: string; buildId: string }>()
   const navigate = useNavigate()
   const { gameDataStore, buildStore, uiStore } = useStores()
-  const { deleteBuild } = useBuild()
   const { result, recalculate } = usePriceSolver()
   const { buildSnapshot } = useSolverSnapshot()
   // Holds the latest computed prices in an out-of-React store. ProductsImpl
@@ -103,11 +99,14 @@ export function PriceCalculator() {
     }
   }, [buildValid, buildId, buildStore, triggerSolver])
 
-  const handleDeleteBuild = useCallback(() => {
-    if (!buildId || !datasetId) return
-    deleteBuild(buildId)
-    navigate(`/${datasetId}/calculator`)
-  }, [buildId, datasetId, deleteBuild, navigate])
+  const handleBuildDeleted = useCallback(
+    (deletedBuildId: string) => {
+      if (deletedBuildId === buildId && datasetId) {
+        navigate(`/${datasetId}/calculator`)
+      }
+    },
+    [buildId, datasetId, navigate]
+  )
 
   // Push new solver results into the out-of-React price signal. Cells that
   // subscribe via `usePriceCell` wake up individually; no React re-render
@@ -123,27 +122,17 @@ export function PriceCalculator() {
 
   return (
     <div className="flex flex-column h-screen">
-      <div className="flex align-items-center gap-3 p-2 pb-0">
-        <DatasetSelector
-          activeDatasetId={datasetId}
-          onSelect={(id) => navigate(`/${id}/calculator`)}
-        />
-        <BuildSelector
-          datasetId={datasetId}
-          activeBuildId={buildId}
-          onSelect={(id) => navigate(`/${datasetId}/calculator/${id}`)}
-        />
-        <Button
-          icon="pi pi-bars"
-          text
-          className="ml-auto"
-          onClick={() => setSettingsVisible(true)}
-        />
-      </div>
+      <NavBar
+        datasetId={datasetId}
+        buildId={buildId}
+        onSelectBuild={(id) => navigate(`/${datasetId}/calculator/${id}`)}
+        onDeletedBuild={handleBuildDeleted}
+        onOpenSettings={() => setSettingsVisible(true)}
+      />
 
       <div className="flex flex-1 overflow-hidden">
         <div className="col-3 overflow-y-auto p-3">
-          <ConfigPanel buildId={buildId} datasetId={datasetId} onDeleteBuild={handleDeleteBuild} />
+          <ConfigPanel buildId={buildId} datasetId={datasetId} />
         </div>
         <div className="col-4 p-3 flex flex-column" style={{ minHeight: 0 }}>
           <Materials buildId={buildId} datasetId={datasetId} priceSignal={priceSignal} />

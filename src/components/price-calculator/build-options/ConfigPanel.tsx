@@ -7,7 +7,6 @@ import { SkillsPanel } from './SkillsPanel'
 interface Props {
   buildId: string
   datasetId: string
-  onDeleteBuild: () => void
 }
 
 // Memoized so unrelated PriceCalculator re-renders (notably the solver-result
@@ -15,12 +14,12 @@ interface Props {
 // don't cascade into SkillsPanel / CraftingTablesPanel / OptionsPanel — each
 // of which re-runs its own DataTable full of PrimeReact inputs. That cascade
 // was the dominant ~800ms task after every build-store mutation.
-function ConfigPanelImpl({ buildId, datasetId, onDeleteBuild }: Props) {
+function ConfigPanelImpl({ buildId, datasetId }: Props) {
   return (
     <div className="flex flex-column gap-2">
       <SkillsPanel buildId={buildId} datasetId={datasetId} />
       <CraftingTablesPanel buildId={buildId} datasetId={datasetId} />
-      <OptionsPanel buildId={buildId} onDeleteBuild={onDeleteBuild} />
+      <OptionsPanel buildId={buildId} />
     </div>
   )
 }

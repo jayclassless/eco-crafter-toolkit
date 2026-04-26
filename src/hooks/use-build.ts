@@ -1,10 +1,45 @@
 import { useMemo } from 'react'
-import type { Store } from 'tinybase'
+import type { Row, Store } from 'tinybase'
 
 import { generateId } from '@/lib/ids'
 import { useStores } from '@/stores/providers'
 
 import { createSkillManagement } from './use-skill-management'
+
+// Every table in build-store that has a buildId column. Used by both
+// deleteBuild (to wipe a build) and cloneBuild (to duplicate it).
+const PER_BUILD_TABLES = [
+  'userSkills',
+  'userTalents',
+  'userCraftingTables',
+  'userRecipes',
+  'userPrices',
+  'userMargins',
+  'userRecipeMargins',
+  'userProductMargins',
+  'userProductShares',
+  'userSettings',
+  'computedPrices',
+  'hiddenSkills',
+  'hiddenCraftingTables',
+  'hiddenTags',
+] as const
+
+// Subset of PER_BUILD_TABLES whose row schema includes an `id` cell.
+// The `hidden*` tables are keyed by row id only, with no separate id column.
+const TABLES_WITH_ID_CELL = new Set([
+  'userSkills',
+  'userTalents',
+  'userCraftingTables',
+  'userRecipes',
+  'userPrices',
+  'userMargins',
+  'userRecipeMargins',
+  'userProductMargins',
+  'userProductShares',
+  'userSettings',
+  'computedPrices',
+])
 
 export function createBuildOps(buildStore: Store, gameDataStore: Store) {
   const getBuilds = (datasetId: string) => {
@@ -67,21 +102,7 @@ export function createBuildOps(buildStore: Store, gameDataStore: Store) {
 
   const deleteBuild = (buildId: string) => {
     buildStore.transaction(() => {
-      const tables = [
-        'userSkills',
-        'userTalents',
-        'userCraftingTables',
-        'userRecipes',
-        'userPrices',
-        'userMargins',
-        'userRecipeMargins',
-        'userProductMargins',
-        'userSettings',
-        'computedPrices',
-        'hiddenSkills',
-      ] as const
-
-      for (const table of tables) {
+      for (const table of PER_BUILD_TABLES) {
         for (const rowId of buildStore.getRowIds(table)) {
           if (buildStore.getCell(table, rowId, 'buildId') === buildId) {
             buildStore.delRow(table, rowId)
@@ -93,7 +114,43 @@ export function createBuildOps(buildStore: Store, gameDataStore: Store) {
     })
   }
 
-  return { getBuilds, createBuild, deleteBuild }
+  const cloneBuild = (sourceBuildId: string) => {
+    const source = buildStore.getRow('builds', sourceBuildId)
+    if (!source.id) return null
+
+    const newBuildId = generateId()
+
+    buildStore.transaction(() => {
+      buildStore.setRow('builds', newBuildId, {
+        id: newBuildId,
+        datasetId: source.datasetId,
+        name: `${source.name} (Copy)`,
+        createdAt: new Date().toISOString(),
+      })
+
+      for (const table of PER_BUILD_TABLES) {
+        // computedPrices is a solver cache — the solver will rebuild it for
+        // the new build; copying it would just be wasted work.
+        if (table === 'computedPrices') continue
+
+        for (const rowId of buildStore.getRowIds(table)) {
+          if (buildStore.getCell(table, rowId, 'buildId') !== sourceBuildId) continue
+
+          const sourceRow = buildStore.getRow(table, rowId)
+          const newRowId = generateId()
+          const newRow: Row = { ...sourceRow, buildId: newBuildId }
+          if (TABLES_WITH_ID_CELL.has(table)) {
+            newRow.id = newRowId
+          }
+          buildStore.setRow(table, newRowId, newRow)
+        }
+      }
+    })
+
+    return newBuildId
+  }
+
+  return { getBuilds, createBuild, deleteBuild, cloneBuild }
 }
 
 export function useBuild() {
