@@ -141,11 +141,14 @@ describe('DeleteDatasetConfirmDialog — execution', () => {
     ;(mockedPurgeData as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error('boom')
     )
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     renderDialog({ target: makeRow() })
     fireEvent.click(screen.getByRole('button', { name: /^delete$/i }))
 
     await waitFor(() => expect(document.body.textContent ?? '').toMatch(/delete failed/i))
     expect(reloadSpy).not.toHaveBeenCalled()
+    expect(errorSpy).toHaveBeenCalledWith('Failed to delete dataset', expect.any(Error))
+    errorSpy.mockRestore()
   })
 })
