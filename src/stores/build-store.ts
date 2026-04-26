@@ -84,6 +84,7 @@ export function createBuildStore() {
       showParts: { type: 'boolean', default: true },
       showUntagged: { type: 'boolean', default: true },
       showOnlyFavorites: { type: 'boolean', default: false },
+      defaultShareForSecondaryItems: { type: 'number', default: 20 },
     },
     computedPrices: {
       id: { type: 'string' },

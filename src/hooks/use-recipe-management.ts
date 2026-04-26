@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
 import type { Store } from 'tinybase'
 
+import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { generateId } from '@/lib/ids'
+import { computeAutoShares, roundSharesPreservingSum } from '@/lib/share-defaults'
 import { useStores } from '@/stores/providers'
 
 import { ensureUserCraftingTable } from './use-crafting-table-management'
@@ -184,8 +186,23 @@ export function createRecipeManagement(
     }
 
     if (currentShares.size === 0) {
-      for (let i = 0; i < nonReintegrated.length; i++) {
-        currentShares.set(nonReintegrated[i], i === 0 ? 100 : 0)
+      // Bootstrap from the build's auto-default split — this is the user's
+      // first edit on this recipe, so the persisted "manual" set should
+      // start from whatever the dialog/solver was already showing
+      // (config-driven, with Slag/Tailings forced to 0). Round fractional
+      // values to integers while preserving sum=100.
+      let configPercent = 20
+      for (const rowId of buildStore.getRowIds('userSettings')) {
+        const row = buildStore.getRow('userSettings', rowId)
+        if (row.buildId !== buildId) continue
+        configPercent = (row.defaultShareForSecondaryItems as number) ?? 20
+        break
+      }
+      const zeroShare = getGameDataIndexes(gameDataStore).recipeIndexes.zeroShareSecondaryItemIds
+      const fractional = computeAutoShares(nonReintegrated, zeroShare, configPercent)
+      const rounded = roundSharesPreservingSum(nonReintegrated, fractional)
+      for (const pid of nonReintegrated) {
+        currentShares.set(pid, rounded.get(pid) ?? 0)
       }
     } else {
       // Make sure every non-reintegrated product has an entry (handles a

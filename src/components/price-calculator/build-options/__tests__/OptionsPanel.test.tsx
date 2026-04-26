@@ -35,6 +35,7 @@ function makeStores() {
     marginType: 'markup',
     calorieCost: 50,
     applyMarginBetweenSkills: true,
+    defaultShareForSecondaryItems: 25,
   })
   buildStore.setRow('userMargins', 'm1', {
     id: 'm1',
@@ -170,6 +171,34 @@ describe('OptionsPanel (smoke)', () => {
     fireEvent.click(ok)
     await waitFor(() => {
       expect(stores.buildStore.hasRow('userMargins', 'm2')).toBe(false)
+    })
+  })
+
+  it('renders the defaultShareForSecondaryItems value with a % suffix', () => {
+    const stores = makeStores()
+    renderPanel(stores)
+    const inputs = Array.from(document.body.querySelectorAll('input')) as HTMLInputElement[]
+    // Seeded as 25, displayed as "25 %" (PrimeReact formats with the suffix
+    // inline addon, but the input itself shows the numeric value).
+    expect(inputs.some((i) => i.value === '25' || i.value === '25 %')).toBe(true)
+  })
+
+  it('writes defaultShareForSecondaryItems on edit', async () => {
+    const stores = makeStores()
+    renderPanel(stores)
+    // Find the input adjacent to the suffix span "%" — that's the
+    // defaultShareForSecondaryItems numeric field.
+    const suffixSpans = Array.from(document.body.querySelectorAll('.p-inputgroup-addon'))
+    const shareSuffix = suffixSpans.find((s) => s.textContent === '%') as HTMLElement
+    expect(shareSuffix).toBeDefined()
+    const group = shareSuffix.closest('.p-inputgroup') as HTMLElement
+    const input = group.querySelector('input') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '40' } })
+    fireEvent.blur(input)
+    await waitFor(() => {
+      expect(
+        stores.buildStore.getCell('userSettings', 'st1', 'defaultShareForSecondaryItems')
+      ).toBe(40)
     })
   })
 

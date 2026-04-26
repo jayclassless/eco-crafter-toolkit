@@ -414,6 +414,32 @@ describe('createRecipeManagement', () => {
       mgmt().removeRecipe(ur)
       expect(sharesFor(ur)).toEqual({})
     })
+
+    it('bootstraps from the build defaultShareForSecondaryItems setting', () => {
+      // No userSettings row → schema default 20.
+      const ur = setupMultiProduct(['a', 'b'])
+      // First-edit no-op: setting b to its already-displayed default (20)
+      // would still write the bootstrap; instead set it to 50 so we can see
+      // both the bootstrap (a=80, b=20) and the redistribute (a→50, b=50).
+      mgmt().setProductShare(ur, 'b', 50)
+      expect(sharesFor(ur)).toEqual({ a: 50, b: 50 })
+    })
+
+    it('bootstraps with primary=100 and zero-share secondaries=0 when items are SlagItem/Tailings', () => {
+      gameDataStore.setRow('items', 'slag', {
+        id: 'slag',
+        datasetId: DATASET_ID,
+        name: 'SlagItem',
+        isTag: false,
+      })
+      const ur = setupMultiProduct(['ingot', 'slag'])
+      // ingot is primary, slag is the only (zero-share) secondary → bootstrap
+      // is {ingot: 100, slag: 0}. Setting ingot to 60 redistributes 40 to
+      // slag (it's the only "other" — even though it would normally be 0,
+      // an explicit user edit takes precedence).
+      mgmt().setProductShare(ur, 'ingot', 60)
+      expect(sharesFor(ur)).toEqual({ ingot: 60, slag: 40 })
+    })
   })
 
   describe('setRecipeFavorite', () => {

@@ -361,10 +361,10 @@ describe('buildSolverSnapshot', () => {
     expect(r.ingredients).toHaveLength(1)
     expect(r.ingredients[0].modifiers).toHaveLength(1)
     expect(r.products).toHaveLength(2)
-    // Default without userProductShares: primary (first non-reintegrated by
-    // index) gets 100%, others 0%.
-    expect(r.products[0].share).toBeCloseTo(1)
-    expect(r.products[1].share).toBeCloseTo(0)
+    // Default without userProductShares: primary gets `100 − config`, the
+    // single non-zero secondary gets `config`. Schema default config is 20.
+    expect(r.products[0].share).toBeCloseTo(0.8)
+    expect(r.products[1].share).toBeCloseTo(0.2)
     expect(r.craftMinutesModifiers).toHaveLength(1)
     expect(r.laborModifiers).toHaveLength(1)
   })
@@ -1001,14 +1001,16 @@ describe('buildSolverSnapshot', () => {
       expect(scrap.share).toBe(0)
     })
 
-    it('without userProductShares rows, primary (first non-reintegrated by index) = 1 and others = 0', () => {
+    it('without userProductShares rows, applies the build-level default split', () => {
+      // Schema default `defaultShareForSecondaryItems` = 20 → primary 80,
+      // each of the two non-zero secondaries gets 10.
       setupMultiProductRecipe({ productIds: ['a', 'b', 'c'] })
       const snap = buildSolverSnapshot(game, build, BUILD, DS)!
       const r = snap.recipes[0]
       expect(r.products).toHaveLength(3)
-      expect(r.products[0].share).toBeCloseTo(1)
-      expect(r.products[1].share).toBe(0)
-      expect(r.products[2].share).toBe(0)
+      expect(r.products[0].share).toBeCloseTo(0.8)
+      expect(r.products[1].share).toBeCloseTo(0.1)
+      expect(r.products[2].share).toBeCloseTo(0.1)
     })
 
     it('when a reintegrated product sits at index 0, primary is the next non-reintegrated product', () => {
@@ -1067,9 +1069,75 @@ describe('buildSolverSnapshot', () => {
       })
       const snap = buildSolverSnapshot(game, build, BUILD, DS)!
       const r = snap.recipes[0]
-      // No valid rows for this userRecipeId → default (primary=1, rest=0)
+      // No valid rows for this userRecipeId → falls back to the auto split
+      // (config 20 → primary 80, secondary 20).
+      expect(r.products[0].share).toBeCloseTo(0.8)
+      expect(r.products[1].share).toBeCloseTo(0.2)
+    })
+
+    it('honors a custom defaultShareForSecondaryItems setting', () => {
+      setupMultiProductRecipe({ productIds: ['a', 'b'] })
+      // Override the default 20 with 50.
+      build.setCell('userSettings', 'st1', 'defaultShareForSecondaryItems', 50)
+      const snap = buildSolverSnapshot(game, build, BUILD, DS)!
+      const r = snap.recipes[0]
+      expect(r.products[0].share).toBeCloseTo(0.5)
+      expect(r.products[1].share).toBeCloseTo(0.5)
+    })
+
+    it('config=0 reverts to the legacy primary=100, secondaries=0 split', () => {
+      setupMultiProductRecipe({ productIds: ['a', 'b', 'c'] })
+      build.setCell('userSettings', 'st1', 'defaultShareForSecondaryItems', 0)
+      const snap = buildSolverSnapshot(game, build, BUILD, DS)!
+      const r = snap.recipes[0]
       expect(r.products[0].share).toBeCloseTo(1)
       expect(r.products[1].share).toBe(0)
+      expect(r.products[2].share).toBe(0)
+    })
+
+    it('keeps Slag/Tailings/WetTailings at 0 even when defaultShareForSecondaryItems > 0', () => {
+      // Add real item rows so buildRecipeIndexes sees them as zero-share.
+      game.setRow('items', 'slag', { id: 'slag', datasetId: DS, name: 'SlagItem', isTag: false })
+      game.setRow('items', 'tail', {
+        id: 'tail',
+        datasetId: DS,
+        name: 'TailingsItem',
+        isTag: false,
+      })
+      game.setRow('items', 'wet', {
+        id: 'wet',
+        datasetId: DS,
+        name: 'WetTailingsItem',
+        isTag: false,
+      })
+      // Recipe: primary=ingot, secondaries=slag, tail, wet (all zero-share),
+      // plus one non-zero secondary 'wool'.
+      setupMultiProductRecipe({ productIds: ['ingot', 'slag', 'tail', 'wet', 'wool'] })
+      const snap = buildSolverSnapshot(game, build, BUILD, DS)!
+      const r = snap.recipes[0]
+      const ingot = r.products.find((p) => p.itemOrTagId === 'ingot')!
+      const slag = r.products.find((p) => p.itemOrTagId === 'slag')!
+      const tail = r.products.find((p) => p.itemOrTagId === 'tail')!
+      const wet = r.products.find((p) => p.itemOrTagId === 'wet')!
+      const wool = r.products.find((p) => p.itemOrTagId === 'wool')!
+      // Schema default config = 20. Only 'wool' counts as a non-zero
+      // secondary, so it gets the full 20%; primary gets 80%; waste stays 0.
+      expect(ingot.share).toBeCloseTo(0.8)
+      expect(slag.share).toBe(0)
+      expect(tail.share).toBe(0)
+      expect(wet.share).toBe(0)
+      expect(wool.share).toBeCloseTo(0.2)
+    })
+
+    it('keeps primary at 100% when every secondary is zero-share', () => {
+      game.setRow('items', 'slag', { id: 'slag', datasetId: DS, name: 'SlagItem', isTag: false })
+      setupMultiProductRecipe({ productIds: ['ingot', 'slag'] })
+      const snap = buildSolverSnapshot(game, build, BUILD, DS)!
+      const r = snap.recipes[0]
+      const ingot = r.products.find((p) => p.itemOrTagId === 'ingot')!
+      const slag = r.products.find((p) => p.itemOrTagId === 'slag')!
+      expect(ingot.share).toBeCloseTo(1)
+      expect(slag.share).toBe(0)
     })
 
     it('drops products the user has moved to Materials (isOverride=true, manual)', () => {

@@ -34,6 +34,7 @@ import {
 } from '@/hooks/use-store-revision'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { formatQty, resolveRecipeModifiers } from '@/lib/recipe-modifiers'
+import { computeAutoShares } from '@/lib/share-defaults'
 import { computeUsedInRecipes, type UsedInRecipe } from '@/lib/used-in-recipes'
 import { useStores } from '@/stores/providers'
 
@@ -247,7 +248,26 @@ export function RecipeDialog({
     const hasUserShares = userSharesByProduct.size > 0
 
     const productRaws = rawRows.filter((r) => r.isProduct).sort((a, b) => a.index - b.index)
-    let primaryAssigned = false
+
+    // Auto-default shares used when the user hasn't edited any share for this
+    // recipe. Mirrors the snapshot-side computation in
+    // `assembleSolverRecipe` so the dialog displays exactly what the solver
+    // charges. Only computed when needed.
+    let autoShares: Map<string, number> | null = null
+    if (!hasUserShares) {
+      const nonReintegratedIds = productRaws
+        .map((r) => r.itemOrTagId)
+        .filter((id) => !ingredientItemIds.has(id))
+      let configPercent = 20
+      for (const rowId of buildStore.getRowIds('userSettings')) {
+        const row = buildStore.getRow('userSettings', rowId)
+        if (row.buildId !== buildId) continue
+        configPercent = (row.defaultShareForSecondaryItems as number) ?? 20
+        break
+      }
+      const zeroShare = getGameDataIndexes(gameDataStore).recipeIndexes.zeroShareSecondaryItemIds
+      autoShares = computeAutoShares(nonReintegratedIds, zeroShare, configPercent)
+    }
 
     // modifier multiplier + final modified quantity per recipeElement, keyed
     // by recipeElement row id. Absent key → no bonuses apply (multiplier = 1).
@@ -311,15 +331,9 @@ export function RecipeDialog({
           userPriceId: '',
         })
       } else {
-        let sharePercent: number
-        if (hasUserShares) {
-          sharePercent = userSharesByProduct.get(r.itemOrTagId) ?? 0
-        } else if (!primaryAssigned) {
-          sharePercent = 100
-          primaryAssigned = true
-        } else {
-          sharePercent = 0
-        }
+        const sharePercent = hasUserShares
+          ? (userSharesByProduct.get(r.itemOrTagId) ?? 0)
+          : (autoShares?.get(r.itemOrTagId) ?? 0)
         products.push({
           recipeElementId: r.id,
           itemOrTagId: r.itemOrTagId,
@@ -378,7 +392,10 @@ export function RecipeDialog({
     setActiveTabIndex(e.index)
   }, [])
 
-  useStoreRevision(buildStore, ['userProductShares'])
+  // userSettings is included so the dialog refreshes when the build's
+  // defaultShareForSecondaryItems changes — getElements reads it inline to
+  // compute auto-default share percentages for multi-product recipes.
+  useStoreRevision(buildStore, ['userProductShares', 'userSettings'])
   // Row-ids-only: the useMemo below only reads userRecipes.recipeId (stable
   // after row creation) and userPrices.itemOrTagId (ditto). Cell edits like
   // a userPrices.price change must not invalidate this memo — doing so

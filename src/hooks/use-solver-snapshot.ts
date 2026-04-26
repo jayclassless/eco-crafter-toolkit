@@ -1,7 +1,9 @@
 import { useCallback } from 'react'
 import type { Store } from 'tinybase'
 
+import { ZERO_SHARE_SECONDARY_ITEM_NAMES } from '@/lib/game-constants'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
+import { computeAutoShares } from '@/lib/share-defaults'
 import { useStores } from '@/stores/providers'
 import type { PriceMode, SolverInput, SolverRecipe, SolverModifier } from '@/types/solver'
 
@@ -27,6 +29,11 @@ export interface RecipeIndexes {
   getSkill: (skillId: string) => { laborReducePercent: number[] } | null
   getModifiers: (targetType: string, targetId: string) => SolverModifier[]
   computeEffectiveValue: (b: BonusEntry, level: number) => number
+  /** Item IDs whose raw name is in `ZERO_SHARE_SECONDARY_ITEM_NAMES`
+   * (Slag/Tailings/WetTailings). Consumed by `computeAutoShares` so these
+   * waste byproducts stay at 0% even when the build's
+   * `defaultShareForSecondaryItems` is non-zero. */
+  zeroShareSecondaryItemIds: Set<string>
 }
 
 export interface RecipeBuildState {
@@ -35,6 +42,9 @@ export interface RecipeBuildState {
   userTalentsByTalentId: Map<string, { enabled: boolean; level: number }>
   userCraftingTablesByCTId: Map<string, { pluginModuleId: string; costPerMinute: number }>
   userProductSharesByUserRecipeId: Map<string, Map<string, number>>
+  /** Build-level config: % of recipe cost split among non-zero secondaries
+   * by default. See `computeAutoShares` in `src/lib/share-defaults.ts`. */
+  defaultShareForSecondaryItems: number
 }
 
 // Without these indexes the per-recipe loop is O(N_userRecipes ×
@@ -160,6 +170,12 @@ export function buildRecipeIndexes(gameDataStore: Store): RecipeIndexes {
     return cached
   }
 
+  const zeroShareSecondaryItemIds = new Set<string>()
+  for (const itemId of gameDataStore.getRowIds('items')) {
+    const name = gameDataStore.getCell('items', itemId, 'name') as string | undefined
+    if (name && ZERO_SHARE_SECONDARY_ITEM_NAMES.has(name)) zeroShareSecondaryItemIds.add(itemId)
+  }
+
   return {
     modifiersByTarget,
     elementsByRecipeId,
@@ -168,6 +184,7 @@ export function buildRecipeIndexes(gameDataStore: Store): RecipeIndexes {
     getSkill,
     getModifiers,
     computeEffectiveValue,
+    zeroShareSecondaryItemIds,
   }
 }
 
@@ -213,8 +230,8 @@ export function buildRecipeBuildState(buildStore: Store, buildId: string): Recip
     })
   }
 
-  // Absence of a userRecipeId key means "no user override — use the default
-  // split (primary product = 1.0, others = 0)".
+  // Absence of a userRecipeId key means "no user override — fall back to the
+  // build's auto-default split (see `computeAutoShares`)".
   const userProductSharesByUserRecipeId = new Map<string, Map<string, number>>()
   for (const upsId of buildStore.getRowIds('userProductShares')) {
     const ups = buildStore.getRow('userProductShares', upsId)
@@ -228,12 +245,21 @@ export function buildRecipeBuildState(buildStore: Store, buildId: string): Recip
     inner.set(ups.productItemOrTagId as string, ups.sharePercent as number)
   }
 
+  let defaultShareForSecondaryItems = 20
+  for (const rowId of buildStore.getRowIds('userSettings')) {
+    const row = buildStore.getRow('userSettings', rowId)
+    if (row.buildId !== buildId) continue
+    defaultShareForSecondaryItems = (row.defaultShareForSecondaryItems as number) ?? 20
+    break
+  }
+
   return {
     userRecipesById,
     userSkillsBySkillId,
     userTalentsByTalentId,
     userCraftingTablesByCTId,
     userProductSharesByUserRecipeId,
+    defaultShareForSecondaryItems,
   }
 }
 
@@ -338,24 +364,32 @@ export function assembleSolverRecipe(
   }
 
   // Apply shares. Non-reintegrated products get either user-assigned
-  // percentages (userProductShares rows, stored 0–100) or the default of
-  // primary=1.0 (first non-reintegrated by recipeElement index) / others=0.
-  // Reintegrated products always carry share=0 — they aren't in the priced
-  // output at all, just deducted from cost.
+  // percentages (userProductShares rows, stored 0–100) or the build's
+  // auto-default split (see `computeAutoShares`). Reintegrated products
+  // always carry share=0 — they aren't in the priced output at all, just
+  // deducted from cost.
   const userShares = userRecipeId
     ? buildState.userProductSharesByUserRecipeId.get(userRecipeId)
     : undefined
-  let primaryAssigned = false
-  for (const prod of products) {
-    if (prod.isReintegrated) continue
-    if (userShares) {
+  if (userShares) {
+    for (const prod of products) {
+      if (prod.isReintegrated) continue
       const pct = userShares.get(prod.itemOrTagId) ?? 0
       prod.share = pct / 100
-    } else if (!primaryAssigned) {
-      prod.share = 1
-      primaryAssigned = true
-    } else {
-      prod.share = 0
+    }
+  } else {
+    const nonReintegratedIds: string[] = []
+    for (const prod of products) {
+      if (!prod.isReintegrated) nonReintegratedIds.push(prod.itemOrTagId)
+    }
+    const auto = computeAutoShares(
+      nonReintegratedIds,
+      indexes.zeroShareSecondaryItemIds,
+      buildState.defaultShareForSecondaryItems
+    )
+    for (const prod of products) {
+      if (prod.isReintegrated) continue
+      prod.share = (auto.get(prod.itemOrTagId) ?? 0) / 100
     }
   }
 

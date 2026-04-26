@@ -223,14 +223,32 @@ describe('RecipeDialog', () => {
     expect(stoneRows.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('shows the Share % column with defaults 100 on primary and 0 on secondary', async () => {
+  it('shows the Share % column with the build-default split (config 20 → 80/20)', async () => {
     renderDialog(stores)
     // PrimeReact InputNumber renders as an <input> with its current value.
+    // No userSettings row exists in the test fixture → schema default config
+    // (20) applies → primary 80, single non-zero secondary 20.
     await waitFor(() => {
       expect(screen.getAllByRole('spinbutton').length).toBe(2)
     })
     const inputs = screen.getAllByRole('spinbutton') as HTMLInputElement[]
     const values = inputs.map((i) => i.value.replace(/\s|%/g, ''))
+    expect(values).toContain('80')
+    expect(values).toContain('20')
+  })
+
+  it('keeps zero-share secondaries (SlagItem) at 0 even when config > 0', async () => {
+    // Rename 'slag' to the raw game name 'SlagItem' so it lands in the
+    // zero-share set built by buildRecipeIndexes.
+    stores.gameDataStore.setCell('items', 'slag', 'name', 'SlagItem')
+    renderDialog(stores)
+    await waitFor(() => {
+      expect(screen.getAllByRole('spinbutton').length).toBe(2)
+    })
+    const inputs = screen.getAllByRole('spinbutton') as HTMLInputElement[]
+    const values = inputs.map((i) => i.value.replace(/\s|%/g, ''))
+    // Primary back to 100, slag stays at 0 (no non-zero secondary to absorb
+    // the config%).
     expect(values).toContain('100')
     expect(values).toContain('0')
   })

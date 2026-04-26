@@ -36,6 +36,7 @@ interface UserSettings {
   marginType: string
   calorieCost: number
   applyMarginBetweenSkills: boolean
+  defaultShareForSecondaryItems: number
 }
 
 export function OptionsPanel({ buildId }: Props) {
@@ -57,6 +58,7 @@ export function OptionsPanel({ buildId }: Props) {
           marginType: row.marginType as string,
           calorieCost: row.calorieCost as number,
           applyMarginBetweenSkills: row.applyMarginBetweenSkills as boolean,
+          defaultShareForSecondaryItems: (row.defaultShareForSecondaryItems as number) ?? 20,
         }
       }
     }
@@ -202,6 +204,26 @@ export function OptionsPanel({ buildId }: Props) {
           />
         </div>
 
+        {/* Apply margin between skills */}
+        <div className="flex align-items-center gap-2">
+          <Checkbox
+            inputId="marginBetweenSkills"
+            checked={settings.applyMarginBetweenSkills}
+            onChange={(e: CheckboxChangeEvent) =>
+              setSetting('applyMarginBetweenSkills', e.checked ?? false)
+            }
+          />
+          <label htmlFor="marginBetweenSkills" className="text-sm">
+            {t('priceCalculator.config.applyMarginBetweenSkills')}
+            <i className="pi pi-info-circle ml-1 text-xs margin-between-tooltip" />
+          </label>
+          <Tooltip
+            target=".margin-between-tooltip"
+            content={t('priceCalculator.config.applyMarginBetweenSkillsTooltip')}
+            position="right"
+          />
+        </div>
+
         {/* Calorie cost */}
         <div>
           <label className="block mb-1 text-sm">
@@ -221,26 +243,25 @@ export function OptionsPanel({ buildId }: Props) {
           />
         </div>
 
-        {/* Checkboxes */}
-        <div className="flex flex-column gap-2">
-          <div className="flex align-items-center gap-2">
-            <Checkbox
-              inputId="marginBetweenSkills"
-              checked={settings.applyMarginBetweenSkills}
-              onChange={(e: CheckboxChangeEvent) =>
-                setSetting('applyMarginBetweenSkills', e.checked ?? false)
-              }
-            />
-            <label htmlFor="marginBetweenSkills" className="text-sm">
-              {t('priceCalculator.config.applyMarginBetweenSkills')}
-              <i className="pi pi-info-circle ml-1 text-xs margin-between-tooltip" />
-            </label>
-            <Tooltip
-              target=".margin-between-tooltip"
-              content={t('priceCalculator.config.applyMarginBetweenSkillsTooltip')}
-              position="right"
-            />
-          </div>
+        {/* Default share for secondary items */}
+        <div>
+          <label className="block mb-1 text-sm">
+            {t('priceCalculator.config.defaultShareForSecondaryItems')}
+            <i className="pi pi-info-circle ml-1 text-xs default-share-tooltip" />
+          </label>
+          <Tooltip
+            target=".default-share-tooltip"
+            content={t('priceCalculator.config.defaultShareForSecondaryItemsTooltip')}
+            position="right"
+          />
+          <NumericField
+            value={settings.defaultShareForSecondaryItems}
+            onChange={(v) => setSetting('defaultShareForSecondaryItems', v ?? 0)}
+            min={0}
+            max={100}
+            suffix="%"
+            className="w-full"
+          />
         </div>
 
         <Dialog

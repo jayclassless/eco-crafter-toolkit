@@ -73,6 +73,7 @@ export function createBuildOps(buildStore: Store, gameDataStore: Store) {
         showParts: true,
         showUntagged: true,
         showOnlyFavorites: false,
+        defaultShareForSecondaryItems: 20,
       })
 
       // Default margin — must exist before addSkill runs, because addSkill
