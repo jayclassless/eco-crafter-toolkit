@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { defaultLocale } from '@/i18n/config'
-import { loadIndex, peekIndex, type LocalizedNameIndex } from '@/stores/localized-name-store'
+import {
+  loadIndex,
+  type LocalizedNameIndex,
+  peekIndex,
+  subscribeLocalizedNames,
+} from '@/stores/localized-name-store'
 
 const EMPTY: LocalizedNameIndex = new Map()
 
@@ -46,19 +51,10 @@ export function useLocalizedName(
       setReady(false)
       return
     }
-    // Sync cache hit: update state directly (React bails on Object.is-equal
-    // values, so a hit-on-first-mount is a no-op) and skip the async path.
-    const cachedPrimary = peekIndex(datasetId, locale)
-    const cachedFallback =
-      locale === defaultLocale ? cachedPrimary : peekIndex(datasetId, defaultLocale)
-    if (cachedPrimary && cachedFallback) {
-      setPrimary(cachedPrimary)
-      setFallback(cachedFallback)
-      setReady(true)
-      return
-    }
+
     let cancelled = false
-    void (async () => {
+
+    const reload = async () => {
       const primaryIdx = await loadIndex(datasetId, locale)
       if (cancelled) return
       setPrimary(primaryIdx)
@@ -70,9 +66,32 @@ export function useLocalizedName(
         setFallback(fallbackIdx)
       }
       setReady(true)
-    })()
+    }
+
+    // Sync cache hit: update state directly (React bails on Object.is-equal
+    // values, so a hit-on-first-mount is a no-op) and skip the async path.
+    const cachedPrimary = peekIndex(datasetId, locale)
+    const cachedFallback =
+      locale === defaultLocale ? cachedPrimary : peekIndex(datasetId, defaultLocale)
+    if (cachedPrimary && cachedFallback) {
+      setPrimary(cachedPrimary)
+      setFallback(cachedFallback)
+      setReady(true)
+    } else {
+      void reload()
+    }
+
+    // Re-load when names are written for this dataset (e.g. a custom item
+    // gets renamed). Without this the hook holds a stale snapshot until the
+    // component remounts, and renames silently revert in the UI.
+    const unsubscribe = subscribeLocalizedNames((changedId) => {
+      if (changedId !== datasetId) return
+      void reload()
+    })
+
     return () => {
       cancelled = true
+      unsubscribe()
     }
   }, [datasetId, locale])
 

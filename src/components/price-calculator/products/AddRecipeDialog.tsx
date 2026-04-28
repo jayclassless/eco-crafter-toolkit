@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { RecipeIcon } from '@/components/common/RecipeIcon'
+import { CustomEntitiesDialog } from '@/components/settings/datasets/CustomEntitiesDialog'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { buildRecipeProductItemIds, getRecipePrimaryProductRawName } from '@/hooks/use-products'
 import { useRecipeManagement } from '@/hooks/use-recipe-management'
@@ -20,11 +21,14 @@ interface RecipeOption {
   id: string
   name: string
   rawName: string
+  isCustom: boolean
 }
+
+type Mode = 'skill' | 'standard' | 'custom'
 
 interface ModeOption {
   label: string
-  value: 'skill' | 'any'
+  value: Mode
   disabled?: boolean
 }
 
@@ -54,7 +58,7 @@ export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingR
   const isOverrideRev = useCellInTableRevision(buildStore, 'userPrices', 'isOverride')
   const gameDataRev = useStoreRevision(gameDataStore, GAME_DATA_TABLES)
 
-  const { skillRecipes, anyRecipes } = useMemo(() => {
+  const { skillRecipes, standardRecipes, customRecipes } = useMemo(() => {
     const buildSkillIds = new Set<string>()
     for (const rowId of buildStore.getRowIds('userSkills')) {
       const row = buildStore.getRow('userSkills', rowId)
@@ -82,7 +86,8 @@ export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingR
     const productItemIdsByRecipeId = buildRecipeProductItemIds(gameDataStore)
 
     const skill: RecipeOption[] = []
-    const any: RecipeOption[] = []
+    const standard: RecipeOption[] = []
+    const custom: RecipeOption[] = []
     for (const rowId of gameDataStore.getRowIds('recipes')) {
       const recipe = gameDataStore.getRow('recipes', rowId)
       if (recipe.datasetId !== datasetId) continue
@@ -90,10 +95,14 @@ export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingR
       const productIds = productItemIdsByRecipeId.get(rowId)
       const primaryProductId = productIds && productIds.length > 0 ? productIds[0] : ''
       if (primaryProductId && excludedItems.has(primaryProductId)) continue
-      const name = getName('recipe', rowId)
+      const name = getName('recipe', rowId) || (recipe.name as string)
       const rawName = getRecipePrimaryProductRawName(gameDataStore, rowId, productItemIdsByRecipeId)
-      const option: RecipeOption = { id: rowId, name, rawName }
-      any.push(option)
+      const option: RecipeOption = { id: rowId, name, rawName, isCustom: !!recipe.isCustom }
+      if (recipe.isCustom) {
+        custom.push(option)
+        continue
+      }
+      standard.push(option)
       if (buildSkillIds.has(recipe.skillId as string)) {
         skill.push(option)
       }
@@ -101,8 +110,9 @@ export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingR
 
     const byName = (a: RecipeOption, b: RecipeOption) => a.name.localeCompare(b.name)
     skill.sort(byName)
-    any.sort(byName)
-    return { skillRecipes: skill, anyRecipes: any }
+    standard.sort(byName)
+    custom.sort(byName)
+    return { skillRecipes: skill, standardRecipes: standard, customRecipes: custom }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     buildStore,
@@ -117,16 +127,17 @@ export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingR
     gameDataRev,
   ])
 
-  const [mode, setMode] = useState<'skill' | 'any'>('skill')
+  const [mode, setMode] = useState<Mode>('skill')
   const [selected, setSelected] = useState<RecipeOption | undefined>(undefined)
   const [suggestions, setSuggestions] = useState<RecipeOption[]>([])
+  const [manageCustomVisible, setManageCustomVisible] = useState(false)
 
   // Reset state and pick default mode whenever the dialog opens.
   // Intentionally only depends on `visible` — the user's toggle choice should
   // stick while the dialog is open, even if the underlying lists change.
   useEffect(() => {
     if (!visible) return
-    setMode(skillRecipes.length === 0 ? 'any' : 'skill')
+    setMode(skillRecipes.length === 0 ? 'standard' : 'skill')
     setSelected(undefined)
     setSuggestions([])
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -140,25 +151,34 @@ export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingR
         disabled: skillRecipes.length === 0,
       },
       {
-        label: t('priceCalculator.addRecipeDialog.mode.any'),
-        value: 'any',
+        label: t('priceCalculator.addRecipeDialog.mode.standard'),
+        value: 'standard',
+      },
+      {
+        label: t('priceCalculator.addRecipeDialog.mode.custom'),
+        value: 'custom',
       },
     ],
     [t, skillRecipes.length]
   )
 
+  const activeRecipes = useMemo(() => {
+    if (mode === 'skill') return skillRecipes
+    if (mode === 'standard') return standardRecipes
+    return customRecipes
+  }, [mode, skillRecipes, standardRecipes, customRecipes])
+
   const searchRecipes = (event: AutoCompleteCompleteEvent) => {
     const query = event.query.toLowerCase()
-    const active = mode === 'skill' ? skillRecipes : anyRecipes
     const filtered = query
-      ? active.filter((r) => r.name.toLowerCase().includes(query))
-      : active.slice()
+      ? activeRecipes.filter((r) => r.name.toLowerCase().includes(query))
+      : activeRecipes.slice()
     setSuggestions(filtered)
   }
 
   const handleModeChange = (e: SelectButtonChangeEvent) => {
     if (!e.value) return
-    setMode(e.value as 'skill' | 'any')
+    setMode(e.value as Mode)
     setSelected(undefined)
     setSuggestions([])
   }
@@ -172,62 +192,98 @@ export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingR
   const itemTemplate = useCallback(
     (item: RecipeOption) => (
       <div className="flex align-items-center gap-2">
-        {item.rawName && <RecipeIcon primaryProduct={{ name: item.rawName }} />}
+        {(item.rawName || item.isCustom) && (
+          <RecipeIcon primaryProduct={{ name: item.rawName, isCustom: item.isCustom }} />
+        )}
         <span>{item.name}</span>
       </div>
     ),
     []
   )
 
-  const footer = (
-    <div className="flex justify-content-end gap-2">
-      <Button label={t('priceCalculator.addRecipeDialog.cancel')} outlined onClick={onHide} />
-      <Button
-        label={t('priceCalculator.addRecipeDialog.add')}
-        disabled={!selected}
-        onClick={handleAdd}
-      />
-    </div>
-  )
+  const showCustomEmptyHint = mode === 'custom' && customRecipes.length === 0
+  const showStandardEmptyHint =
+    skillRecipes.length === 0 && mode === 'standard' && standardRecipes.length > 0
+
+  const footer =
+    mode === 'custom' ? (
+      <div className="flex justify-content-between gap-2">
+        <Button
+          label={t('priceCalculator.addRecipeDialog.manageCustom')}
+          icon="pi pi-wrench"
+          outlined
+          onClick={() => setManageCustomVisible(true)}
+        />
+        <div className="flex gap-2">
+          <Button label={t('priceCalculator.addRecipeDialog.cancel')} outlined onClick={onHide} />
+          <Button
+            label={t('priceCalculator.addRecipeDialog.add')}
+            disabled={!selected}
+            onClick={handleAdd}
+          />
+        </div>
+      </div>
+    ) : (
+      <div className="flex justify-content-end gap-2">
+        <Button label={t('priceCalculator.addRecipeDialog.cancel')} outlined onClick={onHide} />
+        <Button
+          label={t('priceCalculator.addRecipeDialog.add')}
+          disabled={!selected}
+          onClick={handleAdd}
+        />
+      </div>
+    )
 
   return (
-    <Dialog
-      header={t('priceCalculator.addRecipeDialog.title')}
-      visible={visible}
-      onHide={onHide}
-      style={{ width: '32rem' }}
-      modal
-      footer={footer}
-    >
-      <div className="flex flex-column gap-3">
-        <SelectButton
-          value={mode}
-          options={modeOptions}
-          onChange={handleModeChange}
-          optionLabel="label"
-          optionValue="value"
-          optionDisabled="disabled"
-          allowEmpty={false}
-        />
-        <AutoComplete
-          value={selected}
-          suggestions={suggestions}
-          completeMethod={searchRecipes}
-          field="name"
-          dropdown
-          forceSelection
-          itemTemplate={itemTemplate}
-          placeholder={t('priceCalculator.addRecipeDialog.placeholder')}
-          onChange={(e) => setSelected((e.value as RecipeOption | undefined) ?? undefined)}
-          className="w-full"
-          inputClassName="w-full"
-        />
-        {skillRecipes.length === 0 && mode === 'any' && (
-          <small className="text-color-secondary">
-            {t('priceCalculator.addRecipeDialog.noSkillRecipesHint')}
-          </small>
-        )}
-      </div>
-    </Dialog>
+    <>
+      <Dialog
+        header={t('priceCalculator.addRecipeDialog.title')}
+        visible={visible}
+        onHide={onHide}
+        style={{ width: '52rem' }}
+        modal
+        footer={footer}
+      >
+        <div className="flex flex-column gap-3">
+          <SelectButton
+            value={mode}
+            options={modeOptions}
+            onChange={handleModeChange}
+            optionLabel="label"
+            optionValue="value"
+            optionDisabled="disabled"
+            allowEmpty={false}
+          />
+          <AutoComplete
+            value={selected}
+            suggestions={suggestions}
+            completeMethod={searchRecipes}
+            field="name"
+            dropdown
+            forceSelection
+            itemTemplate={itemTemplate}
+            placeholder={t('priceCalculator.addRecipeDialog.placeholder')}
+            onChange={(e) => setSelected((e.value as RecipeOption | undefined) ?? undefined)}
+            className="w-full"
+            inputClassName="w-full"
+          />
+          {showStandardEmptyHint && (
+            <small className="text-color-secondary">
+              {t('priceCalculator.addRecipeDialog.noSkillRecipesHint')}
+            </small>
+          )}
+          {showCustomEmptyHint && (
+            <small className="text-color-secondary">
+              {t('priceCalculator.addRecipeDialog.noCustomRecipesHint')}
+            </small>
+          )}
+        </div>
+      </Dialog>
+      <CustomEntitiesDialog
+        visible={manageCustomVisible}
+        onHide={() => setManageCustomVisible(false)}
+        datasetId={datasetId}
+      />
+    </>
   )
 }

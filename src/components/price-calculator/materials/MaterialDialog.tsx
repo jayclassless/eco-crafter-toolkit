@@ -29,6 +29,7 @@ interface ProducedByRow {
   rowKey: string
   recipeId: string
   recipeName: string
+  recipeIsCustom: boolean
   recipePrimaryProductRawName: string
   skillId: string
   skillName: string
@@ -53,6 +54,7 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
 
   const itemRow = itemId ? gameDataStore.getRow('items', itemId) : null
   const isTag = itemRow ? (itemRow.isTag as boolean) : false
+  const isCustomItem = itemRow ? !!itemRow.isCustom : false
   const itemRawName = itemRow ? ((itemRow.name as string) ?? '') : ''
   const itemName = itemId ? getName('item', itemId) : ''
 
@@ -131,6 +133,7 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
             rowKey: p.reId,
             recipeId,
             recipeName: getName('recipe', recipeId),
+            recipeIsCustom: !!recipeRow.isCustom,
             recipePrimaryProductRawName: primaryProductRawNameOf(recipeId),
             skillId,
             skillName: skillId ? getName('skill', skillId) : '',
@@ -158,7 +161,9 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
 
   const headerNode = (
     <div className="flex align-items-center gap-2">
-      {itemRawName && <ItemIcon item={{ name: itemRawName }} size={48} />}
+      {(itemRawName || isCustomItem) && (
+        <ItemIcon item={{ name: itemRawName, isCustom: isCustomItem }} size={48} />
+      )}
       <span className="mr-2">{itemName}</span>
       {isTag && <i className="pi pi-tag text-sm" />}
       {itemTagIds.length > 0 && (
@@ -184,8 +189,13 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
 
   const producedByRecipeTemplate = (row: ProducedByRow) => (
     <div className="flex align-items-center gap-2">
-      {row.recipePrimaryProductRawName && (
-        <RecipeIcon primaryProduct={{ name: row.recipePrimaryProductRawName }} />
+      {(row.recipePrimaryProductRawName || row.recipeIsCustom) && (
+        <RecipeIcon
+          primaryProduct={{
+            name: row.recipePrimaryProductRawName,
+            isCustom: row.recipeIsCustom,
+          }}
+        />
       )}
       <Button
         label={row.recipeName}

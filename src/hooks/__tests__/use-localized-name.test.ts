@@ -1,7 +1,11 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { __resetLocalizedNameStore, saveLocalizedNames } from '@/stores/localized-name-store'
+import {
+  __resetLocalizedNameStore,
+  saveLocalizedNames,
+  upsertLocalizedNames,
+} from '@/stores/localized-name-store'
 
 import { useLocalizedName } from '../use-localized-name'
 
@@ -89,5 +93,39 @@ describe('useLocalizedName', () => {
     const { result } = renderHook(() => useLocalizedName(''))
     expect(result.current.ready).toBe(false)
     expect(result.current.getName('item', 'iron')).toBe('')
+  })
+
+  it('reloads when names are upserted for the same dataset', async () => {
+    await saveLocalizedNames('ds1', [
+      { id: '1', entityType: 'item', entityId: 'iron', locale: 'en-US', name: 'Iron' },
+    ])
+
+    const { result } = renderHook(() => useLocalizedName('ds1'))
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    expect(result.current.getName('item', 'iron')).toBe('Iron')
+
+    // Subsequent upsert should fire the subscription and refresh in-memory
+    // state without remounting the hook.
+    await upsertLocalizedNames('ds1', [
+      { id: '2', entityType: 'item', entityId: 'iron', locale: 'en-US', name: 'Iron Bar' },
+    ])
+
+    await waitFor(() => expect(result.current.getName('item', 'iron')).toBe('Iron Bar'))
+  })
+
+  it('does not reload when a different dataset changes', async () => {
+    await saveLocalizedNames('ds1', [
+      { id: '1', entityType: 'item', entityId: 'iron', locale: 'en-US', name: 'Iron' },
+    ])
+
+    const { result } = renderHook(() => useLocalizedName('ds1'))
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    await upsertLocalizedNames('ds2', [
+      { id: '2', entityType: 'item', entityId: 'iron', locale: 'en-US', name: 'Other' },
+    ])
+
+    // Original dataset's name is unchanged.
+    expect(result.current.getName('item', 'iron')).toBe('Iron')
   })
 })

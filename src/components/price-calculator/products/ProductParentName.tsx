@@ -25,6 +25,7 @@ export const ProductParentName = memo(function ProductParentName({
       itemId={parent.primaryProductId}
       displayName={parent.primaryProductName}
       rawName={parent.primaryProductRawName}
+      isCustom={parent.primaryProductIsCustom}
       userPriceId={userPriceId}
       buildStore={buildStore}
       signal={signal}

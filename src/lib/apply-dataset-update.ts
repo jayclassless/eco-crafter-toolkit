@@ -3,6 +3,7 @@ import type { Store } from 'tinybase'
 import { createGameDataOps } from '@/hooks/use-game-data'
 import { findInstalledDatasetsByBundledId } from '@/lib/dataset-utils'
 import { importDatasetFromManifestEntry } from '@/lib/import-dataset-from-manifest'
+import { readLocalizedNamesForEntity, upsertLocalizedNames } from '@/stores/localized-name-store'
 import type { ManifestEntry } from '@/types/dataset-manifest'
 
 class DatasetNotInstalledError extends Error {
@@ -19,6 +20,10 @@ interface NameIdMaps {
   craftingTables: Map<string, string>
   pluginModules: Map<string, string>
   recipes: Map<string, string>
+  /** Reverse lookups for the migration step (id → name in OLD dataset). */
+  itemNameById: Map<string, string>
+  skillNameById: Map<string, string>
+  craftingTableNameById: Map<string, string>
 }
 
 interface Remap {
@@ -35,7 +40,9 @@ function buildNameIdMaps(store: Store, datasetId: string): NameIdMaps {
   const skillNameById = new Map<string, string>()
   const talents = new Map<string, string>()
   const items = new Map<string, string>()
+  const itemNameById = new Map<string, string>()
   const craftingTables = new Map<string, string>()
+  const craftingTableNameById = new Map<string, string>()
   const pluginModules = new Map<string, string>()
   const recipes = new Map<string, string>()
 
@@ -59,11 +66,13 @@ function buildNameIdMaps(store: Store, datasetId: string): NameIdMaps {
     if (store.getCell('items', id, 'datasetId') !== datasetId) continue
     const name = store.getCell('items', id, 'name') as string
     items.set(name, id)
+    itemNameById.set(id, name)
   }
   for (const id of store.getRowIds('craftingTables')) {
     if (store.getCell('craftingTables', id, 'datasetId') !== datasetId) continue
     const name = store.getCell('craftingTables', id, 'name') as string
     craftingTables.set(name, id)
+    craftingTableNameById.set(id, name)
   }
   for (const id of store.getRowIds('pluginModules')) {
     if (store.getCell('pluginModules', id, 'datasetId') !== datasetId) continue
@@ -76,7 +85,17 @@ function buildNameIdMaps(store: Store, datasetId: string): NameIdMaps {
     recipes.set(name, id)
   }
 
-  return { skills, talents, items, craftingTables, pluginModules, recipes }
+  return {
+    skills,
+    talents,
+    items,
+    craftingTables,
+    pluginModules,
+    recipes,
+    itemNameById,
+    skillNameById,
+    craftingTableNameById,
+  }
 }
 
 function composeRemap(oldMaps: NameIdMaps, newMaps: NameIdMaps): Remap {
@@ -146,6 +165,104 @@ function sweepBuildStore(
 }
 
 /**
+ * Move a dataset's custom items, custom recipes, their recipeElements, and
+ * their modifiers from the old dataset id to the new one. Custom rows must
+ * survive the post-update purge of the old dataset, so we retag their
+ * `datasetId` cells before that purge runs.
+ *
+ * UUIDs are preserved across the move so any build references (userPrices,
+ * userRecipes, etc.) keep resolving. Cross-references that would otherwise
+ * break — a custom recipe's `skillId`/`craftingTableId`, and its
+ * recipeElements that point at standard items — get remapped by name to the
+ * new dataset's UUIDs. References to other CUSTOM items stay as-is because
+ * those custom items get retagged here too.
+ */
+function migrateCustomEntities(
+  store: Store,
+  oldId: string,
+  newId: string,
+  oldMaps: NameIdMaps,
+  newMaps: NameIdMaps
+): { customItemIds: Set<string>; customRecipeIds: Set<string> } {
+  const customItemIds = new Set<string>()
+  const customRecipeIds = new Set<string>()
+
+  store.transaction(() => {
+    for (const itemId of store.getRowIds('items')) {
+      if (store.getCell('items', itemId, 'datasetId') !== oldId) continue
+      if (!store.getCell('items', itemId, 'isCustom')) continue
+      customItemIds.add(itemId)
+      store.setCell('items', itemId, 'datasetId', newId)
+    }
+
+    for (const recipeId of store.getRowIds('recipes')) {
+      if (store.getCell('recipes', recipeId, 'datasetId') !== oldId) continue
+      if (!store.getCell('recipes', recipeId, 'isCustom')) continue
+      customRecipeIds.add(recipeId)
+      store.setCell('recipes', recipeId, 'datasetId', newId)
+      const oldSkillId = store.getCell('recipes', recipeId, 'skillId') as string
+      if (oldSkillId) {
+        const skillName = oldMaps.skillNameById.get(oldSkillId)
+        const remappedSkillId = skillName ? (newMaps.skills.get(skillName) ?? '') : ''
+        store.setCell('recipes', recipeId, 'skillId', remappedSkillId)
+      }
+      const oldCtId = store.getCell('recipes', recipeId, 'craftingTableId') as string
+      if (oldCtId) {
+        const ctName = oldMaps.craftingTableNameById.get(oldCtId)
+        const remappedCtId = ctName ? (newMaps.craftingTables.get(ctName) ?? '') : ''
+        store.setCell('recipes', recipeId, 'craftingTableId', remappedCtId)
+      }
+    }
+
+    const elementIdsOfCustomRecipes = new Set<string>()
+    for (const elementId of store.getRowIds('recipeElements')) {
+      const recipeId = store.getCell('recipeElements', elementId, 'recipeId') as string
+      if (!customRecipeIds.has(recipeId)) continue
+      elementIdsOfCustomRecipes.add(elementId)
+      store.setCell('recipeElements', elementId, 'datasetId', newId)
+      const oldItemId = store.getCell('recipeElements', elementId, 'itemOrTagId') as string
+      if (!oldItemId) continue
+      // Custom-item references keep their UUIDs (already retagged above).
+      // Standard-item references get remapped by name; on a name miss
+      // (e.g. the new dataset removed the item) leave the dangling old id —
+      // the UI already tolerates missing item rows.
+      if (customItemIds.has(oldItemId)) continue
+      const itemName = oldMaps.itemNameById.get(oldItemId)
+      if (!itemName) continue
+      const newItemId = newMaps.items.get(itemName)
+      if (newItemId) store.setCell('recipeElements', elementId, 'itemOrTagId', newItemId)
+    }
+
+    for (const modifierId of store.getRowIds('modifiers')) {
+      const targetId = store.getCell('modifiers', modifierId, 'targetId') as string
+      if (!customRecipeIds.has(targetId) && !elementIdsOfCustomRecipes.has(targetId)) continue
+      store.setCell('modifiers', modifierId, 'datasetId', newId)
+    }
+  })
+
+  return { customItemIds, customRecipeIds }
+}
+
+async function migrateCustomLocalizedNames(
+  oldId: string,
+  newId: string,
+  customItemIds: Set<string>,
+  customRecipeIds: Set<string>
+): Promise<void> {
+  const rows = []
+  for (const itemId of customItemIds) {
+    const fetched = await readLocalizedNamesForEntity(oldId, 'item', itemId)
+    rows.push(...fetched)
+  }
+  for (const recipeId of customRecipeIds) {
+    const fetched = await readLocalizedNamesForEntity(oldId, 'recipe', recipeId)
+    rows.push(...fetched)
+  }
+  if (rows.length === 0) return
+  await upsertLocalizedNames(newId, rows)
+}
+
+/**
  * Updates an installed bundled dataset to the manifest's revision. Imports the
  * new dataset as a separate row, sweeps every build attached to the old
  * dataset (rewriting entity-id FKs by name match), repoints uiStore's active
@@ -186,6 +303,18 @@ export async function applyDatasetUpdate(
 
   const newMaps = buildNameIdMaps(gameDataStore, newId)
   const remap = composeRemap(oldMaps, newMaps)
+
+  // Migrate custom items/recipes to the new dataset BEFORE the old dataset is
+  // purged — otherwise the post-update deleteDataset call would cascade-delete
+  // every custom row by datasetId.
+  const { customItemIds, customRecipeIds } = migrateCustomEntities(
+    gameDataStore,
+    oldId,
+    newId,
+    oldMaps,
+    newMaps
+  )
+  await migrateCustomLocalizedNames(oldId, newId, customItemIds, customRecipeIds)
 
   sweepBuildStore(buildStore, oldId, newId, remap)
 

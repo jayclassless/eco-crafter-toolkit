@@ -93,13 +93,25 @@ export function PriceCalculator() {
       buildStore.addCellListener('userMargins', null, 'percent', () => triggerSolver())
     )
 
+    // Custom recipe edits mutate game-data tables in place (the recipe row,
+    // its recipeElements, and its modifiers all get rewritten by
+    // updateCustomRecipe). The build store doesn't change, so without these
+    // listeners the solver wouldn't re-run after a save and prices would stay
+    // stale. The 200ms debounce in `usePriceSolver` collapses the burst of
+    // writes inside a single transaction into one snapshot.
+    const gameDataListenerIds: string[] = []
+    for (const table of ['recipes', 'recipeElements', 'modifiers']) {
+      gameDataListenerIds.push(gameDataStore.addTableListener(table, () => triggerSolver()))
+    }
+
     // Initial calculation
     triggerSolver()
 
     return () => {
       for (const id of listenerIds) buildStore.delListener(id)
+      for (const id of gameDataListenerIds) gameDataStore.delListener(id)
     }
-  }, [buildValid, buildId, buildStore, triggerSolver])
+  }, [buildValid, buildId, buildStore, gameDataStore, triggerSolver])
 
   const handleBuildDeleted = useCallback(
     (deletedBuildId: string) => {

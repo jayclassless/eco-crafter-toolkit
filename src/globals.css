@@ -49,3 +49,9 @@ body {
   min-height: 0;
   height: auto;
 }
+
+.p-menuitem.p-menuitem-danger > .p-menuitem-content > .p-menuitem-link,
+.p-menuitem.p-menuitem-danger > .p-menuitem-content > .p-menuitem-link .p-menuitem-icon,
+.p-menuitem.p-menuitem-danger > .p-menuitem-content > .p-menuitem-link .p-menuitem-text {
+  color: var(--red-500);
+}

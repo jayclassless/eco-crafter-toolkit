@@ -4,6 +4,7 @@ export interface UsedInRecipe {
   rowKey: string
   recipeId: string
   recipeName: string
+  recipeIsCustom: boolean
   recipePrimaryProductRawName: string
   skillId: string
   skillName: string
@@ -132,6 +133,7 @@ export function computeUsedInRecipes(
       rowKey: ing.reId,
       recipeId: ing.recipeId,
       recipeName: getName('recipe', ing.recipeId),
+      recipeIsCustom: !!recipeRow.isCustom,
       recipePrimaryProductRawName: primaryProductRawNameOf(ing.recipeId),
       skillId,
       skillName: skillId ? getName('skill', skillId) : '',

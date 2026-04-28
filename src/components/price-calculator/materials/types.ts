@@ -6,6 +6,8 @@ export interface Material {
   name: string
   rawName: string
   isTag: boolean
+  /** User-authored item — render its row icon as a `pi pi-book` placeholder. */
+  isCustom: boolean
   userPriceId: string
   isOverride: boolean
   isChild: boolean

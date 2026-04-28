@@ -6,7 +6,11 @@ import {
   __resetLocalizedNameStore,
   deleteLocalizedNamesForDataset,
   loadIndex,
+  readLocalizedNamesForEntity,
+  removeLocalizedName,
   saveLocalizedNames,
+  subscribeLocalizedNames,
+  upsertLocalizedNames,
 } from '../localized-name-store'
 
 async function deleteDb(): Promise<void> {
@@ -92,5 +96,78 @@ describe('localized-name-store', () => {
     await saveLocalizedNames('ds1', [row('1', 'item', 'iron', 'en-US', 'Iron')])
     const de = await loadIndex('ds1', 'de-DE')
     expect(de.size).toBe(0)
+  })
+
+  it('upsertLocalizedNames merges into the existing bucket without losing other entries', async () => {
+    await saveLocalizedNames('ds1', [
+      row('1', 'item', 'iron', 'en-US', 'Iron'),
+      row('2', 'item', 'copper', 'en-US', 'Copper'),
+    ])
+
+    await upsertLocalizedNames('ds1', [row('3', 'item', 'iron', 'en-US', 'Iron Bar')])
+
+    const idx = await loadIndex('ds1', 'en-US')
+    expect(idx.get('item:iron')).toBe('Iron Bar')
+    expect(idx.get('item:copper')).toBe('Copper')
+  })
+
+  it('upsertLocalizedNames is a no-op when given an empty list', async () => {
+    await saveLocalizedNames('ds1', [row('1', 'item', 'iron', 'en-US', 'Iron')])
+    await upsertLocalizedNames('ds1', [])
+    const idx = await loadIndex('ds1', 'en-US')
+    expect(idx.get('item:iron')).toBe('Iron')
+  })
+
+  it('removeLocalizedName drops only the targeted entity, across all locales', async () => {
+    await saveLocalizedNames('ds1', [
+      row('1', 'item', 'iron', 'en-US', 'Iron'),
+      row('2', 'item', 'iron', 'fr-FR', 'Fer'),
+      row('3', 'item', 'copper', 'en-US', 'Copper'),
+    ])
+
+    await removeLocalizedName('ds1', 'item', 'iron')
+
+    const en = await loadIndex('ds1', 'en-US')
+    expect(en.get('item:iron')).toBeUndefined()
+    expect(en.get('item:copper')).toBe('Copper')
+
+    const fr = await loadIndex('ds1', 'fr-FR')
+    expect(fr.get('item:iron')).toBeUndefined()
+  })
+
+  it('readLocalizedNamesForEntity returns one row per locale for the entity', async () => {
+    await saveLocalizedNames('ds1', [
+      row('1', 'item', 'iron', 'en-US', 'Iron'),
+      row('2', 'item', 'iron', 'fr-FR', 'Fer'),
+      row('3', 'item', 'copper', 'en-US', 'Copper'),
+    ])
+
+    const rows = await readLocalizedNamesForEntity('ds1', 'item', 'iron')
+    expect(rows).toHaveLength(2)
+    const names = rows.map((r) => `${r.locale}:${r.name}`).sort()
+    expect(names).toEqual(['en-US:Iron', 'fr-FR:Fer'])
+  })
+
+  it('readLocalizedNamesForEntity returns an empty list when the entity has no entries', async () => {
+    await saveLocalizedNames('ds1', [row('1', 'item', 'iron', 'en-US', 'Iron')])
+    const rows = await readLocalizedNamesForEntity('ds1', 'item', 'unknown')
+    expect(rows).toHaveLength(0)
+  })
+
+  it('subscribeLocalizedNames notifies on save / upsert / remove / dataset delete', async () => {
+    const events: string[] = []
+    const unsubscribe = subscribeLocalizedNames((id) => events.push(id))
+
+    await saveLocalizedNames('ds1', [row('1', 'item', 'iron', 'en-US', 'Iron')])
+    await upsertLocalizedNames('ds1', [row('2', 'item', 'iron', 'en-US', 'Iron Bar')])
+    await removeLocalizedName('ds1', 'item', 'iron')
+    await deleteLocalizedNamesForDataset('ds1')
+
+    expect(events).toEqual(['ds1', 'ds1', 'ds1', 'ds1'])
+    unsubscribe()
+
+    // After unsubscribe further writes do not fire.
+    await saveLocalizedNames('ds2', [row('3', 'item', 'wood', 'en-US', 'Wood')])
+    expect(events).toEqual(['ds1', 'ds1', 'ds1', 'ds1'])
   })
 })

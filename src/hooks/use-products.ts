@@ -9,6 +9,8 @@ export interface Product {
   userRecipeId: string
   recipeId: string
   recipeName: string
+  /** Recipe is user-authored — used to swap its row icon for `pi pi-book`. */
+  recipeIsCustom: boolean
   skillId: string
   skillName: string
   skillRawName: string
@@ -24,6 +26,9 @@ export interface Product {
   productItemIds: string[]
   primaryProductId: string
   primaryProductName: string
+  /** Primary product is a user-authored item — used to swap parent-row icons
+   * for `pi pi-book`. */
+  primaryProductIsCustom: boolean
   /** userPrices row id for this entry's primary product, or '' when none
    * exists yet. Used by single-recipe (flat) rows that have no parent to
    * carry the id. */
@@ -39,6 +44,8 @@ export interface ProductParent {
   primaryProductId: string
   primaryProductName: string
   primaryProductRawName: string
+  /** Primary product is a user-authored item. */
+  primaryProductIsCustom: boolean
   /** '' when no userPrices row exists yet — price-cell components tolerate. */
   userPriceId: string
   /** Parent-level margin (from userProductMargins); '' means inherit none. */
@@ -227,6 +234,7 @@ export function buildProducts(
     const craftingTableId = (recipe.craftingTableId as string) ?? ''
     const requiredSkillLevel = (recipe.requiredSkillLevel as number) ?? 0
     const recipeName = getName('recipe', recipeId)
+    const recipeIsCustom = !!recipe.isCustom
 
     const productItemIds = productsByRecipeId.get(recipeId) ?? []
     const ingredientIds = ingredientsByRecipeId.get(recipeId)
@@ -250,6 +258,7 @@ export function buildProducts(
         userRecipeId: urId,
         recipeId,
         recipeName,
+        recipeIsCustom,
         skillId,
         skillName,
         skillRawName,
@@ -260,6 +269,7 @@ export function buildProducts(
         productItemIds,
         primaryProductId: productId,
         primaryProductName: getName('item', productId),
+        primaryProductIsCustom: !!productRow?.isCustom,
         userPriceId: userPriceIdByItem.get(productId) ?? '',
         userMarginId,
         unlockingTalentIds,
@@ -337,6 +347,7 @@ export function buildProductGroups(
         primaryProductId: productId,
         primaryProductName: first.primaryProductName,
         primaryProductRawName: first.primaryProductRawName,
+        primaryProductIsCustom: first.primaryProductIsCustom,
         userPriceId: userPriceByItemId.get(productId) ?? '',
         productUserMarginId: productMarginByItemId.get(productId) ?? '',
       },

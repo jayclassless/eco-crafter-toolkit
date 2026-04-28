@@ -131,14 +131,22 @@ describe('DatasetsDialog', () => {
     expect(screen.getByText('2026-04-21')).toBeInTheDocument()
   })
 
-  it('shows Download for unloaded datasets and Delete for loaded ones', async () => {
+  it('exposes Delete for loaded datasets via the row menu', async () => {
     renderDialog(makeStores({ withLoadedV13: true }))
     await waitFor(() => expect(screen.getByText('Eco v13.0.2')).toBeInTheDocument())
 
     const v13Row = screen.getByText('Eco v13.0.2').closest('tr')!
+    fireEvent.click(within(v13Row).getByRole('button', { name: /dataset actions/i }))
+    expect(await screen.findByRole('menuitem', { name: /delete/i })).toBeInTheDocument()
+  })
+
+  it('exposes Download for unloaded datasets via the row menu', async () => {
+    renderDialog(makeStores({ withLoadedV13: true }))
+    await waitFor(() => expect(screen.getByText('Eco v12.0.7')).toBeInTheDocument())
+
     const v12Row = screen.getByText('Eco v12.0.7').closest('tr')!
-    expect(within(v13Row).getByRole('button', { name: /delete/i })).toBeInTheDocument()
-    expect(within(v12Row).getByRole('button', { name: /download/i })).toBeInTheDocument()
+    fireEvent.click(within(v12Row).getByRole('button', { name: /dataset actions/i }))
+    expect(await screen.findByRole('menuitem', { name: /download/i })).toBeInTheDocument()
   })
 
   it('shows the build count for loaded datasets and a dash for unloaded ones', async () => {
@@ -148,7 +156,9 @@ describe('DatasetsDialog', () => {
     const v13Row = screen.getByText('Eco v13.0.2').closest('tr')!
     const v12Row = screen.getByText('Eco v12.0.7').closest('tr')!
     expect(within(v13Row).getByText('3')).toBeInTheDocument()
-    expect(within(v12Row).getByText('—')).toBeInTheDocument()
+    // v12 isn't installed so all numeric columns (builds + custom counts)
+    // render as a dash. There are three; just assert at least one is present.
+    expect(within(v12Row).getAllByText('—').length).toBeGreaterThan(0)
   })
 
   it('shows a retry button when the manifest fetch fails', async () => {
@@ -163,12 +173,13 @@ describe('DatasetsDialog', () => {
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
   })
 
-  it('opens the delete confirmation when Delete is clicked', async () => {
+  it('opens the delete confirmation when the Delete menu item is clicked', async () => {
     renderDialog(makeStores({ withLoadedV13: true, buildsForV13: 2 }))
     await waitFor(() => expect(screen.getByText('Eco v13.0.2')).toBeInTheDocument())
 
     const v13Row = screen.getByText('Eco v13.0.2').closest('tr')!
-    fireEvent.click(within(v13Row).getByRole('button', { name: /delete/i }))
+    fireEvent.click(within(v13Row).getByRole('button', { name: /dataset actions/i }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /delete/i }))
 
     expect(screen.getByText('Delete dataset?')).toBeInTheDocument()
     expect(
@@ -176,7 +187,7 @@ describe('DatasetsDialog', () => {
     ).toBeInTheDocument()
   })
 
-  it('marks the active dataset with a badge and hides its Switch button', async () => {
+  it('marks the active dataset with a badge', async () => {
     renderDialog(makeStores({ withLoadedV13: true, withLoadedV12: true }), {
       activeDatasetId: 'ds-random-1',
     })
@@ -185,12 +196,35 @@ describe('DatasetsDialog', () => {
     const v13Row = screen.getByText('Eco v13.0.2').closest('tr')!
     const v12Row = screen.getByText('Eco v12.0.7').closest('tr')!
     expect(within(v13Row).getByText('Active')).toBeInTheDocument()
-    expect(within(v13Row).queryByRole('button', { name: /switch/i })).not.toBeInTheDocument()
     expect(within(v12Row).queryByText('Active')).not.toBeInTheDocument()
-    expect(within(v12Row).getByRole('button', { name: /switch/i })).toBeInTheDocument()
   })
 
-  it('calls onSwitch with the loaded datasetId when Switch is clicked', async () => {
+  it("hides Switch in the active dataset's row menu", async () => {
+    renderDialog(makeStores({ withLoadedV13: true, withLoadedV12: true }), {
+      activeDatasetId: 'ds-random-1',
+    })
+    await waitFor(() => expect(screen.getByText('Eco v13.0.2')).toBeInTheDocument())
+
+    const v13Row = screen.getByText('Eco v13.0.2').closest('tr')!
+    fireEvent.click(within(v13Row).getByRole('button', { name: /dataset actions/i }))
+    // Wait for v13's menu to actually render (PrimeReact uses CSSTransition
+    // with `unmountOnExit`, so menu items mount asynchronously after toggle).
+    expect(await screen.findByRole('menuitem', { name: /delete/i })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /switch/i })).not.toBeInTheDocument()
+  })
+
+  it("shows Switch in a non-active dataset's row menu", async () => {
+    renderDialog(makeStores({ withLoadedV13: true, withLoadedV12: true }), {
+      activeDatasetId: 'ds-random-1',
+    })
+    await waitFor(() => expect(screen.getByText('Eco v12.0.7')).toBeInTheDocument())
+
+    const v12Row = screen.getByText('Eco v12.0.7').closest('tr')!
+    fireEvent.click(within(v12Row).getByRole('button', { name: /dataset actions/i }))
+    expect(await screen.findByRole('menuitem', { name: /switch/i })).toBeInTheDocument()
+  })
+
+  it('calls onSwitch with the loaded datasetId when Switch menu item is clicked', async () => {
     const onSwitch = vi.fn()
     renderDialog(makeStores({ withLoadedV13: true, withLoadedV12: true }), {
       activeDatasetId: 'ds-random-1',
@@ -199,11 +233,12 @@ describe('DatasetsDialog', () => {
     await waitFor(() => expect(screen.getByText('Eco v12.0.7')).toBeInTheDocument())
 
     const v12Row = screen.getByText('Eco v12.0.7').closest('tr')!
-    fireEvent.click(within(v12Row).getByRole('button', { name: /switch/i }))
+    fireEvent.click(within(v12Row).getByRole('button', { name: /dataset actions/i }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /switch/i }))
     expect(onSwitch).toHaveBeenCalledWith('ds-random-2')
   })
 
-  it('shows an Update button when the manifest revision is newer than the installed one', async () => {
+  it('shows an Update menu item when the manifest revision is newer than the installed one', async () => {
     const stores = makeStores({ withLoadedV13: true })
     // Bump the manifest revision so the row gets an availableRevision.
     vi.unstubAllGlobals()
@@ -224,10 +259,11 @@ describe('DatasetsDialog', () => {
     renderDialog(stores)
     await waitFor(() => expect(screen.getByText('Eco v13.0.2')).toBeInTheDocument())
     const v13Row = screen.getByText('Eco v13.0.2').closest('tr')!
-    expect(within(v13Row).getByRole('button', { name: /update/i })).toBeInTheDocument()
+    fireEvent.click(within(v13Row).getByRole('button', { name: /dataset actions/i }))
+    expect(await screen.findByRole('menuitem', { name: /update/i })).toBeInTheDocument()
   })
 
-  it('clicking Download on an unloaded row triggers an import', async () => {
+  it('clicking the Download menu item on an unloaded row triggers an import', async () => {
     const stores = makeStores()
     vi.unstubAllGlobals()
     vi.stubGlobal(
@@ -246,7 +282,8 @@ describe('DatasetsDialog', () => {
     renderDialog(stores)
     await waitFor(() => expect(screen.getByText('Eco v13.0.2')).toBeInTheDocument())
     const v13Row = screen.getByText('Eco v13.0.2').closest('tr')!
-    fireEvent.click(within(v13Row).getByRole('button', { name: /download/i }))
+    fireEvent.click(within(v13Row).getByRole('button', { name: /dataset actions/i }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: /download/i }))
     await waitFor(() => {
       expect(stores.gameDataStore.getRowIds('datasets').length).toBe(1)
     })

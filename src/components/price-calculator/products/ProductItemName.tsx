@@ -11,6 +11,7 @@ interface Props {
   itemId: string
   displayName: string
   rawName: string
+  isCustom?: boolean
   userPriceId: string
   buildStore: Store
   signal: PriceSignal
@@ -26,6 +27,7 @@ export const ProductItemName = memo(function ProductItemName({
   itemId,
   displayName,
   rawName,
+  isCustom,
   userPriceId,
   buildStore,
   signal,
@@ -36,7 +38,7 @@ export const ProductItemName = memo(function ProductItemName({
   const mode: PriceMode = ((stored ?? 'min') as PriceMode) || 'min'
   const cost = usePriceCell(signal, itemId, 'costPrice')
 
-  const icon = rawName ? <ItemIcon item={{ name: rawName }} /> : null
+  const icon = rawName || isCustom ? <ItemIcon item={{ name: rawName, isCustom }} /> : null
   const boldClass = bold ? ' font-bold' : ''
 
   if (mode === 'avg' || cost === null) {

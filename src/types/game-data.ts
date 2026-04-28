@@ -38,6 +38,7 @@ export interface Item {
   name: string
   isTag: boolean
   isPart?: boolean
+  isCustom?: boolean
 }
 
 export interface ItemPart {
@@ -90,6 +91,7 @@ export interface Recipe {
   craftingTableId: string
   baseCraftTime: number
   baseLaborCost: number
+  isCustom?: boolean
 }
 
 export interface RecipeElement {

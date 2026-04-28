@@ -53,6 +53,7 @@ export function createGameDataStore() {
       name: { type: 'string' },
       isTag: { type: 'boolean' },
       isPart: { type: 'boolean', default: false },
+      isCustom: { type: 'boolean', default: false },
     },
     itemParts: {
       id: { type: 'string' },
@@ -99,6 +100,7 @@ export function createGameDataStore() {
       craftingTableId: { type: 'string' },
       baseCraftTime: { type: 'number' },
       baseLaborCost: { type: 'number' },
+      isCustom: { type: 'boolean', default: false },
     },
     recipeElements: {
       id: { type: 'string' },

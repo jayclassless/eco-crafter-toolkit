@@ -29,8 +29,13 @@ export function UsedInRecipesTable({ rows, emptyMessage, onOpenRecipe }: Props) 
 
   const recipeTemplate = (row: UsedInRecipe) => (
     <div className="flex align-items-center gap-2">
-      {row.recipePrimaryProductRawName && (
-        <RecipeIcon primaryProduct={{ name: row.recipePrimaryProductRawName }} />
+      {(row.recipePrimaryProductRawName || row.recipeIsCustom) && (
+        <RecipeIcon
+          primaryProduct={{
+            name: row.recipePrimaryProductRawName,
+            isCustom: row.recipeIsCustom,
+          }}
+        />
       )}
       <Button
         label={row.recipeName}

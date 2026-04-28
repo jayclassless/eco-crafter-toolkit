@@ -2,12 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createBuildStore } from '@/stores/build-store'
 import { createGameDataStore } from '@/stores/game-data-store'
-import { __resetLocalizedNameStore } from '@/stores/localized-name-store'
+import {
+  __resetLocalizedNameStore,
+  loadIndex,
+  upsertLocalizedNames,
+} from '@/stores/localized-name-store'
 import { createUIStore } from '@/stores/ui-store'
 import type { DatasetJson } from '@/types/dataset-json'
 import type { ManifestEntry } from '@/types/dataset-manifest'
 
 import { applyDatasetUpdate } from '../apply-dataset-update'
+import { createCustomItem, createCustomRecipe, type CustomRecipeInput } from '../custom-entities'
 
 const minimalDataset = (skillName = 'Mining', plankName = 'Plank'): DatasetJson =>
   ({
@@ -255,6 +260,126 @@ describe('applyDatasetUpdate', () => {
     expect(stores.build.getCell('builds', 'b-other', 'datasetId')).toBe(otherDatasetId)
     // Old (non-target) dataset is untouched
     expect(stores.game.hasRow('datasets', otherDatasetId)).toBe(true)
+  })
+
+  it('migrates custom items and recipes through update', async () => {
+    const { stores, oldDatasetId } = await setupV1Install()
+
+    const oldWoodId = findRowIdByCell(stores.game, 'items', 'name', 'Wood')!
+
+    // Author a custom item, then a custom recipe that consumes Wood (standard
+    // ingredient) AND the custom item, producing the custom item.
+    const customItemId = await createCustomItem(stores.game, oldDatasetId, 'Refined Wood', 'en-US')
+    const customInput: CustomRecipeInput = {
+      name: 'Refine Wood',
+      craftingTableId: findRowIdByCell(stores.game, 'craftingTables', 'name', 'Workbench')!,
+      skillId: findRowIdByCell(stores.game, 'skills', 'name', 'Mining')!,
+      requiredSkillLevel: 0,
+      baseLaborCost: 25,
+      baseCraftTime: 0,
+      ingredients: [
+        { itemId: oldWoodId, baseQuantity: 4, isDiscountedBySkill: true },
+        { itemId: customItemId, baseQuantity: 1, isDiscountedBySkill: false },
+      ],
+      products: [{ itemId: customItemId, quantity: 1 }],
+    }
+    const customRecipeId = await createCustomRecipe(stores.game, oldDatasetId, customInput, 'en-US')
+
+    // A build references the custom recipe and the custom item via userPrices,
+    // which should keep working after the update.
+    stores.build.setRow('builds', 'b1', {
+      id: 'b1',
+      datasetId: oldDatasetId,
+      name: 'Build',
+      createdAt: '2026-01-01',
+    })
+    stores.build.setRow('userRecipes', 'ur1', {
+      id: 'ur1',
+      buildId: 'b1',
+      recipeId: customRecipeId,
+      roundFactor: 0,
+    })
+    stores.build.setRow('userPrices', 'up-custom', {
+      id: 'up-custom',
+      buildId: 'b1',
+      itemOrTagId: customItemId,
+      price: 7,
+    })
+
+    stubFetch(minimalDataset())
+    const result = await applyDatasetUpdate(v2Entry, stores.game, stores.build, stores.ui)
+    vi.unstubAllGlobals()
+
+    // Custom item retains its UUID but gets retagged to the new dataset.
+    expect(stores.game.hasRow('items', customItemId)).toBe(true)
+    expect(stores.game.getCell('items', customItemId, 'datasetId')).toBe(result.datasetId)
+    expect(stores.game.getCell('items', customItemId, 'isCustom')).toBe(true)
+
+    // Custom recipe retains its UUID and is retagged.
+    expect(stores.game.hasRow('recipes', customRecipeId)).toBe(true)
+    expect(stores.game.getCell('recipes', customRecipeId, 'datasetId')).toBe(result.datasetId)
+
+    // Skill and crafting table refs are remapped to the new dataset's UUIDs.
+    const newSkillId = findRowIdByCell(stores.game, 'skills', 'name', 'Mining')!
+    const newCtId = findRowIdByCell(stores.game, 'craftingTables', 'name', 'Workbench')!
+    expect(stores.game.getCell('recipes', customRecipeId, 'skillId')).toBe(newSkillId)
+    expect(stores.game.getCell('recipes', customRecipeId, 'craftingTableId')).toBe(newCtId)
+
+    // Ingredients: the standard "Wood" ref should be remapped to the new id;
+    // the custom-item ref should be unchanged.
+    const newWoodId = findRowIdByCell(stores.game, 'items', 'name', 'Wood')!
+    expect(newWoodId).not.toBe(oldWoodId)
+    const elementRows = stores.game
+      .getRowIds('recipeElements')
+      .map((id) => stores.game.getRow('recipeElements', id))
+      .filter((r) => r.recipeId === customRecipeId)
+    const ingredients = elementRows.filter((r) => !r.isProduct)
+    const standardIng = ingredients.find((r) => r.baseQuantity === -4)!
+    expect(standardIng.itemOrTagId).toBe(newWoodId)
+    const customIng = ingredients.find((r) => r.baseQuantity === -1)!
+    expect(customIng.itemOrTagId).toBe(customItemId)
+
+    // Modifiers tied to the custom recipe / its elements survive with the new
+    // datasetId.
+    const elementIdSet = new Set(
+      stores.game
+        .getRowIds('recipeElements')
+        .filter((id) => stores.game.getCell('recipeElements', id, 'recipeId') === customRecipeId)
+    )
+    const ownedModifiers = stores.game
+      .getRowIds('modifiers')
+      .map((id) => ({ id, row: stores.game.getRow('modifiers', id) }))
+      .filter(
+        ({ row }) => row.targetId === customRecipeId || elementIdSet.has(row.targetId as string)
+      )
+    expect(ownedModifiers.length).toBeGreaterThan(0)
+    for (const m of ownedModifiers) {
+      expect(m.row.datasetId).toBe(result.datasetId)
+    }
+
+    // Build references survive: the user's price for the custom item still
+    // resolves because the UUID is preserved.
+    expect(stores.build.getCell('userPrices', 'up-custom', 'itemOrTagId')).toBe(customItemId)
+    expect(stores.build.getCell('userRecipes', 'ur1', 'recipeId')).toBe(customRecipeId)
+  })
+
+  it('moves custom localized names to the new dataset', async () => {
+    const { stores, oldDatasetId } = await setupV1Install()
+
+    const customItemId = await createCustomItem(stores.game, oldDatasetId, 'My Item', 'en-US')
+    // Add a second-locale entry to verify it migrates too.
+    await upsertLocalizedNames(oldDatasetId, [
+      { id: '', entityType: 'item', entityId: customItemId, locale: 'fr-FR', name: 'Mon Objet' },
+    ])
+
+    stubFetch(minimalDataset())
+    const result = await applyDatasetUpdate(v2Entry, stores.game, stores.build, stores.ui)
+    vi.unstubAllGlobals()
+
+    const enIndex = await loadIndex(result.datasetId, 'en-US')
+    expect(enIndex.get(`item:${customItemId}`)).toBe('My Item')
+    const frIndex = await loadIndex(result.datasetId, 'fr-FR')
+    expect(frIndex.get(`item:${customItemId}`)).toBe('Mon Objet')
   })
 
   it('cleans up after a previously failed mid-flight update by reusing the existing new install', async () => {

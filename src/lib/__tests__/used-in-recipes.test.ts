@@ -134,11 +134,30 @@ describe('computeUsedInRecipes', () => {
     expect(result[0]).toMatchObject({
       recipeId: 'r-table',
       recipeName: 'TableRecipe',
+      recipeIsCustom: false,
       skillName: 'Carpentry',
       quantity: 4,
       viaTag: null,
       recipePrimaryProductRawName: 'Table',
     })
+  })
+
+  it('flags consuming recipes as custom when the recipe row has isCustom=true', () => {
+    addRecipe(
+      'r-custom',
+      'CustomRecipe',
+      'sk-carpentry',
+      [{ id: 're-1', itemOrTagId: 'plank', baseQuantity: 4 }],
+      [{ id: 're-2', itemOrTagId: 'table', baseQuantity: 1 }]
+    )
+    game.setCell('recipes', 'r-custom', 'isCustom', true)
+    const [row] = computeUsedInRecipes(game, build, {
+      itemId: 'plank',
+      buildId: BUILD,
+      datasetId: DS,
+      getName,
+    })
+    expect(row.recipeIsCustom).toBe(true)
   })
 
   it('detects items consumed indirectly through a tag', () => {

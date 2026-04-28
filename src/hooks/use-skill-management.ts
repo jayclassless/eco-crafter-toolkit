@@ -50,6 +50,7 @@ export function createSkillManagement(
         if (
           recipe.skillId === skillId &&
           recipe.datasetId === datasetId &&
+          !recipe.isCustom &&
           !existingRecipeIds.has(rId)
         ) {
           const urId = generateId()

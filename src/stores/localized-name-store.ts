@@ -11,6 +11,26 @@ export type LocalizedNameIndex = Map<string /* `${entityType}:${entityId}` */, s
 let dbPromise: Promise<IDBDatabase> | null = null
 const cache = new Map<string /* `${datasetId}:${locale}` */, LocalizedNameIndex>()
 
+type ChangeListener = (datasetId: string) => void
+const changeListeners = new Set<ChangeListener>()
+
+function notifyChange(datasetId: string): void {
+  for (const listener of changeListeners) listener(datasetId)
+}
+
+/**
+ * Subscribe to write events on the localized-name store. The listener is
+ * invoked with the affected `datasetId` whenever names are added, updated, or
+ * removed. Used by `useLocalizedName` so React state reflects renames of
+ * custom entities without waiting for a remount.
+ */
+export function subscribeLocalizedNames(listener: ChangeListener): () => void {
+  changeListeners.add(listener)
+  return () => {
+    changeListeners.delete(listener)
+  }
+}
+
 function openDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise
   dbPromise = new Promise((resolve, reject) => {
@@ -92,6 +112,138 @@ export async function saveLocalizedNames(datasetId: string, rows: LocalizedName[
   for (const key of cache.keys()) {
     if (key.startsWith(`${datasetId}:`)) cache.delete(key)
   }
+  notifyChange(datasetId)
+}
+
+/**
+ * Merge-write: load each affected (datasetId, locale) bucket, apply the new
+ * rows on top, write back. Use this when adding or updating individual names
+ * in a dataset that already has names — `saveLocalizedNames` does a wholesale
+ * replace and would lose the rest.
+ */
+export async function upsertLocalizedNames(
+  datasetId: string,
+  rows: LocalizedName[]
+): Promise<void> {
+  if (rows.length === 0) return
+  const byLocale = new Map<string, LocalizedName[]>()
+  for (const r of rows) {
+    let list = byLocale.get(r.locale)
+    if (!list) {
+      list = []
+      byLocale.set(r.locale, list)
+    }
+    list.push(r)
+  }
+
+  const db = await openDb()
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite')
+    const os = tx.objectStore(STORE_NAME)
+    let pending = byLocale.size
+    if (pending === 0) {
+      resolve()
+      return
+    }
+    for (const [locale, localeRows] of byLocale) {
+      const key = `${datasetId}:${locale}`
+      const getReq = os.get(key)
+      getReq.onsuccess = () => {
+        const value = (getReq.result as StoredValue | undefined) ?? {}
+        for (const r of localeRows) {
+          let typeBucket = value[r.entityType]
+          if (!typeBucket) {
+            typeBucket = {}
+            value[r.entityType] = typeBucket
+          }
+          typeBucket[r.entityId] = r.name
+        }
+        os.put(value, key)
+        pending--
+      }
+      getReq.onerror = () => reject(getReq.error)
+    }
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+  })
+
+  for (const key of cache.keys()) {
+    if (key.startsWith(`${datasetId}:`)) cache.delete(key)
+  }
+  notifyChange(datasetId)
+}
+
+/**
+ * Remove a single entity's name from every locale stored for the dataset.
+ * Used when a custom item or recipe is deleted.
+ */
+export async function removeLocalizedName(
+  datasetId: string,
+  entityType: string,
+  entityId: string
+): Promise<void> {
+  const db = await openDb()
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite')
+    const os = tx.objectStore(STORE_NAME)
+    const range = IDBKeyRange.bound(`${datasetId}:`, `${datasetId}:￿`, false, false)
+    const cursorReq = os.openCursor(range)
+    cursorReq.onsuccess = () => {
+      const cursor = cursorReq.result
+      if (!cursor) return
+      const value = cursor.value as StoredValue
+      const typeBucket = value[entityType]
+      if (typeBucket && typeBucket[entityId] !== undefined) {
+        delete typeBucket[entityId]
+        if (Object.keys(typeBucket).length === 0) delete value[entityType]
+        cursor.update(value)
+      }
+      cursor.continue()
+    }
+    cursorReq.onerror = () => reject(cursorReq.error)
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+  })
+
+  for (const key of cache.keys()) {
+    if (key.startsWith(`${datasetId}:`)) cache.delete(key)
+  }
+  notifyChange(datasetId)
+}
+
+/**
+ * Read every stored entry for one entity (across all locales). Used by the
+ * dataset-update flow to migrate a custom entity's names to the new dataset.
+ */
+export async function readLocalizedNamesForEntity(
+  datasetId: string,
+  entityType: string,
+  entityId: string
+): Promise<LocalizedName[]> {
+  const db = await openDb()
+  return new Promise<LocalizedName[]>((resolve, reject) => {
+    const out: LocalizedName[] = []
+    const tx = db.transaction(STORE_NAME, 'readonly')
+    const os = tx.objectStore(STORE_NAME)
+    const range = IDBKeyRange.bound(`${datasetId}:`, `${datasetId}:￿`, false, false)
+    const cursorReq = os.openCursor(range)
+    cursorReq.onsuccess = () => {
+      const cursor = cursorReq.result
+      if (!cursor) return
+      const key = cursor.key as string
+      const locale = key.slice(datasetId.length + 1)
+      const value = cursor.value as StoredValue
+      const typeBucket = value[entityType]
+      const name = typeBucket?.[entityId]
+      if (name !== undefined) {
+        out.push({ id: '', entityType, entityId, locale, name })
+      }
+      cursor.continue()
+    }
+    cursorReq.onerror = () => reject(cursorReq.error)
+    tx.oncomplete = () => resolve(out)
+    tx.onerror = () => reject(tx.error)
+  })
 }
 
 export async function deleteLocalizedNamesForDataset(datasetId: string): Promise<void> {
@@ -108,10 +260,12 @@ export async function deleteLocalizedNamesForDataset(datasetId: string): Promise
   for (const key of cache.keys()) {
     if (key.startsWith(`${datasetId}:`)) cache.delete(key)
   }
+  notifyChange(datasetId)
 }
 
 export async function __resetLocalizedNameStore(): Promise<void> {
   cache.clear()
+  changeListeners.clear()
   if (dbPromise) {
     const db = await dbPromise
     db.close()

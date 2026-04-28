@@ -301,4 +301,38 @@ describe('RecipeDialog', () => {
       expect(stores.buildStore.getCell('userRecipes', UR_ID, 'favorite')).toBe(true)
     })
   })
+
+  it('does not show the edit-recipe pencil button for non-custom recipes', async () => {
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getAllByRole('row').length).toBeGreaterThan(0))
+    expect(document.body.querySelector('button[aria-label="Edit custom recipe"]')).toBeNull()
+  })
+
+  it('shows a pencil button in the header when the recipe is custom', async () => {
+    stores.gameDataStore.setCell('recipes', RECIPE_ID, 'isCustom', true)
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getAllByRole('row').length).toBeGreaterThan(0))
+    expect(document.body.querySelector('button[aria-label="Edit custom recipe"]')).not.toBeNull()
+  })
+
+  it('renders a pi-book placeholder in the header for a custom recipe', async () => {
+    stores.gameDataStore.setCell('recipes', RECIPE_ID, 'isCustom', true)
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getAllByRole('row').length).toBeGreaterThan(0))
+    // The header's ItemIcon switches to a `<i class="pi pi-book">` for custom
+    // recipes; size=48 distinguishes it from any inline pi-book elsewhere.
+    const bookIcons = Array.from(document.body.querySelectorAll('i.pi.pi-book'))
+    expect(bookIcons.length).toBeGreaterThan(0)
+  })
+
+  it('opens the custom recipe edit form when the pencil is clicked', async () => {
+    stores.gameDataStore.setCell('recipes', RECIPE_ID, 'isCustom', true)
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getAllByRole('row').length).toBeGreaterThan(0))
+    const pencil = document.body.querySelector(
+      'button[aria-label="Edit custom recipe"]'
+    ) as HTMLButtonElement
+    fireEvent.click(pencil)
+    expect(screen.getByText(/edit custom recipe/i)).toBeInTheDocument()
+  })
 })

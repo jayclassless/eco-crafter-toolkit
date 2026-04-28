@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { Store } from 'tinybase'
 import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
@@ -144,5 +144,59 @@ describe('PriceCalculator (smoke)', () => {
     await waitFor(() => {
       expect(screen.getByText(/Settings/i)).toBeInTheDocument()
     })
+  })
+
+  it('retriggers the solver when game-data recipe tables change (e.g. a custom recipe edit)', async () => {
+    const workers: FakeWorker[] = []
+    class CapturingFakeWorker extends FakeWorker {
+      constructor() {
+        super()
+        workers.push(this)
+      }
+    }
+    vi.stubGlobal('Worker', CapturingFakeWorker)
+
+    const stores = makeStores()
+    renderApp(stores, `/${DS}/calculator/${BUILD}`)
+    await waitFor(() => expect(screen.getByText('Build A')).toBeInTheDocument())
+
+    // Wait for the initial solver run (200ms debounce + worker postMessage).
+    await waitFor(
+      () => expect(workers.some((w) => w.postMessage.mock.calls.length > 0)).toBe(true),
+      { timeout: 1500 }
+    )
+    const initialTotal = workers.reduce((n, w) => n + w.postMessage.mock.calls.length, 0)
+
+    // Simulate a custom-recipe edit: rewriting a recipe row + its elements +
+    // its modifiers. Listeners on these tables must enqueue a recalculation.
+    // Wrap in `act` so the synchronous React state updates triggered by the
+    // store's table listeners (MaterialDialog / RecipeDialog / AddRecipeDialog
+    // memo invalidations) settle before assertions run — otherwise React's
+    // testing utilities log noisy "not wrapped in act(...)" warnings.
+    await act(async () => {
+      stores.gameDataStore.transaction(() => {
+        stores.gameDataStore.setRow('recipes', 'r-x', {
+          datasetId: DS,
+          name: 'Test Custom',
+          familyName: 'Test Custom',
+          skillId: '',
+          requiredSkillLevel: 0,
+          isBlueprint: false,
+          isDefault: true,
+          craftingTableId: '',
+          baseCraftTime: 0,
+          baseLaborCost: 0,
+          isCustom: true,
+        })
+      })
+    })
+
+    await waitFor(
+      () =>
+        expect(workers.reduce((n, w) => n + w.postMessage.mock.calls.length, 0)).toBeGreaterThan(
+          initialTotal
+        ),
+      { timeout: 1500 }
+    )
   })
 })

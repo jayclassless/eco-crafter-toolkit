@@ -23,6 +23,7 @@ describe('ProductParentName', () => {
           primaryProductId: 'iron',
           primaryProductName: 'Iron Bar',
           primaryProductRawName: 'IronItem',
+          primaryProductIsCustom: false,
           userPriceId: 'up1',
           productUserMarginId: '',
         }}

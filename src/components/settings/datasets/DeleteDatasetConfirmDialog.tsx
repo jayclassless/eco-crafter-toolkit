@@ -50,6 +50,9 @@ export function DeleteDatasetConfirmDialog({ target, onHide }: Props) {
 
   const visible = target !== null
   const buildCount = target?.buildCount ?? 0
+  const customItemCount = target?.customItemCount ?? 0
+  const customRecipeCount = target?.customRecipeCount ?? 0
+  const hasCustom = customItemCount > 0 || customRecipeCount > 0
 
   const footer = (
     <div className="flex justify-content-end gap-2">
@@ -93,6 +96,14 @@ export function DeleteDatasetConfirmDialog({ target, onHide }: Props) {
             {buildCount === 1
               ? t('settings.deleteDataset.tiedBuildsWarningOne')
               : t('settings.deleteDataset.tiedBuildsWarningMany', { count: buildCount })}
+          </small>
+        )}
+        {hasCustom && (
+          <small className="text-color-secondary">
+            {t('settings.deleteDataset.customCountsWarning', {
+              items: customItemCount,
+              recipes: customRecipeCount,
+            })}
           </small>
         )}
       </div>

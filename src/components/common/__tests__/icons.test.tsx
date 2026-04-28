@@ -89,3 +89,29 @@ describe('icon wrappers forward name + alt to EcoIcon', () => {
     )
   })
 })
+
+describe('icon wrappers swap to pi-book for custom entities', () => {
+  it('ItemIcon renders a pi-book placeholder when item.isCustom is true', () => {
+    const { container } = render(<ItemIcon item={{ name: 'TestOre', isCustom: true }} />)
+    expect(container.querySelector('img')).toBeNull()
+    const i = container.querySelector('i.pi.pi-book')
+    expect(i).toBeInTheDocument()
+    expect(i!.getAttribute('aria-label')).toBe('TestOre')
+  })
+
+  it('ItemIcon falls back to a normal asset image when isCustom is false', () => {
+    const { container } = render(<ItemIcon item={{ name: 'WoodItem', isCustom: false }} />)
+    expect(container.querySelector('i.pi.pi-book')).toBeNull()
+    expect(container.querySelector('img')).toBeInTheDocument()
+  })
+
+  it('RecipeIcon renders a pi-book placeholder when primaryProduct.isCustom is true', () => {
+    const { container } = render(
+      <RecipeIcon primaryProduct={{ name: 'CustomRecipe', isCustom: true }} alt="custom" />
+    )
+    expect(container.querySelector('img')).toBeNull()
+    const i = container.querySelector('i.pi.pi-book')
+    expect(i).toBeInTheDocument()
+    expect(i!.getAttribute('aria-label')).toBe('custom')
+  })
+})

@@ -669,8 +669,13 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
               userRecipeId={p.userRecipeId}
               onToggle={handleToggleFavorite}
             />
-            {p.recipePrimaryProductRawName && (
-              <RecipeIcon primaryProduct={{ name: p.recipePrimaryProductRawName }} />
+            {(p.recipePrimaryProductRawName || p.recipeIsCustom) && (
+              <RecipeIcon
+                primaryProduct={{
+                  name: p.recipePrimaryProductRawName,
+                  isCustom: p.recipeIsCustom,
+                }}
+              />
             )}
             <Button
               label={p.recipeName}
@@ -691,8 +696,10 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
             userRecipeId={p.userRecipeId}
             onToggle={handleToggleFavorite}
           />
-          {p.primaryProductRawName && (
-            <RecipeIcon primaryProduct={{ name: p.primaryProductRawName }} />
+          {(p.primaryProductRawName || p.recipeIsCustom) && (
+            <RecipeIcon
+              primaryProduct={{ name: p.primaryProductRawName, isCustom: p.recipeIsCustom }}
+            />
           )}
           <Button
             label={p.primaryProductName}

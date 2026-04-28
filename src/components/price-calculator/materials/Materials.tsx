@@ -162,6 +162,7 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
           name: getName('item', itemId),
           rawName: (itemRow.name as string) ?? '',
           isTag: itemRow.isTag as boolean,
+          isCustom: !!itemRow.isCustom,
           userPriceId: up ? up.id : '',
           isOverride: up ? up.isOverride : false,
           isChild,
@@ -302,7 +303,9 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
         className="flex align-items-center gap-2"
         style={row.isChild ? { paddingLeft: '1.5rem' } : undefined}
       >
-        {row.rawName && <ItemIcon item={{ name: row.rawName }} />}
+        {(row.rawName || row.isCustom) && (
+          <ItemIcon item={{ name: row.rawName, isCustom: row.isCustom }} />
+        )}
         <Button
           label={row.name}
           link

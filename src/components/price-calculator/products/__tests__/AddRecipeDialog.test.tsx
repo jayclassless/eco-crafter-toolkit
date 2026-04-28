@@ -110,17 +110,18 @@ describe('AddRecipeDialog', () => {
     const stores = makeStores()
     renderDialog(stores)
     expect(screen.getByText('Add Recipe')).toBeInTheDocument()
-    expect(screen.getByText("From build's skills")).toBeInTheDocument()
-    expect(screen.getByText('Any recipe')).toBeInTheDocument()
+    expect(screen.getByText("Recipes from Build's Skills")).toBeInTheDocument()
+    expect(screen.getByText('Any Standard Recipe')).toBeInTheDocument()
+    expect(screen.getByText('Custom Recipes')).toBeInTheDocument()
     expect(screen.getByPlaceholderText(/Search recipes/i)).toBeInTheDocument()
   })
 
-  it('starts in any-mode when no skill recipes are available', () => {
+  it('starts in standard-mode when no skill recipes are available', () => {
     const stores = makeStores(false)
     renderDialog(stores)
-    // When no userSkills exist, "From build's skills" is disabled and the
-    // dialog defaults to "Any recipe".
-    const skillBtn = screen.getByText("From build's skills").closest('div')
+    // When no userSkills exist, "Recipes from Build's Skills" is disabled and
+    // the dialog defaults to "Any Standard Recipe".
+    const skillBtn = screen.getByText("Recipes from Build's Skills").closest('div')
     expect(skillBtn?.className).toContain('p-disabled')
   })
 
@@ -146,7 +147,7 @@ describe('AddRecipeDialog', () => {
   it('switching modes clears the selection so Add stays disabled', () => {
     const stores = makeStores(false)
     renderDialog(stores)
-    fireEvent.click(screen.getByText('Any recipe'))
+    fireEvent.click(screen.getByText('Any Standard Recipe'))
     expect(screen.getByRole('button', { name: /^Add$/i })).toBeDisabled()
   })
 
@@ -156,5 +157,66 @@ describe('AddRecipeDialog', () => {
     const dropdown = document.body.querySelector('.p-autocomplete-dropdown') as HTMLButtonElement
     fireEvent.click(dropdown)
     expect(dropdown).toBeInTheDocument()
+  })
+
+  it('does not show the Manage Custom button outside of the Custom Recipes mode', () => {
+    const stores = makeStores()
+    renderDialog(stores)
+    expect(screen.queryByRole('button', { name: /manage custom recipes/i })).toBeNull()
+  })
+
+  it('shows the Manage Custom button when in Custom Recipes mode', () => {
+    const stores = makeStores()
+    // Add a custom recipe so the Custom Recipes option is meaningful.
+    stores.gameDataStore.setRow('recipes', 'r-custom', {
+      id: 'r-custom',
+      datasetId: DS,
+      name: 'CustomRecipe',
+      familyName: 'Custom',
+      skillId: 'sk-mine',
+      requiredSkillLevel: 0,
+      isBlueprint: false,
+      isDefault: true,
+      craftingTableId: 'ct1',
+      baseCraftTime: 0,
+      baseLaborCost: 0,
+      isCustom: true,
+    })
+    renderDialog(stores)
+    fireEvent.click(screen.getByText('Custom Recipes'))
+    expect(screen.getByRole('button', { name: /manage custom recipes/i })).toBeInTheDocument()
+  })
+
+  it('Custom Recipes mode shows an empty hint when no custom recipes exist', () => {
+    const stores = makeStores()
+    renderDialog(stores)
+    fireEvent.click(screen.getByText('Custom Recipes'))
+    expect(screen.getByText(/no custom recipes yet/i)).toBeInTheDocument()
+  })
+
+  it('Any Standard Recipe mode excludes custom recipes', () => {
+    const stores = makeStores()
+    stores.gameDataStore.setRow('recipes', 'r-custom', {
+      id: 'r-custom',
+      datasetId: DS,
+      name: 'CustomRecipe',
+      familyName: 'Custom',
+      skillId: 'sk-mine',
+      requiredSkillLevel: 0,
+      isBlueprint: false,
+      isDefault: true,
+      craftingTableId: 'ct1',
+      baseCraftTime: 0,
+      baseLaborCost: 0,
+      isCustom: true,
+    })
+    renderDialog(stores)
+    fireEvent.click(screen.getByText('Any Standard Recipe'))
+    const dropdown = document.body.querySelector('.p-autocomplete-dropdown') as HTMLButtonElement
+    fireEvent.click(dropdown)
+    // Standard recipe is in the suggestions list.
+    expect(screen.getByText('IronRecipe')).toBeInTheDocument()
+    // Custom recipe must not appear.
+    expect(screen.queryByText('CustomRecipe')).toBeNull()
   })
 })

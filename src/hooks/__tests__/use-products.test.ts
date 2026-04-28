@@ -123,6 +123,24 @@ describe('buildProducts', () => {
     expect(it0.primaryProductRawName).toBe('IronOre')
     expect(it0.productItemIds).toEqual(['item-iron'])
     expect(it0.userMarginId).toBe('m-prem')
+    // Default isCustom flags for non-custom rows.
+    expect(it0.recipeIsCustom).toBe(false)
+    expect(it0.primaryProductIsCustom).toBe(false)
+  })
+
+  it('marks recipeIsCustom and primaryProductIsCustom for custom entities', () => {
+    gameDataStore.setCell('recipes', 'recipe-iron', 'isCustom', true)
+    gameDataStore.setCell('items', 'item-iron', 'isCustom', true)
+    buildStore.setRow('userRecipes', 'ur1', {
+      id: 'ur1',
+      buildId: BUILD_ID,
+      recipeId: 'recipe-iron',
+      roundFactor: 0,
+    })
+
+    const [it0] = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    expect(it0.recipeIsCustom).toBe(true)
+    expect(it0.primaryProductIsCustom).toBe(true)
   })
 
   it('leaves userMarginId empty when no recipe-margin link exists', () => {

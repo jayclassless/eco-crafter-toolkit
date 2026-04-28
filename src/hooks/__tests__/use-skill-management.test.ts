@@ -174,6 +174,30 @@ describe('createSkillManagement', () => {
       expect(recipeIds).toEqual(['recipe-copper', 'recipe-iron'])
     })
 
+    it('does not auto-add custom recipes that share the skill', () => {
+      gameDataStore.setRow('recipes', 'recipe-custom', {
+        id: 'recipe-custom',
+        datasetId: DATASET_ID,
+        name: 'Custom Smelt',
+        familyName: 'Custom Smelt',
+        skillId: 'skill-mining',
+        requiredSkillLevel: 1,
+        isBlueprint: false,
+        isDefault: true,
+        craftingTableId: 'ct1',
+        baseCraftTime: 1,
+        baseLaborCost: 1,
+        isCustom: true,
+      })
+      mgmt().addSkill('skill-mining')
+      const recipeIds = rowsForBuild(buildStore, 'userRecipes')
+        .map((r) => r.recipeId)
+        .sort()
+      // recipe-custom is excluded — custom recipes are user-managed, not
+      // auto-added when their skill joins the build.
+      expect(recipeIds).toEqual(['recipe-copper', 'recipe-iron'])
+    })
+
     it('auto-links each new recipe to the default margin', () => {
       mgmt().addSkill('skill-mining')
       const links = rowsForBuild(buildStore, 'userRecipeMargins')

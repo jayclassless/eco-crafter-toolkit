@@ -55,6 +55,8 @@ function makeRow(overrides: Partial<DatasetRow> = {}): DatasetRow {
     loadedDatasetId: 'ds-loaded',
     isActive: false,
     buildCount: 0,
+    customItemCount: 0,
+    customRecipeCount: 0,
     entry: {
       id: 'eco-v13',
       name: 'Eco v13',
@@ -104,6 +106,22 @@ describe('DeleteDatasetConfirmDialog — display', () => {
     expect(
       screen.getByText('4 builds tied to this dataset will also be deleted')
     ).toBeInTheDocument()
+  })
+
+  it('shows the custom-counts warning when custom items or recipes will cascade', () => {
+    renderDialog({
+      target: makeRow({ customItemCount: 2, customRecipeCount: 5 }),
+    })
+    expect(
+      screen.getByText(/2 custom item\(s\) and 5 custom recipe\(s\) will also be deleted/i)
+    ).toBeInTheDocument()
+  })
+
+  it('omits the custom-counts warning when both counts are zero', () => {
+    renderDialog({ target: makeRow({ customItemCount: 0, customRecipeCount: 0 }) })
+    expect(
+      screen.queryByText(/custom item\(s\) and .* custom recipe\(s\) will also be deleted/i)
+    ).toBeNull()
   })
 })
 

@@ -8,15 +8,16 @@ import { Toast } from 'primereact/toast'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { countCustomEntities } from '@/lib/custom-entities'
 import { countBuildsByDataset, getDatasetIdsByBundledId } from '@/lib/dataset-utils'
 import { fetchDatasetManifest } from '@/lib/fetch-manifest'
 import { useStores } from '@/stores/providers'
 import type { DatasetManifest } from '@/types/dataset-manifest'
 
+import { CustomEntitiesDialog } from './CustomEntitiesDialog'
+import { DatasetActionsMenu } from './DatasetActionsMenu'
 import { DeleteDatasetConfirmDialog } from './DeleteDatasetConfirmDialog'
-import { DownloadDatasetButton } from './DownloadDatasetButton'
 import type { DatasetRow } from './types'
-import { UpdateDatasetButton } from './UpdateDatasetButton'
 
 interface Props {
   visible: boolean
@@ -35,6 +36,7 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [storeTick, setStoreTick] = useState(0)
   const [deleteTarget, setDeleteTarget] = useState<DatasetRow | null>(null)
+  const [manageTarget, setManageTarget] = useState<DatasetRow | null>(null)
   const toastRef = useRef<Toast>(null)
 
   const loadManifest = useCallback(() => {
@@ -50,10 +52,15 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
   useEffect(() => {
     if (!visible) return
     loadManifest()
-    const dsListener = gameDataStore.addTableListener('datasets', () => setStoreTick((n) => n + 1))
-    const buildListener = buildStore.addTableListener('builds', () => setStoreTick((n) => n + 1))
+    const bump = () => setStoreTick((n) => n + 1)
+    const dsListener = gameDataStore.addTableListener('datasets', bump)
+    const itemsListener = gameDataStore.addTableListener('items', bump)
+    const recipesListener = gameDataStore.addTableListener('recipes', bump)
+    const buildListener = buildStore.addTableListener('builds', bump)
     return () => {
       gameDataStore.delListener(dsListener)
+      gameDataStore.delListener(itemsListener)
+      gameDataStore.delListener(recipesListener)
       buildStore.delListener(buildListener)
     }
   }, [visible, gameDataStore, buildStore, loadManifest])
@@ -82,6 +89,9 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
         loadedDatasetId !== null
           ? (gameDataStore.getCell('datasets', loadedDatasetId, 'name') as string) || entry.name
           : entry.name
+      const customCounts = loadedDatasetId
+        ? countCustomEntities(gameDataStore, loadedDatasetId)
+        : { items: 0, recipes: 0 }
       return {
         manifestId: entry.id,
         name: localName,
@@ -89,6 +99,8 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
         loadedDatasetId,
         isActive: loadedDatasetId !== null && loadedDatasetId === activeDatasetId,
         buildCount: loadedDatasetId ? (buildsByDataset[loadedDatasetId] ?? 0) : 0,
+        customItemCount: customCounts.items,
+        customRecipeCount: customCounts.recipes,
         availableRevision,
         entry,
       }
@@ -134,6 +146,12 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
   const buildsTemplate = (row: DatasetRow) =>
     row.loadedDatasetId === null ? t('settings.datasets.noBuilds') : String(row.buildCount)
 
+  const customItemsTemplate = (row: DatasetRow) =>
+    row.loadedDatasetId === null ? t('settings.datasets.noBuilds') : String(row.customItemCount)
+
+  const customRecipesTemplate = (row: DatasetRow) =>
+    row.loadedDatasetId === null ? t('settings.datasets.noBuilds') : String(row.customRecipeCount)
+
   const nameTemplate = (row: DatasetRow) => (
     <div className="flex align-items-center gap-2">
       <span>{row.name}</span>
@@ -141,46 +159,26 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
     </div>
   )
 
-  const actionTemplate = (row: DatasetRow) => {
-    const content =
-      row.loadedDatasetId === null ? (
-        <DownloadDatasetButton entry={row.entry} onError={handleDownloadError} />
-      ) : (
-        <>
-          {row.availableRevision !== undefined && (
-            <UpdateDatasetButton
-              entry={row.entry}
-              onError={handleUpdateError}
-              onSuccess={handleUpdateSuccess}
-            />
-          )}
-          {!row.isActive && (
-            <Button
-              label={t('settings.datasets.switch')}
-              icon="pi pi-arrow-right"
-              size="small"
-              onClick={() => onSwitch(row.loadedDatasetId!)}
-            />
-          )}
-          <Button
-            label={t('settings.datasets.delete')}
-            icon="pi pi-trash"
-            severity="danger"
-            outlined
-            size="small"
-            onClick={() => setDeleteTarget(row)}
-          />
-        </>
-      )
-    return <div className="flex gap-2 justify-content-center">{content}</div>
-  }
+  const actionTemplate = (row: DatasetRow) => (
+    <div className="flex justify-content-end">
+      <DatasetActionsMenu
+        row={row}
+        onSwitch={onSwitch}
+        onManageCustom={(r) => setManageTarget(r)}
+        onDelete={(r) => setDeleteTarget(r)}
+        onDownloadError={handleDownloadError}
+        onUpdateError={handleUpdateError}
+        onUpdateSuccess={handleUpdateSuccess}
+      />
+    </div>
+  )
 
   return (
     <Dialog
       header={t('settings.datasets.dialogTitle')}
       visible={visible}
       onHide={onHide}
-      style={{ width: '58rem' }}
+      style={{ width: '50rem' }}
       modal
     >
       <Toast ref={toastRef} />
@@ -205,17 +203,32 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
           <Column
             field="updatedAt"
             header={t('settings.datasets.columnUpdated')}
-            style={{ width: '10rem' }}
+            style={{ width: '8rem' }}
           />
           <Column
             header={t('settings.datasets.columnBuilds')}
             body={buildsTemplate}
             style={{ width: '7rem' }}
           />
-          <Column body={actionTemplate} style={{ width: '20rem' }} />
+          <Column
+            header={t('settings.datasets.columnCustomItems')}
+            body={customItemsTemplate}
+            style={{ width: '7rem' }}
+          />
+          <Column
+            header={t('settings.datasets.columnCustomRecipes')}
+            body={customRecipesTemplate}
+            style={{ width: '7rem' }}
+          />
+          <Column body={actionTemplate} style={{ width: '3rem' }} />
         </DataTable>
       )}
       <DeleteDatasetConfirmDialog target={deleteTarget} onHide={() => setDeleteTarget(null)} />
+      <CustomEntitiesDialog
+        visible={manageTarget !== null}
+        onHide={() => setManageTarget(null)}
+        datasetId={manageTarget?.loadedDatasetId ?? ''}
+      />
     </Dialog>
   )
 }
