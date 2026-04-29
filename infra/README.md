@@ -33,9 +33,9 @@ stack just provisions the platform.
 
 ```sh
 cd infra
-mise exec -- aube install --frozen-lockfile
-mise exec -- aube exec cdk bootstrap aws://<account-id>/us-east-1
-mise exec -- aube exec cdk deploy
+mise exec -- pnpm install --frozen-lockfile
+mise exec -- pnpm exec cdk bootstrap aws://<account-id>/us-east-1
+mise exec -- pnpm exec cdk deploy
 ```
 
 The first `cdk deploy` will pause inside CloudFormation while the ACM
@@ -103,31 +103,9 @@ Infra changes:
 
 ```sh
 cd infra
-mise exec -- aube exec cdk diff
-mise exec -- aube exec cdk deploy
+mise exec -- pnpm exec cdk diff
+mise exec -- pnpm exec cdk deploy
 ```
 
 Site content changes happen automatically via the workflow on push to
 `production`.
-
-## Adding a Lambda API later
-
-When server-side functions are needed, define the function in
-`lib/eco-crafter-stack.ts` and attach it as an additional behavior on the
-existing distribution:
-
-```ts
-const apiFn = new lambda.Function(this, 'Api', {
-  /* ... */
-})
-const fnUrl = apiFn.addFunctionUrl({
-  authType: lambda.FunctionUrlAuthType.AWS_IAM,
-})
-distribution.addBehavior('/api/*', new origins.FunctionUrlOrigin(fnUrl), {
-  cachePolicy: cf.CachePolicy.CACHING_DISABLED,
-  originRequestPolicy: cf.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-  allowedMethods: cf.AllowedMethods.ALLOW_ALL,
-})
-```
-
-No changes to the bucket, the deploy workflow, or DNS are required.
