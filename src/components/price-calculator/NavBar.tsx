@@ -1,6 +1,7 @@
 import { Button } from 'primereact/button'
 import { useTranslation } from 'react-i18next'
 
+import { NewsBadgeButton } from '@/components/game-news/NewsBadgeButton'
 import { useStores } from '@/stores/providers'
 
 import { BuildSelector } from './BuildSelector'
@@ -40,7 +41,8 @@ export function NavBar({
         onSelect={onSelectBuild}
         onDeleted={onDeletedBuild}
       />
-      <Button icon="pi pi-bars" text className="ml-auto" onClick={onOpenSettings} />
+      <NewsBadgeButton />
+      <Button icon="pi pi-bars" text onClick={onOpenSettings} />
     </div>
   )
 }

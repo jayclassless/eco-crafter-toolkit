@@ -53,6 +53,28 @@ describe('useLocalization', () => {
     })
   })
 
+  describe('formatDate', () => {
+    it('formats a Date with the default medium style in en-US', () => {
+      const { result } = renderHook(() => useLocalization())
+      // 2026-04-25T12:00:00Z, formatted as 'Apr 25, 2026' (en-US medium)
+      const date = new Date(Date.UTC(2026, 3, 25, 12, 0, 0))
+      expect(result.current.formatDate(date)).toBe('Apr 25, 2026')
+    })
+
+    it('accepts a unix-millisecond timestamp', () => {
+      const { result } = renderHook(() => useLocalization())
+      const ms = Date.UTC(2026, 3, 25, 12, 0, 0)
+      expect(result.current.formatDate(ms)).toBe('Apr 25, 2026')
+    })
+
+    it('honors custom options', () => {
+      const { result } = renderHook(() => useLocalization())
+      const date = new Date(Date.UTC(2026, 3, 25, 12, 0, 0))
+      const formatted = result.current.formatDate(date, { year: 'numeric', month: 'long' })
+      expect(formatted).toBe('April 2026')
+    })
+  })
+
   it('returns a stable object across renders when the language is unchanged', () => {
     const { result, rerender } = renderHook(() => useLocalization())
     const first = result.current

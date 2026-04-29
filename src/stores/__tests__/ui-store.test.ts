@@ -30,6 +30,7 @@ describe('createUIStore', () => {
       themeMode: 'dark',
       themeColor: 'blue',
       uiScale: 14,
+      lastNewsViewedAt: 0,
     })
   })
 

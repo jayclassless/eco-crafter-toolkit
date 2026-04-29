@@ -1,7 +1,12 @@
+import * as path from 'path'
+
 import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib'
 import * as acm from 'aws-cdk-lib/aws-certificatemanager'
 import * as cf from 'aws-cdk-lib/aws-cloudfront'
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins'
+import * as iam from 'aws-cdk-lib/aws-iam'
+import * as lambda from 'aws-cdk-lib/aws-lambda'
+import * as lambda_nodejs from 'aws-cdk-lib/aws-lambda-nodejs'
 import * as s3 from 'aws-cdk-lib/aws-s3'
 import { Construct } from 'constructs'
 
@@ -56,6 +61,24 @@ export class EcoCrafterStack extends Stack {
       allowedMethods: cf.AllowedMethods.ALLOW_GET_HEAD,
     }
 
+    const steamNewsFn = new lambda_nodejs.NodejsFunction(this, 'SteamNewsFn', {
+      entry: path.join(__dirname, '../lambda/steam-news/lambda.ts'),
+      handler: 'handler',
+      runtime: lambda.Runtime.NODEJS_22_X,
+      memorySize: 256,
+      timeout: Duration.seconds(10),
+      bundling: {
+        target: 'node22',
+        minify: true,
+      },
+    })
+
+    const steamNewsFnUrl = steamNewsFn.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.AWS_IAM,
+    })
+
+    const apiOrigin = origins.FunctionUrlOrigin.withOriginAccessControl(steamNewsFnUrl)
+
     const distribution = new cf.Distribution(this, 'Distribution', {
       defaultRootObject: 'index.html',
       domainNames: [SITE_DOMAIN],
@@ -98,7 +121,22 @@ export class EcoCrafterStack extends Stack {
           cachePolicy: oneDayCachePolicy,
           responseHeadersPolicy: oneDayHeaders,
         },
+        '/api/*': {
+          origin: apiOrigin,
+          viewerProtocolPolicy: cf.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cf.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+          cachePolicy: cf.CachePolicy.CACHING_OPTIMIZED,
+          originRequestPolicy: cf.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          compress: true,
+        },
       },
+    })
+
+    steamNewsFn.addPermission('AllowCloudFrontInvoke', {
+      principal: new iam.ServicePrincipal('cloudfront.amazonaws.com'),
+      action: 'lambda:InvokeFunctionUrl',
+      sourceArn: `arn:aws:cloudfront::${this.account}:distribution/${distribution.distributionId}`,
+      functionUrlAuthType: lambda.FunctionUrlAuthType.AWS_IAM,
     })
 
     new CfnOutput(this, 'SiteBucketName', { value: bucket.bucketName })

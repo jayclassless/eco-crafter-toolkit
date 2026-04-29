@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import type { Store } from 'tinybase'
 import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
 import { describe, expect, it } from 'vitest'
@@ -53,13 +54,15 @@ function renderNav(stores: { gameDataStore: Store; buildStore: Store; uiStore: S
         uiPersister: stubPersister(),
       }}
     >
-      <NavBar
-        datasetId="ds1"
-        buildId="b1"
-        onSelectBuild={() => {}}
-        onDeletedBuild={() => {}}
-        onOpenSettings={() => {}}
-      />
+      <MemoryRouter>
+        <NavBar
+          datasetId="ds1"
+          buildId="b1"
+          onSelectBuild={() => {}}
+          onDeletedBuild={() => {}}
+          onOpenSettings={() => {}}
+        />
+      </MemoryRouter>
     </StoreContext.Provider>
   )
 }

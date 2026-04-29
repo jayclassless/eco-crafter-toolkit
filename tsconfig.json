@@ -19,5 +19,5 @@
     }
   },
   "include": ["**/*.ts", "**/*.tsx", "**/*.mts"],
-  "exclude": ["node_modules", "dist", "infra"]
+  "exclude": ["node_modules", "dist", "infra", "workers"]
 }

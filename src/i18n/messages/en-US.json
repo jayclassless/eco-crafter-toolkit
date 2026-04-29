@@ -178,6 +178,15 @@
       }
     }
   },
+  "gameNews": {
+    "title": "Game News",
+    "openButton": "Game News",
+    "back": "Back",
+    "loading": "Loading…",
+    "errorTitle": "Could not load news",
+    "retry": "Retry",
+    "byAuthor": "by {author}"
+  },
   "settings": {
     "title": "Eco Crafter Toolkit",
     "mode": "Theme Mode",
