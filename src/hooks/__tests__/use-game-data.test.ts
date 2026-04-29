@@ -165,6 +165,40 @@ describe('createGameDataOps', () => {
       await ops.importDataset(parsed, 'X')
       expect(store.getCell('recipes', 'r1', 'skillId')).toBe('')
     })
+
+    it('writes all rows in a single transaction', async () => {
+      // Each finished transaction triggers a full-store save in the IDB
+      // persister, so an unwrapped import would issue thousands of saves.
+      const ops = createGameDataOps(store)
+      const parsed = emptyParsed()
+      for (let i = 0; i < 50; i++) {
+        parsed.skills.push({
+          id: `s${i}`,
+          name: `Skill ${i}`,
+          profession: '',
+          maxLevel: 7,
+          laborReducePercent: [1],
+        } as ParsedDataset['skills'][number])
+        parsed.items.push({
+          id: `i${i}`,
+          name: `Item ${i}`,
+          isTag: false,
+        } as ParsedDataset['items'][number])
+        parsed.recipes.push({
+          id: `r${i}`,
+          name: `R${i}`,
+          craftingTableId: 'ct1',
+          baseCraftTime: 1,
+          baseLaborCost: 1,
+        } as ParsedDataset['recipes'][number])
+      }
+      let transactions = 0
+      store.addDidFinishTransactionListener(() => {
+        transactions++
+      })
+      await ops.importDataset(parsed, 'Big')
+      expect(transactions).toBe(1)
+    })
   })
 
   describe('getDatasets', () => {
@@ -213,6 +247,33 @@ describe('createGameDataOps', () => {
       expect(goneIdx.size).toBe(0)
       const keptIdx = await loadIndex(b, 'en-US')
       expect(keptIdx.get('item:iron')).toBe('Iron (B)')
+    })
+
+    it('deletes scoped rows in a single transaction', async () => {
+      const ops = createGameDataOps(store)
+      const parsed = emptyParsed()
+      for (let i = 0; i < 30; i++) {
+        parsed.items.push({
+          id: `i${i}`,
+          name: `Item ${i}`,
+          isTag: false,
+        } as ParsedDataset['items'][number])
+        parsed.recipes.push({
+          id: `r${i}`,
+          name: `R${i}`,
+          craftingTableId: 'ct1',
+          baseCraftTime: 1,
+          baseLaborCost: 1,
+        } as ParsedDataset['recipes'][number])
+      }
+      const a = await ops.importDataset(parsed, 'A')
+
+      let transactions = 0
+      store.addDidFinishTransactionListener(() => {
+        transactions++
+      })
+      await ops.deleteDataset(a)
+      expect(transactions).toBe(1)
     })
   })
 })
