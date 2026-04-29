@@ -2,6 +2,7 @@ import { renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import '@/i18n'
+
 import { useLocalization } from '../use-localization'
 
 describe('useLocalization', () => {
