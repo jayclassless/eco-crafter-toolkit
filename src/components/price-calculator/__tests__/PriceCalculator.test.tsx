@@ -13,6 +13,14 @@ import { PriceCalculator } from '../PriceCalculator'
 
 import '@/i18n'
 
+// NewsBadgeButton (rendered inside NavBar) calls fetchSteamNews against a
+// relative URL that node's fetch can't parse, polluting test output with a
+// console.warn. These tests don't exercise the badge, so stub the module
+// with a never-resolving promise — no console.warn, no post-unmount setState.
+vi.mock('@/lib/steam-news', () => ({
+  fetchSteamNews: vi.fn(() => new Promise(() => {})),
+}))
+
 // jsdom can't actually run a Web Worker, so we replace `globalThis.Worker`
 // with a no-op stub that keeps the onmessage hook idle. The component then
 // renders without crashing on `new Worker(...)`.

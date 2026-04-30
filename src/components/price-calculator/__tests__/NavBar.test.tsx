@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import type { Store } from 'tinybase'
 import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { createBuildStore } from '@/stores/build-store'
 import { createGameDataStore } from '@/stores/game-data-store'
@@ -12,6 +12,14 @@ import { createUIStore } from '@/stores/ui-store'
 import { NavBar } from '../NavBar'
 
 import '@/i18n'
+
+// NewsBadgeButton (rendered inside NavBar) calls fetchSteamNews against a
+// relative URL that node's fetch can't parse, polluting test output with a
+// console.warn. These tests don't exercise the badge, so stub the module
+// with a never-resolving promise — no console.warn, no post-unmount setState.
+vi.mock('@/lib/steam-news', () => ({
+  fetchSteamNews: vi.fn(() => new Promise(() => {})),
+}))
 
 function stubPersister(): IndexedDbPersister {
   return { save: async () => {}, schedule: async () => {} } as unknown as IndexedDbPersister
