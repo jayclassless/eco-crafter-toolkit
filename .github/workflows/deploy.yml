@@ -15,7 +15,7 @@ jobs:
       - uses: lewagon/wait-on-check-action@v1.6.0
         if: github.event_name != 'workflow_dispatch'
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ github.sha }}
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 10
 
