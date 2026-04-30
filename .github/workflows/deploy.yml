@@ -12,12 +12,12 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: lewagon/wait-on-check-action@v1.6.0
-        if: github.event_name != 'workflow_dispatch'
-        with:
-          ref: ${{ github.sha }}
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 10
+      # - uses: lewagon/wait-on-check-action@v1.7.0
+      #   if: github.event_name != 'workflow_dispatch'
+      #   with:
+      #     ref: ${{ github.sha }}
+      #     repo-token: ${{ secrets.GITHUB_TOKEN }}
+      #     wait-interval: 10
 
       - uses: actions/checkout@v6
 
