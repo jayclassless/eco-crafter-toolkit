@@ -3,6 +3,8 @@ import path from 'path'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vitest/config'
 
+import pkg from './package.json' with { type: 'json' }
+
 // Steam's news API has no CORS headers. In production a Lambda Function URL
 // behind CloudFront serves /api/game-news; in dev this middleware runs the
 // same handler in-process so the SPA always uses a relative URL.
@@ -31,6 +33,9 @@ function steamNewsDevProxy(): Plugin {
 export default defineConfig({
   plugins: [react(), steamNewsDevProxy()],
   base: '/',
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   server: {
     port: 3000,
   },

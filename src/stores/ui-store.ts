@@ -17,6 +17,7 @@ export function createUIStore() {
       themeColor: { type: 'string', default: 'blue' },
       uiScale: { type: 'number', default: 14 },
       lastNewsViewedAt: { type: 'number', default: 0 },
+      hasSeenAboutDialog: { type: 'boolean', default: false },
     },
   })
 

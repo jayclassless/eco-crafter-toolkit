@@ -206,8 +206,10 @@
       "teal": "Teal"
     },
     "menu": {
+      "gameNews": "Game News",
       "datasets": "Game Datasets",
-      "uiSettings": "UI Settings"
+      "uiSettings": "UI Settings",
+      "about": "About this App"
     },
     "ui": {
       "title": "UI Settings",

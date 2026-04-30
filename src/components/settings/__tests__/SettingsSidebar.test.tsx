@@ -34,7 +34,9 @@ function makeStores() {
 function renderSidebar(opts: {
   visible?: boolean
   onHide?: () => void
+  onOpenGameNews?: () => void
   onOpenDatasets?: () => void
+  onOpenAbout?: () => void
   stores?: { gameDataStore: Store; buildStore: Store; uiStore: Store }
 }) {
   const stores = opts.stores ?? makeStores()
@@ -50,7 +52,9 @@ function renderSidebar(opts: {
       <SettingsSidebar
         visible={opts.visible ?? true}
         onHide={opts.onHide ?? (() => {})}
+        onOpenGameNews={opts.onOpenGameNews ?? (() => {})}
         onOpenDatasets={opts.onOpenDatasets ?? (() => {})}
+        onOpenAbout={opts.onOpenAbout ?? (() => {})}
       />
     </StoreContext.Provider>
   )
@@ -85,6 +89,15 @@ describe('SettingsSidebar', () => {
     expect(screen.getByText('Game Datasets')).toBeInTheDocument()
   })
 
+  it('calls onHide and onOpenGameNews when Game News is clicked', () => {
+    const onHide = vi.fn()
+    const onOpenGameNews = vi.fn()
+    renderSidebar({ onHide, onOpenGameNews })
+    fireEvent.click(screen.getByText('Game News'))
+    expect(onHide).toHaveBeenCalledTimes(1)
+    expect(onOpenGameNews).toHaveBeenCalledTimes(1)
+  })
+
   it('calls onHide and onOpenDatasets when Game Datasets is clicked', () => {
     const onHide = vi.fn()
     const onOpenDatasets = vi.fn()
@@ -92,6 +105,15 @@ describe('SettingsSidebar', () => {
     fireEvent.click(screen.getByText('Game Datasets'))
     expect(onHide).toHaveBeenCalledTimes(1)
     expect(onOpenDatasets).toHaveBeenCalledTimes(1)
+  })
+
+  it('calls onHide and onOpenAbout when About is clicked', () => {
+    const onHide = vi.fn()
+    const onOpenAbout = vi.fn()
+    renderSidebar({ onHide, onOpenAbout })
+    fireEvent.click(screen.getByText('About this App'))
+    expect(onHide).toHaveBeenCalledTimes(1)
+    expect(onOpenAbout).toHaveBeenCalledTimes(1)
   })
 
   it('resets to the menu view each time the sidebar opens', () => {
@@ -110,7 +132,13 @@ describe('SettingsSidebar', () => {
           uiPersister: stubPersister(),
         }}
       >
-        <SettingsSidebar visible={false} onHide={() => {}} onOpenDatasets={() => {}} />
+        <SettingsSidebar
+          visible={false}
+          onHide={() => {}}
+          onOpenGameNews={() => {}}
+          onOpenDatasets={() => {}}
+          onOpenAbout={() => {}}
+        />
       </StoreContext.Provider>
     )
 
@@ -124,7 +152,13 @@ describe('SettingsSidebar', () => {
           uiPersister: stubPersister(),
         }}
       >
-        <SettingsSidebar visible={true} onHide={() => {}} onOpenDatasets={() => {}} />
+        <SettingsSidebar
+          visible={true}
+          onHide={() => {}}
+          onOpenGameNews={() => {}}
+          onOpenDatasets={() => {}}
+          onOpenAbout={() => {}}
+        />
       </StoreContext.Provider>
     )
 

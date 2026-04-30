@@ -135,6 +135,24 @@ describe('PriceCalculator (smoke)', () => {
     expect(container.querySelector('.col-3')).toBeNull()
   })
 
+  it('auto-opens the About dialog on first calculator visit and flips the persisted flag', async () => {
+    const stores = makeStores()
+    expect(stores.uiStore.getCell('uiState', 'main', 'hasSeenAboutDialog')).toBe(false)
+    renderApp(stores, `/${DS}/calculator/${BUILD}`)
+    await waitFor(() =>
+      expect(screen.getByText(/Welcome to the Eco Crafter Toolkit/i)).toBeInTheDocument()
+    )
+    expect(stores.uiStore.getCell('uiState', 'main', 'hasSeenAboutDialog')).toBe(true)
+  })
+
+  it('does not auto-open the About dialog when the seen flag is already set', async () => {
+    const stores = makeStores()
+    stores.uiStore.setCell('uiState', 'main', 'hasSeenAboutDialog', true)
+    renderApp(stores, `/${DS}/calculator/${BUILD}`)
+    await waitFor(() => expect(screen.getByText('Build A')).toBeInTheDocument())
+    expect(screen.queryByText(/Welcome to the Eco Crafter Toolkit/i)).not.toBeInTheDocument()
+  })
+
   it('opens the settings sidebar when the menu icon is clicked', async () => {
     const stores = makeStores()
     renderApp(stores, `/${DS}/calculator/${BUILD}`)

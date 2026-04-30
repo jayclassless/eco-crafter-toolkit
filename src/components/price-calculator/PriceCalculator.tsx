@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 
+import { AboutDialog } from '@/components/settings/AboutDialog'
 import { DatasetsDialog } from '@/components/settings/datasets/DatasetsDialog'
 import { SettingsSidebar } from '@/components/settings/SettingsSidebar'
 import { usePriceSolver } from '@/hooks/use-price-solver'
@@ -27,6 +28,7 @@ export function PriceCalculator() {
 
   const [settingsVisible, setSettingsVisible] = useState(false)
   const [datasetsDialogVisible, setDatasetsDialogVisible] = useState(false)
+  const [aboutVisible, setAboutVisible] = useState(false)
 
   // URL is the source of truth. Stale or hand-edited segments are caught
   // here and redirected; the BuildRedirect / RootRedirect routes pick
@@ -52,6 +54,17 @@ export function PriceCalculator() {
       uiStore.setCell('uiState', 'main', 'activeBuildId', buildId)
     }
   }, [buildValid, buildId, uiStore])
+
+  // Show the About dialog the first time the calculator renders for a valid
+  // build. The flag is persisted in uiStore so subsequent visits stay quiet.
+  useEffect(() => {
+    if (!buildValid) return
+    const seen = uiStore.getCell('uiState', 'main', 'hasSeenAboutDialog') as boolean
+    if (!seen) {
+      setAboutVisible(true)
+      uiStore.setCell('uiState', 'main', 'hasSeenAboutDialog', true)
+    }
+  }, [buildValid, uiStore])
 
   // Trigger solver when build data changes. The snapshot build is expensive
   // (it reads thousands of rows) so we pass a thunk that `recalculate` will
@@ -158,7 +171,9 @@ export function PriceCalculator() {
       <SettingsSidebar
         visible={settingsVisible}
         onHide={() => setSettingsVisible(false)}
+        onOpenGameNews={() => navigate('/game-news')}
         onOpenDatasets={() => setDatasetsDialogVisible(true)}
+        onOpenAbout={() => setAboutVisible(true)}
       />
       <DatasetsDialog
         visible={datasetsDialogVisible}
@@ -169,6 +184,7 @@ export function PriceCalculator() {
           navigate(`/${id}/calculator`)
         }}
       />
+      <AboutDialog visible={aboutVisible} onHide={() => setAboutVisible(false)} />
     </div>
   )
 }

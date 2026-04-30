@@ -11,12 +11,20 @@ import './SettingsSidebar.css'
 interface Props {
   visible: boolean
   onHide: () => void
+  onOpenGameNews: () => void
   onOpenDatasets: () => void
+  onOpenAbout: () => void
 }
 
 type View = 'menu' | 'uiSettings'
 
-export function SettingsSidebar({ visible, onHide, onOpenDatasets }: Props) {
+export function SettingsSidebar({
+  visible,
+  onHide,
+  onOpenGameNews,
+  onOpenDatasets,
+  onOpenAbout,
+}: Props) {
   const { t } = useTranslation()
   const [view, setView] = useState<View>('menu')
 
@@ -40,17 +48,29 @@ export function SettingsSidebar({ visible, onHide, onOpenDatasets }: Props) {
       </div>
     )
 
+  const handleSelectGameNews = () => {
+    onHide()
+    onOpenGameNews()
+  }
+
   const handleSelectDatasets = () => {
     onHide()
     onOpenDatasets()
+  }
+
+  const handleSelectAbout = () => {
+    onHide()
+    onOpenAbout()
   }
 
   return (
     <Sidebar visible={visible} onHide={onHide} position="right" header={header}>
       {view === 'menu' ? (
         <SidebarMenuView
+          onSelectGameNews={handleSelectGameNews}
           onSelectDatasets={handleSelectDatasets}
           onSelectUiSettings={() => setView('uiSettings')}
+          onSelectAbout={handleSelectAbout}
         />
       ) : (
         <UiSettingsView />
