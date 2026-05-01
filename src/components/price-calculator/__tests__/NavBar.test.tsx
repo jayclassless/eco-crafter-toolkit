@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import type { Store } from 'tinybase'
 import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
@@ -52,7 +52,10 @@ function makeStores() {
   }
 }
 
-function renderNav(stores: { gameDataStore: Store; buildStore: Store; uiStore: Store }) {
+function renderNav(
+  stores: { gameDataStore: Store; buildStore: Store; uiStore: Store },
+  opts: { onOpenConfig?: () => void } = {}
+) {
   return render(
     <StoreContext.Provider
       value={{
@@ -69,6 +72,7 @@ function renderNav(stores: { gameDataStore: Store; buildStore: Store; uiStore: S
           onSelectBuild={() => {}}
           onDeletedBuild={() => {}}
           onOpenSettings={() => {}}
+          onOpenConfig={opts.onOpenConfig}
         />
       </MemoryRouter>
     </StoreContext.Provider>
@@ -80,6 +84,20 @@ describe('NavBar', () => {
     const stores = makeStores()
     renderNav(stores)
     expect(screen.getByText('Eco vTest')).toBeInTheDocument()
+  })
+
+  it('does not render the open-config button when onOpenConfig is not provided', () => {
+    renderNav(makeStores())
+    expect(screen.queryByLabelText('Open Build Configuration')).not.toBeInTheDocument()
+  })
+
+  it('renders the open-config button and invokes the callback when clicked', () => {
+    const onOpenConfig = vi.fn()
+    renderNav(makeStores(), { onOpenConfig })
+    const button = screen.getByLabelText('Open Build Configuration')
+    expect(button).toBeInTheDocument()
+    fireEvent.click(button)
+    expect(onOpenConfig).toHaveBeenCalledTimes(1)
   })
 
   it('renders an empty dataset name when the dataset row is missing', () => {

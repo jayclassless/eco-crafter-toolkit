@@ -28,6 +28,8 @@
     }
   },
   "priceCalculator": {
+    "openConfig": "Open Build Configuration",
+    "configTitle": "Build Configuration",
     "config": {
       "skills": "Skills",
       "skillsCount": "Skills ({count})",

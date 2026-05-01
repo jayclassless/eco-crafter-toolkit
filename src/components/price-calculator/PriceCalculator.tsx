@@ -4,12 +4,14 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { AboutDialog } from '@/components/settings/AboutDialog'
 import { DatasetsDialog } from '@/components/settings/datasets/DatasetsDialog'
 import { SettingsSidebar } from '@/components/settings/SettingsSidebar'
+import { useIsTablet } from '@/hooks/use-is-tablet'
 import { usePriceSolver } from '@/hooks/use-price-solver'
 import { usePriceSignal } from '@/hooks/use-prices-signal'
 import { useSolverSnapshot } from '@/hooks/use-solver-snapshot'
 import { useStores } from '@/stores/providers'
 
 import { ConfigPanel } from './build-options/ConfigPanel'
+import { ConfigPanelDrawer } from './build-options/ConfigPanelDrawer'
 import { Materials } from './materials/Materials'
 import { NavBar } from './NavBar'
 import { Products } from './products/Products'
@@ -29,6 +31,15 @@ export function PriceCalculator() {
   const [settingsVisible, setSettingsVisible] = useState(false)
   const [datasetsDialogVisible, setDatasetsDialogVisible] = useState(false)
   const [aboutVisible, setAboutVisible] = useState(false)
+  const [configDrawerVisible, setConfigDrawerVisible] = useState(false)
+  const isTablet = useIsTablet()
+
+  // Auto-close the drawer when crossing back to the desktop breakpoint
+  // (e.g. iPad rotation, window resize) so it doesn't reopen unexpectedly
+  // the next time the viewport shrinks.
+  useEffect(() => {
+    if (!isTablet) setConfigDrawerVisible(false)
+  }, [isTablet])
 
   // URL is the source of truth. Stale or hand-edited segments are caught
   // here and redirected; the BuildRedirect / RootRedirect routes pick
@@ -155,19 +166,34 @@ export function PriceCalculator() {
         onSelectBuild={(id) => navigate(`/${datasetId}/calculator/${id}`)}
         onDeletedBuild={handleBuildDeleted}
         onOpenSettings={() => setSettingsVisible(true)}
+        onOpenConfig={isTablet ? () => setConfigDrawerVisible(true) : undefined}
       />
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="col-3 overflow-y-auto p-3">
-          <ConfigPanel buildId={buildId} datasetId={datasetId} />
-        </div>
-        <div className="col-4 p-3 flex flex-column" style={{ minHeight: 0 }}>
+        {!isTablet && (
+          <div className="col-3">
+            <ConfigPanel buildId={buildId} datasetId={datasetId} />
+          </div>
+        )}
+        <div
+          className={`${isTablet ? 'col-5' : 'col-4'} p-3 flex flex-column`}
+          style={{ minHeight: 0 }}
+        >
           <Materials buildId={buildId} datasetId={datasetId} priceSignal={priceSignal} />
         </div>
-        <div className="col-5 p-3 flex flex-column" style={{ minHeight: 0 }}>
+        <div
+          className={`${isTablet ? 'col-7' : 'col-5'} p-3 flex flex-column`}
+          style={{ minHeight: 0 }}
+        >
           <Products buildId={buildId} datasetId={datasetId} priceSignal={priceSignal} />
         </div>
       </div>
+      <ConfigPanelDrawer
+        visible={configDrawerVisible}
+        onHide={() => setConfigDrawerVisible(false)}
+        buildId={buildId}
+        datasetId={datasetId}
+      />
       <SettingsSidebar
         visible={settingsVisible}
         onHide={() => setSettingsVisible(false)}

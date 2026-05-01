@@ -12,6 +12,7 @@ interface Props {
   onSelectBuild: (buildId: string) => void
   onDeletedBuild: (buildId: string) => void
   onOpenSettings: () => void
+  onOpenConfig?: () => void
 }
 
 export function NavBar({
@@ -20,6 +21,7 @@ export function NavBar({
   onSelectBuild,
   onDeletedBuild,
   onOpenSettings,
+  onOpenConfig,
 }: Props) {
   const { t } = useTranslation()
   const { gameDataStore } = useStores()
@@ -27,6 +29,15 @@ export function NavBar({
 
   return (
     <div className="flex align-items-center gap-3 p-2 pb-0">
+      {onOpenConfig && (
+        <Button
+          icon="pi pi-sliders-h"
+          text
+          aria-label={t('priceCalculator.openConfig')}
+          title={t('priceCalculator.openConfig')}
+          onClick={onOpenConfig}
+        />
+      )}
       <img
         src="/icons/favicon-256x256.png"
         alt={t('common.title')}
