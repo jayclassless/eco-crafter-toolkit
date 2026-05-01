@@ -12,4 +12,4 @@ _.file = ".env"
 HK_MISE = "1"
 
 [hooks]
-postinstall = "hk install --mise"
+postinstall = ["hk install --mise", "aube install"]

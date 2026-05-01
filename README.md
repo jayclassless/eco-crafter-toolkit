@@ -1,113 +1,38 @@
-# eco-crafter-toolkit
+# Eco Crafter Toolkit
 
-## Development Tools
+[This application](https://eco-crafter.classless.net) gives players of
+[Eco](https://play.eco) a price calculator for the in-game economy: pick
+your skills, talents, plugin modules, and crafting tables, set prices for
+the raw materials you can source, and the app derives the cost and sale
+price of every recipe you can craft (with margins, ingredient swaps, and
+recipe variants resolved automatically).
 
-### Extracting a fresh dataset from an Eco server install
+The app is free to use and records no information about you — all data is
+stored locally in your browser.
 
-`scripts/extract-eco-dataset.ts` reads the auto-generated C# under
-`<eco-root>/Eco_Data/Server/Mods/__core__/AutoGen/` and writes a `DatasetJson`
-matching `src/types/dataset-json.ts`.
+## Contributing
 
-#### Prerequisites
+Bug reports and pull requests are welcome on
+[GitHub](https://github.com/jayclassless/eco-crafter-toolkit/issues).
+For non-trivial changes, please open an issue first to discuss the
+approach.
 
-- A local Eco server install (the directory containing `Eco_Data/`).
-- `mise exec -- aube install` (the script's deps `tsx` and
-  `@crowdin/crowdin-api-client` live in root `devDependencies`).
-- Optional: a Crowdin API token for translations
-  (https://crowdin.com/settings#api-key). Without it, only `en-US` is populated.
+## Development
 
-#### Usage
+To set up an environment to develop this application, the most straight-
+forward way is to use `mise`:
 
-```sh
-mise exec -- aube exec tsx scripts/extract-eco-dataset.ts \
-  --eco-root /path/to/EcoServer \
-  --output   /path/to/eco-vN.json \
-  --version  1 \
-  [--crowdin-token TOKEN | CROWDIN_API_TOKEN=TOKEN] \
-  [--crowdin-project 300454] \
-  [--compare public/data/eco-v12.json]
+```shell
+$ mise settings experimental=true
+$ mise trust
+$ mise install
 ```
 
-All of `--eco-root` and `--output` are required. The script
-never writes to `public/data/` automatically and never edits
-`datasets-manifest.json` — point `--output` wherever you want, then move and
-register the file by hand.
+To boot up a local development server:
 
-#### Comparison output
-
-When `--compare <existing-dataset.json>` is passed, the script prints an
-entity-count table after writing:
-
+```shell
+$ aube run dev
 ```
-[compare] vs public/data/eco-v12.json
-  Entity       existing   generated    delta
-  Skills             43          43        0
-  Items            1441        1576     +135
-  Tags              139         157      +18
-  Recipes          1367        1080     -287
-```
-
-Use this to sanity-check the run before promoting the file. Drops are not
-inherently wrong (the game removes content between versions) but warrant a
-spot-check against the source `.cs` files.
-
-#### Known limitations of the dataset extractor
-
-- The parser is regex-based against the auto-generated C# templates. Hand-edited
-  recipe files outside `AutoGen/` are not picked up.
-- Talent levels/values come from `AutoGen/Benefit/*.cs` only — talents declared
-  elsewhere will appear with `Value: 0, Level: 0`.
-- Plugin module detection assumes the `EfficiencyModule` constructor signature
-  used by the core templates.
-- Crowdin string matching is by exact English source text. New strings without
-  a Crowdin entry stay English-only.
-
-### Extracting icons from an Eco game install
-
-`scripts/extract-eco-icons.ts` drives [AssetRipper](https://github.com/AssetRipper/AssetRipper)
-to dump sprite metadata from Eco's `icons_assets_all_*.bundle`, fetches the
-underlying tileset PNGs via AssetRipper's dev HTTP API, then crops each
-sprite into `items/`, `skills/`, `talents/`, or `misc/` under `--output`.
-
-#### Prerequisites
-
-- A local Eco install (the directory containing `Eco_Data/`). A full client
-  install yields more icons than a server-only install.
-- A built `AssetRipper.GUI.Free` binary (Linux build works).
-- `mise exec -- aube install` (the script's only extra dep is `sharp`,
-  already in `devDependencies`).
-
-#### Usage
-
-```sh
-mise exec -- aube exec tsx scripts/extract-eco-icons.ts \
-  --eco-root     /path/to/EcoServer \
-  --output       /path/to/eco-icons \
-  --asset-ripper /path/to/AssetRipper.GUI.Free \
-  [--compare     public/data/eco-vN.json]
-```
-
-`--output` is the **root** icon directory; the script creates and writes
-into four sub-directories matching `public/eco-icons/`:
-`items/`, `skills/`, `talents/`, `misc/`. `_FG` sprite variants are skipped.
-
-The script never writes into `public/eco-icons/` automatically —
-point `--output` there explicitly to overwrite.
-
-#### Compare-only mode
-
-Pass `--compare` **without** `--eco-root`/`--asset-ripper` to skip
-extraction and just audit an existing `--output` tree against a dataset:
-
-```sh
-mise exec -- aube exec tsx scripts/extract-eco-icons.ts \
-  --output  public/eco-icons \
-  --compare public/data/eco-v12.json
-```
-
-The report enumerates Items / Skills / Talents / Tags coverage and prints
-every missing entry name in full (sorted). Exit code is always 0 — this is
-a report, not a gate.
 
 ## Deployment
 
@@ -119,3 +44,7 @@ to the S3 bucket provisioned by the stack, then invalidates CloudFront.
 See `infra/README.md` for first-time setup, the IAM policy used by the
 deploy workflow, and instructions for adding a future Lambda API behind
 the same distribution.
+
+## License
+
+[MIT](LICENSE.txt) © Jason Simeone

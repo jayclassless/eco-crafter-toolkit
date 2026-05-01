@@ -5,6 +5,5 @@ build
 .env*
 *.tsbuildinfo
 .claude/settings.local.json
-eco-gnome-website
 eco-game-files
 infra/cdk.out

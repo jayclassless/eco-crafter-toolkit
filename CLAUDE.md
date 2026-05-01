@@ -13,12 +13,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## External references
 
-- Eco Gnome source is cloned locally in the `eco-gnome-website` directory — read it directly instead of web searching for Eco game/recipe logic.
 - The Eco game files for several versions can be found in the `eco-game-files` directory — read it directly when dealing with data or asset extraction logic.
 
 ## Commands
 
-Runtime is pinned via `mise.toml` (Node 24, aube, hk, pkl). Always prefix aube commands with `mise exec --`. `aube run <script>` is required for non-default scripts (only `test`, `start`, `stop`, `restart` are bare shortcuts).
+Runtime is pinned via `mise.toml` (Node 24, aube, pnpm, hk, pkl, jd, jq). Always prefix aube commands with `mise exec --`. `aube run <script>` is required for non-default scripts (only `test`, `start`, `stop`, `restart` are bare shortcuts).
 
 - `mise exec -- aube run dev` — Vite dev server on port 3000 (the user keeps this running; don't start it yourself)
 - `mise exec -- aube run build` — `tsc --noEmit` gate, then `vite build`
@@ -48,6 +47,7 @@ None of these scripts write into `public/` automatically; move files and update 
 The app is a SPA using `react-router-dom` v7 with `HashRouter` (so it can be served from any static host). Routes (`src/components/routing/AppRoutes.tsx`):
 
 - `/` → `RootRedirect` picks an active dataset/build (from `uiStore` or first available) and redirects.
+- `/game-news` → `GameNews` page (Steam news feed).
 - `/:datasetId/calculator` → `BuildRedirect` picks/creates a build for that dataset.
 - `/:datasetId/calculator/:buildId` → `PriceCalculator` (the main UI).
 - Anything else → redirect to `/`.
@@ -60,7 +60,7 @@ Persistent state lives in three TinyBase stores wired up by `src/stores/provider
 
 - **`gameDataStore`** (`eco-crafter-game-data`) — immutable, per-dataset reference data: skills, talents, items, tags, recipes, recipe elements, plugin modules, modifiers. Populated by importing a `DatasetJson` (bundled under `public/data/eco-v*.json`, registered in `datasets-manifest.json`). Schema: `src/stores/game-data-store.ts`.
 - **`buildStore`** (`eco-crafter-builds`) — user state scoped by `buildId`: selected skills/talents/crafting-tables/recipes, manual prices, margins, hidden-rows filters, `computedPrices` cache. Schema: `src/stores/build-store.ts`.
-- **`uiStore`** — ephemeral UI selections (active dataset/build hint, sidebar visibility).
+- **`uiStore`** (`eco-crafter-ui`) — UI preferences and hints: active dataset/build hint, search strings, theme mode/color, UI scale, detailed-view toggles, margin display mode, `lastNewsViewedAt` (drives the news badge), `hasSeenAboutDialog` (gates first-launch About dialog). Schema: `src/stores/ui-store.ts`.
 
 Plus a separate, hand-rolled IndexedDB cache (NOT a TinyBase store):
 
@@ -99,12 +99,13 @@ Types for the solver contract live in `src/types/solver.ts`; game-data types in 
 ### Components
 
 - `src/components/routing/` — `AppRoutes` and the redirect components (`RootRedirect`, `BuildRedirect`).
-- `src/components/price-calculator/` — the main UI. `PriceCalculator.tsx` is the route component; `NavBar.tsx` (with embedded `BuildSelector.tsx`) sits on top; the three columns are split into subdirectories:
+- `src/components/price-calculator/` — the main UI. `PriceCalculator.tsx` is the route component; `NavBar.tsx` (with embedded `BuildSelector.tsx` and `NewsBadgeButton`) sits on top; the three columns are split into subdirectories:
   - `build-options/` — left column (`ConfigPanel` containing `SkillsPanel`, `CraftingTablesPanel`, `OptionsPanel` and their cells)
   - `products/` — Products column (`ProductsDataTable`, `RecipeDialog`, `AddRecipeDialog`, all cell components)
   - `materials/` — Materials column (`MaterialDialog`, price-mode popover, cells)
   - `UsedInRecipesTable.tsx` — shared table used inside dialogs
-- `src/components/settings/` — sidebar (`SettingsSidebar`), theme provider, UI settings view, plus `datasets/` for the Datasets dialog (import/update/delete).
+- `src/components/game-news/` — Steam news feed. `GameNews.tsx` is the `/game-news` route page; `NewsBadgeButton.tsx` lives in `NavBar` and shows an unread count derived from `uiStore.lastNewsViewedAt` via `useNewsBadgeCount`. Fetch logic in `src/lib/steam-news.ts` (shared by the badge hook and the page via an in-flight cache).
+- `src/components/settings/` — sidebar (`SettingsSidebar`, `SidebarMenuView`), theme provider, UI settings view, `AboutDialog` (auto-shown on first launch, gated by `uiStore.hasSeenAboutDialog`), plus `datasets/` for the Datasets dialog (import/update/delete).
 - `src/components/common/` — shared inputs and icons (`EcoIcon`, `ItemIcon`, `RecipeIcon`, `SkillIcon`, `NumericField`, `PriceField`, `GroupedAutoComplete`, etc.).
 
 Path alias: `@/*` → `src/*` (both Vite and tsconfig). Prefer `@/` over relative imports across directories; same-directory siblings can stay relative.
