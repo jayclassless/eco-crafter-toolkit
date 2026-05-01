@@ -22,6 +22,7 @@ export function CustomEntitiesDialog({ visible, onHide, datasetId }: Props) {
       style={{ width: '52rem' }}
       modal
       maximizable
+      dismissableMask
     >
       <TabView>
         <TabPanel header={t('settings.customEntities.tabItems')}>

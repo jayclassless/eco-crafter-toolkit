@@ -180,6 +180,7 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
       onHide={onHide}
       style={{ width: '50rem' }}
       modal
+      dismissableMask
     >
       <Toast ref={toastRef} />
       {loadState === 'loading' && (

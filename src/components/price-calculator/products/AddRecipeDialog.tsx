@@ -242,6 +242,7 @@ export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingR
         onHide={onHide}
         style={{ width: '52rem' }}
         modal
+        dismissableMask
         footer={footer}
       >
         <div className="flex flex-column gap-3">
