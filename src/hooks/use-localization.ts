@@ -2,11 +2,13 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 const priceFormatterCache = new Map<string, Intl.NumberFormat>()
+const numberFormatterCache = new Map<string, Intl.NumberFormat>()
 const durationFormatterCache = new Map<string, Intl.DurationFormat>()
 const zeroDurationFormatterCache = new Map<string, Intl.DurationFormat>()
 const dateFormatterCache = new Map<string, Intl.DateTimeFormat>()
 
 const DEFAULT_DATE_OPTIONS: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }
+const DEFAULT_NUMBER_OPTIONS: Intl.NumberFormatOptions = { maximumFractionDigits: 0 }
 
 function getPriceFormatter(locale: string): Intl.NumberFormat {
   let fmt = priceFormatterCache.get(locale)
@@ -42,6 +44,16 @@ function getDateFormatter(
   return fmt
 }
 
+function getNumberFormatter(locale: string, options: Intl.NumberFormatOptions): Intl.NumberFormat {
+  const key = `${locale}|${JSON.stringify(options)}`
+  let fmt = numberFormatterCache.get(key)
+  if (!fmt) {
+    fmt = new Intl.NumberFormat(locale, options)
+    numberFormatterCache.set(key, fmt)
+  }
+  return fmt
+}
+
 function getZeroDurationFormatter(locale: string): Intl.DurationFormat {
   let fmt = zeroDurationFormatterCache.get(locale)
   if (!fmt) {
@@ -63,6 +75,18 @@ interface Localization {
    * ".3" without premature rounding/grouping.
    */
   formatPrice: (value: number) => string
+  /**
+   * Format a non-price number for read-only display in the active locale.
+   * With no options, renders a grouped integer (e.g. `1,234` in en-US,
+   * `1.234` in de-DE). Pass `Intl.NumberFormatOptions` for variants:
+   * `{ maximumFractionDigits: 2 }` for quantities, `{ signDisplay: 'exceptZero' }`
+   * for signed deltas, etc.
+   *
+   * Use this for counts, quantities, and bonus percentages. Prices go through
+   * `formatPrice`; editable inputs go through `NumericField` (which keeps its
+   * own canonical form, see `formatPrice` doc).
+   */
+  formatNumber: (value: number, options?: Intl.NumberFormatOptions) => string
   /**
    * Format a craft time (in minutes) as a localized duration string. The
    * input is rounded to whole seconds, then split into minutes + seconds.
@@ -101,6 +125,10 @@ export function useLocalization(): Localization {
       },
       formatDate: (value, options) => {
         const fmt = getDateFormatter(i18n.language, options ?? DEFAULT_DATE_OPTIONS)
+        return fmt.format(value)
+      },
+      formatNumber: (value, options) => {
+        const fmt = getNumberFormatter(i18n.language, options ?? DEFAULT_NUMBER_OPTIONS)
         return fmt.format(value)
       },
     }

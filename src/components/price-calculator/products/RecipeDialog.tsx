@@ -34,7 +34,7 @@ import {
   useTableRowIdsRevision,
 } from '@/hooks/use-store-revision'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
-import { formatQty, resolveRecipeModifiers } from '@/lib/recipe-modifiers'
+import { resolveRecipeModifiers } from '@/lib/recipe-modifiers'
 import { computeAutoShares } from '@/lib/share-defaults'
 import { computeUsedInRecipes, type UsedInRecipe } from '@/lib/used-in-recipes'
 import { useStores } from '@/stores/providers'
@@ -93,7 +93,7 @@ export function RecipeDialog({
   const { t } = useTranslation()
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
-  const { formatPrice, formatDuration } = useLocalization()
+  const { formatPrice, formatDuration, formatNumber } = useLocalization()
   const { setProductShare, setRecipeFavorite } = useRecipeManagement(buildId)
   const { setPrice } = usePriceManagement(buildId)
 
@@ -614,8 +614,8 @@ export function RecipeDialog({
         {
           id: 'labor',
           label: t('priceCalculator.recipe.labor'),
-          baseQuantity: baseLaborCost.toFixed(0),
-          modifiedQuantity: recipeCost.laborAmount.toFixed(0),
+          baseQuantity: formatNumber(baseLaborCost),
+          modifiedQuantity: formatNumber(recipeCost.laborAmount),
           unitSuffix: 'cal',
           hasModifiers: laborChanged,
           unitPriceLabel: `${formatPrice(recipeCost.calorieCost)} $/1k cal`,
@@ -638,11 +638,15 @@ export function RecipeDialog({
   const quantityTemplate = (row: ElementRow) =>
     row.hasModifiers ? (
       <span>
-        <span style={{ color: 'var(--primary-color)' }}>{formatQty(row.modifiedQuantity)}</span>{' '}
-        <span className="font-italic">({formatQty(row.baseQuantity)})</span>
+        <span style={{ color: 'var(--primary-color)' }}>
+          {formatNumber(row.modifiedQuantity, { maximumFractionDigits: 2 })}
+        </span>{' '}
+        <span className="font-italic">
+          ({formatNumber(row.baseQuantity, { maximumFractionDigits: 2 })})
+        </span>
       </span>
     ) : (
-      <span>{formatQty(row.baseQuantity)}</span>
+      <span>{formatNumber(row.baseQuantity, { maximumFractionDigits: 2 })}</span>
     )
 
   const additionalCostQuantityTemplate = (row: AdditionalCostRow) => {

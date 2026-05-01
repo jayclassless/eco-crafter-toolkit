@@ -8,6 +8,7 @@ import { Toast } from 'primereact/toast'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { useLocalization } from '@/hooks/use-localization'
 import { countCustomEntities } from '@/lib/custom-entities'
 import { countBuildsByDataset, getDatasetIdsByBundledId } from '@/lib/dataset-utils'
 import { fetchDatasetManifest } from '@/lib/fetch-manifest'
@@ -30,6 +31,7 @@ type LoadState = 'idle' | 'loading' | 'error'
 
 export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: Props) {
   const { t } = useTranslation()
+  const { formatNumber } = useLocalization()
   const { gameDataStore, buildStore } = useStores()
 
   const [manifest, setManifest] = useState<DatasetManifest | null>(null)
@@ -144,13 +146,17 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
   )
 
   const buildsTemplate = (row: DatasetRow) =>
-    row.loadedDatasetId === null ? t('settings.datasets.noBuilds') : String(row.buildCount)
+    row.loadedDatasetId === null ? t('settings.datasets.noBuilds') : formatNumber(row.buildCount)
 
   const customItemsTemplate = (row: DatasetRow) =>
-    row.loadedDatasetId === null ? t('settings.datasets.noBuilds') : String(row.customItemCount)
+    row.loadedDatasetId === null
+      ? t('settings.datasets.noBuilds')
+      : formatNumber(row.customItemCount)
 
   const customRecipesTemplate = (row: DatasetRow) =>
-    row.loadedDatasetId === null ? t('settings.datasets.noBuilds') : String(row.customRecipeCount)
+    row.loadedDatasetId === null
+      ? t('settings.datasets.noBuilds')
+      : formatNumber(row.customRecipeCount)
 
   const nameTemplate = (row: DatasetRow) => (
     <div className="flex align-items-center gap-2">

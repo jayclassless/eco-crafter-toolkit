@@ -28,6 +28,42 @@ describe('useLocalization', () => {
     })
   })
 
+  describe('formatNumber', () => {
+    it('renders a grouped integer by default', () => {
+      const { result } = renderHook(() => useLocalization())
+      expect(result.current.formatNumber(0)).toBe('0')
+      expect(result.current.formatNumber(42)).toBe('42')
+      expect(result.current.formatNumber(1234)).toBe('1,234')
+      expect(result.current.formatNumber(1000000)).toBe('1,000,000')
+    })
+
+    it('rounds to integer when given a fractional value with default options', () => {
+      const { result } = renderHook(() => useLocalization())
+      expect(result.current.formatNumber(1234.7)).toBe('1,235')
+    })
+
+    it('respects maximumFractionDigits and trims trailing zeros', () => {
+      const { result } = renderHook(() => useLocalization())
+      const f = (value: number) => result.current.formatNumber(value, { maximumFractionDigits: 2 })
+      expect(f(2)).toBe('2')
+      expect(f(1.5)).toBe('1.5')
+      expect(f(1.234)).toBe('1.23')
+    })
+
+    it('honors signDisplay: exceptZero', () => {
+      const { result } = renderHook(() => useLocalization())
+      const f = (value: number) => result.current.formatNumber(value, { signDisplay: 'exceptZero' })
+      expect(f(25)).toBe('+25')
+      expect(f(-10)).toBe('-10')
+      expect(f(0)).toBe('0')
+    })
+
+    it('formats negative values with grouping', () => {
+      const { result } = renderHook(() => useLocalization())
+      expect(result.current.formatNumber(-1234)).toBe('-1,234')
+    })
+  })
+
   describe('formatDuration', () => {
     it('renders both minutes and seconds when both are non-zero', () => {
       const { result } = renderHook(() => useLocalization())

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { PluginModuleIcon } from '@/components/common/PluginModuleIcon'
 import { SkillIcon } from '@/components/common/SkillIcon'
 import { TalentIcon } from '@/components/common/TalentIcon'
+import { useLocalization } from '@/hooks/use-localization'
 import type { AppliedBonus, AppliedEffect } from '@/lib/recipe-modifiers'
 
 interface Props {
@@ -22,12 +23,16 @@ function BonusIconFor({ bonus }: { bonus: AppliedBonus }) {
 
 export function AppliedBonuses({ bonuses }: Props) {
   const { t } = useTranslation()
+  const { formatNumber } = useLocalization()
 
   if (bonuses.length === 0) return null
 
   const renderEffect = (e: AppliedEffect): string => {
-    const sign = e.signedPercent > 0 ? '+' : ''
-    return `${sign}${e.signedPercent}% ${t(`priceCalculator.recipe.metric.${e.metric}`)}`
+    const percent = formatNumber(e.signedPercent, {
+      signDisplay: 'exceptZero',
+      maximumFractionDigits: 1,
+    })
+    return `${percent}% ${t(`priceCalculator.recipe.metric.${e.metric}`)}`
   }
 
   return (

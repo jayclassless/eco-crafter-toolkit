@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { RecipeIcon } from '@/components/common/RecipeIcon'
 import { SkillIcon } from '@/components/common/SkillIcon'
 import { TagLabel } from '@/components/common/TagLabel'
+import { useLocalization } from '@/hooks/use-localization'
 import type { UsedInRecipe } from '@/lib/used-in-recipes'
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
 
 export function UsedInRecipesTable({ rows, emptyMessage, onOpenRecipe }: Props) {
   const { t } = useTranslation()
+  const { formatNumber } = useLocalization()
 
   const skillTemplate = (row: UsedInRecipe) => {
     if (!row.skillId) return <span className="text-color-secondary">—</span>
@@ -54,7 +56,9 @@ export function UsedInRecipesTable({ rows, emptyMessage, onOpenRecipe }: Props) 
   )
 
   const quantityTemplate = (row: UsedInRecipe) => (
-    <span className="text-right block">{row.quantity}</span>
+    <span className="text-right block">
+      {formatNumber(row.quantity, { maximumFractionDigits: 2 })}
+    </span>
   )
 
   return (

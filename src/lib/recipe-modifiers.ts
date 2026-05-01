@@ -63,13 +63,6 @@ function metricToTargetKind(metric: MetricKind): ModifierTargetKind {
   return 'resource'
 }
 
-/** Compact display: up to 2 decimals, trailing zeros trimmed. */
-export function formatQty(value: number): string {
-  if (Number.isInteger(value)) return String(value)
-  const rounded = Math.round(value * 100) / 100
-  return Number.isInteger(rounded) ? String(rounded) : String(rounded)
-}
-
 interface SourceGroup {
   source: AppliedBonus['source']
   displayName: string
