@@ -7,7 +7,7 @@ the raw materials you can source, and the app derives the cost and sale
 price of every recipe you can craft (with margins, ingredient swaps, and
 recipe variants resolved automatically).
 
-The app is free to use and records no information about you — all data is
+The app is free to use and records no information about you -- all data is
 stored locally in your browser.
 
 ## Contributing
@@ -19,8 +19,8 @@ approach.
 
 ## Development
 
-To set up an environment to develop this application, the most straight-
-forward way is to use `mise`:
+To set up an environment to develop this application, the most
+straight-forward way is to use [`mise`](https://mise.jdx.dev/):
 
 ```shell
 $ mise settings experimental=true
@@ -47,4 +47,4 @@ the same distribution.
 
 ## License
 
-[MIT](LICENSE.txt) © Jason Simeone
+[MIT](LICENSE.md)

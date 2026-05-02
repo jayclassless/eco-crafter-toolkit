@@ -64,7 +64,31 @@ export function AboutDialog({ visible, onHide }: Props) {
 
       <p className="mb-2 line-height-3">
         This app is still a bit new, so there's bound to be bugs. Please have patience, I'll squash
-        them as fast as I'm able.
+        them as fast as I'm able. Feel free to{' '}
+        <a href="https://github.com/jayclassless/eco-crafter-toolkit/issues" target="_blank">
+          report any bugs here
+        </a>{' '}
+        or contribute to{' '}
+        <a href="https://github.com/jayclassless/eco-crafter-toolkit" target="_blank">
+          the project on GitHub
+        </a>
+        .
+      </p>
+
+      <p className="mb-2 line-height-3">
+        All images, names, and data of in-game entities like Items, Recipes, Skills, etc are
+        copyright{' '}
+        <a href="https://strangeloopgames.com/" target="_blank" rel="noopener noreferrer">
+          Strange Loop Games
+        </a>
+        . The code for this application is released under the terms of the{' '}
+        <a
+          href="https://github.com/jayclassless/eco-crafter-toolkit/blob/main/LICENSE.md"
+          target="_blank"
+        >
+          MIT license
+        </a>
+        .
       </p>
     </Dialog>
   )
