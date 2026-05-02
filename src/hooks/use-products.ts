@@ -100,6 +100,45 @@ export function buildRecipeProductItemIds(gameDataStore: Store): Map<string, str
   return map
 }
 
+interface RecipeSkillInfo {
+  /** '' when the recipe has no skill (some crafting-table recipes are
+   * skill-less) or the recipe doesn't exist. */
+  skillId: string
+  /** Localized name. '' when skillId is ''. */
+  skillName: string
+  /** Raw name (`skills.name`) — the key SkillIcon uses to load the asset.
+   * '' when skillId is ''. */
+  skillRawName: string
+}
+
+/**
+ * Look up display info for the skill that produces a recipe — id, raw
+ * asset-key name, and localized name. Centralises the four-step dance
+ * (recipeId → recipe row → skillId → skill row + getName) used by every
+ * surface that shows a recipe alongside its skill icon: the dependency
+ * graph nodes, MaterialDialog's "Produced by" tab, UsedInRecipesTable
+ * rows, and the Products view-model.
+ *
+ * Returns empty strings when there's no skill — callers handle that the
+ * same way they handle missing names.
+ */
+export function getRecipeSkillInfo(
+  gameDataStore: Store,
+  recipeId: string,
+  getName: (entityType: string, entityId: string) => string
+): RecipeSkillInfo {
+  if (!recipeId) return { skillId: '', skillName: '', skillRawName: '' }
+  const recipeRow = gameDataStore.getRow('recipes', recipeId)
+  const skillId = (recipeRow?.skillId as string) ?? ''
+  if (!skillId) return { skillId: '', skillName: '', skillRawName: '' }
+  const skillRow = gameDataStore.getRow('skills', skillId)
+  return {
+    skillId,
+    skillName: getName('skill', skillId),
+    skillRawName: (skillRow?.name as string) ?? '',
+  }
+}
+
 /**
  * Raw name (i.e. `items.name`, the key used by `EcoIcon`) of a recipe's
  * primary product — the first product element encountered in
@@ -227,10 +266,11 @@ export function buildProducts(
     const recipe = gameDataStore.getRow('recipes', recipeId)
     if (!recipe) continue
 
-    const skillId = recipe.skillId as string
-    const skillName = skillId ? getName('skill', skillId) : ''
-    const skillRow = skillId ? gameDataStore.getRow('skills', skillId) : null
-    const skillRawName = skillRow ? (skillRow.name as string) : ''
+    const { skillId, skillName, skillRawName } = getRecipeSkillInfo(
+      gameDataStore,
+      recipeId,
+      getName
+    )
     const craftingTableId = (recipe.craftingTableId as string) ?? ''
     const requiredSkillLevel = (recipe.requiredSkillLevel as number) ?? 0
     const recipeName = getName('recipe', recipeId)

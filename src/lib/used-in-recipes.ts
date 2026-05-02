@@ -1,5 +1,7 @@
 import type { Store } from 'tinybase'
 
+import { getRecipeSkillInfo } from '@/hooks/use-products'
+
 export interface UsedInRecipe {
   rowKey: string
   recipeId: string
@@ -125,8 +127,7 @@ export function computeUsedInRecipes(
   for (const ing of consumingIngredients) {
     const recipeRow = gameDataStore.getRow('recipes', ing.recipeId)
     if (!recipeRow) continue
-    const skillId = (recipeRow.skillId as string) ?? ''
-    const skillRow = skillId ? gameDataStore.getRow('skills', skillId) : null
+    const skill = getRecipeSkillInfo(gameDataStore, ing.recipeId, getName)
     const viaTag = ing.itemOrTagId !== itemId ? (tagInfoById.get(ing.itemOrTagId) ?? null) : null
 
     rows.push({
@@ -135,9 +136,9 @@ export function computeUsedInRecipes(
       recipeName: getName('recipe', ing.recipeId),
       recipeIsCustom: !!recipeRow.isCustom,
       recipePrimaryProductRawName: primaryProductRawNameOf(ing.recipeId),
-      skillId,
-      skillName: skillId ? getName('skill', skillId) : '',
-      skillRawName: skillRow ? ((skillRow.name as string) ?? '') : '',
+      skillId: skill.skillId,
+      skillName: skill.skillName,
+      skillRawName: skill.skillRawName,
       quantity: Math.abs(ing.baseQuantity),
       viaTag,
     })

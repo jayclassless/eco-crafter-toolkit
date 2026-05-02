@@ -444,6 +444,26 @@ describe('MaterialDialog', () => {
     expect(screen.getByText('Used in Recipes')).toBeTruthy()
   })
 
+  it('shows a "Dependency Graph" tab when the item has a producing recipe with ingredients', () => {
+    // Ingot is produced by RECIPE_USES_ITEM (Stone Crusher), which consumes
+    // Stone — non-empty graph. Tab should appear.
+    renderDialog(stores, ITEM_INGOT)
+    expect(screen.getByText('Dependency Graph')).toBeTruthy()
+  })
+
+  it('hides the "Dependency Graph" tab for tags', () => {
+    renderDialog(stores, TAG_ROCKS)
+    expect(screen.queryByText('Dependency Graph')).toBeNull()
+  })
+
+  it('hides the "Dependency Graph" tab when no producing recipe has ingredients', () => {
+    // Stone's only producers (Stone Quarry, Wild Mining, Stone Refining) have
+    // no ingredients (or only reintegrated ones), so the graph would be a
+    // single node — no point in surfacing the tab.
+    renderDialog(stores, ITEM_STONE)
+    expect(screen.queryByText('Dependency Graph')).toBeNull()
+  })
+
   it('produced-by tab lists every in-game producer regardless of build, and excludes reintegrators', async () => {
     renderDialog(stores, ITEM_STONE)
 

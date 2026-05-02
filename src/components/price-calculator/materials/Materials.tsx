@@ -434,6 +434,7 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
           setSelectedItemId(null)
           setRecipeDialogId(id)
         }}
+        onOpenMaterial={(id) => setSelectedItemId(id)}
       />
       <RecipeDialog
         recipeId={recipeDialogId}

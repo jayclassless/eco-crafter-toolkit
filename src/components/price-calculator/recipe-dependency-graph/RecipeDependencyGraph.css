@@ -1,0 +1,103 @@
+/* Map xyflow's theming hooks onto PrimeReact theme tokens so the viewport
+ * controls and minimap stay readable in both light and dark mode — without
+ * these, the controls render with `color: inherit` and the body's text
+ * colour wins, which is light-on-light in dark mode (invisible icons).
+ *
+ * Note: xyflow's base-state styles read variables WITHOUT the `-props`
+ * suffix (e.g. `--xy-controls-button-background-color`) while hover state
+ * reads the `-props` variant. Both sets must be defined or the natural
+ * state falls through to xyflow's hard-coded light defaults. */
+.react-flow {
+  --xy-controls-button-background-color: var(--surface-card);
+  --xy-controls-button-background-color-props: var(--surface-card);
+  --xy-controls-button-background-color-hover: var(--surface-hover);
+  --xy-controls-button-background-color-hover-props: var(--surface-hover);
+  --xy-controls-button-color: var(--text-color);
+  --xy-controls-button-color-props: var(--text-color);
+  --xy-controls-button-color-hover: var(--text-color);
+  --xy-controls-button-color-hover-props: var(--text-color);
+  --xy-controls-button-border-color: var(--surface-border);
+  --xy-controls-button-border-color-props: var(--surface-border);
+  --xy-background-pattern-color-props: var(--surface-border);
+  --xy-edge-stroke-default-props: var(--surface-border);
+  --xy-edge-stroke-selected-default-props: var(--primary-color);
+  --xy-handle-background-color-default-props: var(--text-color);
+  --xy-handle-border-color-default-props: var(--surface-border);
+}
+
+/* The Controls panel itself is a flex container with a shadow; pin the
+ * shadow to a token-based value so it doesn't disappear on dark
+ * backgrounds. */
+.react-flow__controls {
+  box-shadow: 0 0 0 1px var(--surface-border);
+}
+
+/* xyflow needs an explicit height on its parent. 60vh works in a
+ * normally-sized dialog, but caps the graph at 60% of viewport even when
+ * the user maximizes. We use a JS-measured height (set by the component)
+ * so the graph fills whatever vertical space the maximized dialog gives
+ * it, without threading a brittle flex chain through PrimeReact internals
+ * — the inline `height` overrides this default 60vh fallback. */
+.dependency-graph-wrapper {
+  height: 60vh;
+  width: 100%;
+}
+
+/* Slim down the open-detail icon buttons inside graph nodes — PrimeReact's
+ * default text-button width (~2.5rem) eats too much horizontal space in
+ * the compact 260px node layout. */
+.dependency-graph-icon-button.p-button {
+  width: auto;
+  padding: 0.125rem 0.25rem;
+}
+
+/* Node body styling. Avoids PrimeFlex's `.surface-card` utility, which in
+ * this PrimeReact / PrimeFlex version references `--p-surface-0` (a v11
+ * variable name) while the bundled Lara theme defines `--surface-0` — the
+ * mismatch resolves to nothing and renders nodes with a transparent
+ * background that lets the graph grid bleed through. */
+.dependency-graph-node {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  width: 260px;
+  padding: 0.75rem;
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+.dependency-graph-node--root {
+  border-color: var(--primary-color);
+}
+
+/* Hide the visible "dot" of unused handles. We still render the Handle
+ * component so xyflow's edge resolution works, but a leaf node's source
+ * (right) handle and the root node's target (left) handle have no edges
+ * attached — leaving them visible just clutters the graph. */
+.dependency-graph-handle--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Constrain dropdown chrome so long localized names don't overflow the
+ * 260px node body. Targets both the closed-state value display
+ * (.p-dropdown-label) and the open option list. */
+.dependency-graph-node .p-dropdown {
+  max-width: 100%;
+  overflow: hidden;
+}
+.dependency-graph-node .p-dropdown .p-dropdown-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dependency-graph-node .p-dropdown .p-dropdown-label > div {
+  min-width: 0;
+}
+.dependency-graph-node .p-dropdown .p-dropdown-label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}

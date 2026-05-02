@@ -16,6 +16,7 @@ import { AppliedBonuses } from '@/components/price-calculator/products/AppliedBo
 import { IngredientPriceCell } from '@/components/price-calculator/products/IngredientPriceCell'
 import { ProductItemName } from '@/components/price-calculator/products/ProductItemName'
 import { RecipeFavoriteStar } from '@/components/price-calculator/products/RecipeFavoriteStar'
+import { RecipeDependencyGraph } from '@/components/price-calculator/recipe-dependency-graph/RecipeDependencyGraph'
 import { UsedInRecipesTable } from '@/components/price-calculator/UsedInRecipesTable'
 import { CustomRecipeFormDialog } from '@/components/settings/datasets/CustomRecipeFormDialog'
 import { useLocalization } from '@/hooks/use-localization'
@@ -1004,6 +1005,15 @@ export function RecipeDialog({
                 rows={usedInRows}
                 emptyMessage={t('priceCalculator.recipe.usedInEmpty')}
                 onOpenRecipe={onOpenRecipe ?? (() => {})}
+              />
+            </TabPanel>
+            <TabPanel header={t('priceCalculator.recipe.tabDependencyGraph')}>
+              <RecipeDependencyGraph
+                target={{ type: 'recipe', recipeId }}
+                buildId={buildId}
+                datasetId={datasetId}
+                onOpenRecipe={onOpenRecipe}
+                onOpenMaterial={onOpenMaterial}
               />
             </TabPanel>
           </TabView>

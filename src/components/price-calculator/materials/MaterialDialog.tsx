@@ -10,8 +10,10 @@ import { ItemIcon } from '@/components/common/ItemIcon'
 import { RecipeIcon } from '@/components/common/RecipeIcon'
 import { SkillIcon } from '@/components/common/SkillIcon'
 import { TagLabel } from '@/components/common/TagLabel'
+import { RecipeDependencyGraph } from '@/components/price-calculator/recipe-dependency-graph/RecipeDependencyGraph'
 import { UsedInRecipesTable } from '@/components/price-calculator/UsedInRecipesTable'
 import { useLocalizedName } from '@/hooks/use-localized-name'
+import { getRecipeSkillInfo } from '@/hooks/use-products'
 import { useStoreRevision } from '@/hooks/use-store-revision'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { computeUsedInRecipes } from '@/lib/used-in-recipes'
@@ -23,6 +25,9 @@ interface Props {
   datasetId: string
   onHide: () => void
   onOpenRecipe: (recipeId: string) => void
+  /** Optional — when set, the dependency graph's item-node "open" buttons
+   * are wired to this. Parents typically swap the dialog's active itemId. */
+  onOpenMaterial?: (itemId: string) => void
 }
 
 interface ProducedByRow {
@@ -44,7 +49,14 @@ interface RecipeIndexEntry {
 const GAME_TABLES = ['recipeElements', 'recipes', 'tagItems', 'items'] as const
 const BUILD_TABLES = ['userRecipes'] as const
 
-export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecipe }: Props) {
+export function MaterialDialog({
+  itemId,
+  buildId,
+  datasetId,
+  onHide,
+  onOpenRecipe,
+  onOpenMaterial,
+}: Props) {
   const { t } = useTranslation()
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
@@ -127,17 +139,16 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
           if (p.itemOrTagId !== itemId) continue
           const recipeRow = gameDataStore.getRow('recipes', recipeId)
           if (!recipeRow) continue
-          const skillId = (recipeRow.skillId as string) ?? ''
-          const skillRow = skillId ? gameDataStore.getRow('skills', skillId) : null
+          const skill = getRecipeSkillInfo(gameDataStore, recipeId, getName)
           rows.push({
             rowKey: p.reId,
             recipeId,
             recipeName: getName('recipe', recipeId),
             recipeIsCustom: !!recipeRow.isCustom,
             recipePrimaryProductRawName: primaryProductRawNameOf(recipeId),
-            skillId,
-            skillName: skillId ? getName('skill', skillId) : '',
-            skillRawName: skillRow ? ((skillRow.name as string) ?? '') : '',
+            skillId: skill.skillId,
+            skillName: skill.skillName,
+            skillRawName: skill.skillRawName,
           })
         }
       }
@@ -155,9 +166,23 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
 
   if (!itemId || !itemRow) return null
 
-  const itemTagIds = isTag
-    ? []
-    : (getGameDataIndexes(gameDataStore).tagIdsByItemId.get(itemId) ?? [])
+  const indexes = getGameDataIndexes(gameDataStore)
+  const itemTagIds = isTag ? [] : (indexes.tagIdsByItemId.get(itemId) ?? [])
+
+  // Hide the dependency graph tab when the root item would have no children
+  // — either no recipes produce it, or every primary producer is a raw
+  // recipe with no ingredients (e.g. mining/foraging) or only reintegrated
+  // ones (the item depends on itself, which becomes a cycle back-edge, not
+  // a real child node). A single-node graph isn't useful information.
+  const primaryRecipes = isTag ? [] : (indexes.primaryRecipeIdsByItemId.get(itemId) ?? [])
+  const hasGraphContent = primaryRecipes.some((rid) => {
+    const ings = indexes.ingredientItemIdsByRecipeId.get(rid)
+    if (!ings) return false
+    for (const ingId of ings) {
+      if (ingId !== itemId) return true
+    }
+    return false
+  })
 
   const headerNode = (
     <div className="flex align-items-center gap-2">
@@ -212,9 +237,11 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
       header={headerNode}
       visible={!!itemId}
       onHide={onHide}
-      style={{ width: '40vw' }}
+      style={{ width: '60vw' }}
       modal
       dismissableMask
+      maximizable
+      focusOnShow={false}
     >
       <TabView>
         <TabPanel header={t('priceCalculator.material.tabUsedIn')}>
@@ -242,6 +269,17 @@ export function MaterialDialog({ itemId, buildId, datasetId, onHide, onOpenRecip
                 body={producedByRecipeTemplate}
               />
             </DataTable>
+          </TabPanel>
+        )}
+        {!isTag && hasGraphContent && (
+          <TabPanel header={t('priceCalculator.material.tabDependencyGraph')}>
+            <RecipeDependencyGraph
+              target={{ type: 'item', itemId }}
+              buildId={buildId}
+              datasetId={datasetId}
+              onOpenRecipe={onOpenRecipe}
+              onOpenMaterial={onOpenMaterial}
+            />
           </TabPanel>
         )}
       </TabView>

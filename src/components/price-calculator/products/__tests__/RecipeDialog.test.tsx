@@ -193,6 +193,11 @@ describe('RecipeDialog', () => {
     stores = makeStores()
   })
 
+  it('renders a "Dependency Graph" tab in the tab strip', () => {
+    renderDialog(stores)
+    expect(screen.getByText('Dependency Graph')).toBeTruthy()
+  })
+
   it('renders the returned-ingredient section and excludes that product from the Products table', async () => {
     renderDialog(stores)
 

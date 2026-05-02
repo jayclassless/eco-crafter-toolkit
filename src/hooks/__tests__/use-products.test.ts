@@ -10,6 +10,7 @@ import {
   buildProductGroups,
   buildTagIdsByItemId,
   findDefaultMarginId,
+  getRecipeSkillInfo,
 } from '../use-products'
 
 const BUILD_ID = 'build1'
@@ -732,5 +733,52 @@ describe('buildProductGroups', () => {
     const [group] = buildProductGroups(buildStore, gameDataStore, BUILD_ID, fakeName)
     expect(group.parent?.userPriceId).toBe('')
     expect(group.parent?.productUserMarginId).toBe('')
+  })
+})
+
+describe('getRecipeSkillInfo', () => {
+  it('resolves a recipe to its skill id, raw asset name, and localized name', () => {
+    expect(getRecipeSkillInfo(gameDataStore, 'recipe-iron', fakeName)).toEqual({
+      skillId: 'skill-mining',
+      skillName: 'skill:skill-mining',
+      skillRawName: 'MiningSkill',
+    })
+  })
+
+  it('returns empty strings when recipeId is the empty string', () => {
+    expect(getRecipeSkillInfo(gameDataStore, '', fakeName)).toEqual({
+      skillId: '',
+      skillName: '',
+      skillRawName: '',
+    })
+  })
+
+  it('returns empty strings when the recipe has no skill (skill-less recipe)', () => {
+    gameDataStore.setRow('recipes', 'recipe-skilless', {
+      id: 'recipe-skilless',
+      datasetId: 'ds1',
+      name: 'Skilless',
+      familyName: 'Skilless',
+      skillId: '',
+      requiredSkillLevel: 0,
+      isBlueprint: false,
+      isDefault: true,
+      craftingTableId: 'ct1',
+      baseCraftTime: 1,
+      baseLaborCost: 1,
+    })
+    expect(getRecipeSkillInfo(gameDataStore, 'recipe-skilless', fakeName)).toEqual({
+      skillId: '',
+      skillName: '',
+      skillRawName: '',
+    })
+  })
+
+  it("returns empty strings when the recipe doesn't exist", () => {
+    expect(getRecipeSkillInfo(gameDataStore, 'unknown-recipe', fakeName)).toEqual({
+      skillId: '',
+      skillName: '',
+      skillRawName: '',
+    })
   })
 })

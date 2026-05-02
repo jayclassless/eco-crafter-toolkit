@@ -2,6 +2,7 @@
   "name": "eco-crafter-toolkit",
   "version": "0.1.0",
   "dependencies": {
+    "@xyflow/react": "^12.10.2",
     "i18next": "^26.0.7",
     "i18next-browser-languagedetector": "^8.2.1",
     "primeflex": "^4.0.0",
@@ -42,8 +43,8 @@
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "fullcheck": "aube run lint && aube run knip && aube run typecheck && aube run format && aube run test:coverage",
-    "lint": "oxlint .",
     "knip": "knip",
+    "lint": "oxlint .",
     "preview": "vite preview",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

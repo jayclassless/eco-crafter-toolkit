@@ -906,6 +906,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
           setSelectedMaterialId(null)
           setSelectedRecipeId(id)
         }}
+        onOpenMaterial={(id) => setSelectedMaterialId(id)}
       />
       <ProductsDataTable
         rows={rows}

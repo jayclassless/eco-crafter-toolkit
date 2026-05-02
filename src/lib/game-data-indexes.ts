@@ -32,6 +32,11 @@ interface GameDataIndexes {
    * items. Precomputed here so the per-rebuild scan over ~1300 `tagItems`
    * rows is a one-time cost per dataset. */
   itemIdsByTagId: Map<string, string[]>
+  /** Recipes where this item is the primary product — first product NOT also
+   * an ingredient (matches the "primary product" semantics used by
+   * `buildProducts` and MaterialDialog). Used by the dependency graph to
+   * enumerate which recipes can produce a given item. */
+  primaryRecipeIdsByItemId: Map<string, string[]>
   recipeIndexes: RecipeIndexes
   /** Convenience: talents bucketed by their owning skill — this is the same
    * Map exposed inside `recipeIndexes.talentsBySkillId`, hoisted here so
@@ -71,6 +76,25 @@ function buildTalentDetailsBySkillId(store: Store): Map<string, TalentDetails[]>
   return map
 }
 
+function buildPrimaryRecipeIdsByItemId(
+  productItemIdsByRecipeId: Map<string, string[]>,
+  ingredientItemIdsByRecipeId: Map<string, Set<string>>
+): Map<string, string[]> {
+  const map = new Map<string, string[]>()
+  for (const [recipeId, productIds] of productItemIdsByRecipeId) {
+    if (productIds.length === 0) continue
+    const ingredients = ingredientItemIdsByRecipeId.get(recipeId)
+    const primary = productIds.find((id) => !ingredients?.has(id)) ?? productIds[0]
+    let list = map.get(primary)
+    if (!list) {
+      list = []
+      map.set(primary, list)
+    }
+    list.push(recipeId)
+  }
+  return map
+}
+
 function buildItemIdsByTagId(store: Store): Map<string, string[]> {
   const map = new Map<string, string[]>()
   for (const tiId of store.getRowIds('tagItems')) {
@@ -88,12 +112,18 @@ function buildItemIdsByTagId(store: Store): Map<string, string[]> {
 
 function build(store: Store): GameDataIndexes {
   const recipeIndexes = buildRecipeIndexes(store)
+  const productItemIdsByRecipeId = buildRecipeProductItemIds(store)
+  const ingredientItemIdsByRecipeId = buildRecipeIngredientItemIds(store)
   return {
-    productItemIdsByRecipeId: buildRecipeProductItemIds(store),
-    ingredientItemIdsByRecipeId: buildRecipeIngredientItemIds(store),
+    productItemIdsByRecipeId,
+    ingredientItemIdsByRecipeId,
     unlockingTalentsByRecipeId: buildRecipeUnlockingTalents(store),
     tagIdsByItemId: buildTagIdsByItemId(store),
     itemIdsByTagId: buildItemIdsByTagId(store),
+    primaryRecipeIdsByItemId: buildPrimaryRecipeIdsByItemId(
+      productItemIdsByRecipeId,
+      ingredientItemIdsByRecipeId
+    ),
     recipeIndexes,
     talentsBySkillId: recipeIndexes.talentsBySkillId,
     bonusesByTalentId: recipeIndexes.bonusesByTalentId,

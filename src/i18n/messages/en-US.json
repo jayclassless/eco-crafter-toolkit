@@ -150,6 +150,7 @@
     "material": {
       "tabUsedIn": "Used in Recipes",
       "tabProducedBy": "Produced by Recipes",
+      "tabDependencyGraph": "Dependency Graph",
       "usedInEmpty": "No recipes in this build use this item.",
       "producedByEmpty": "No recipes produce this item."
     },
@@ -170,6 +171,7 @@
       "craftTime": "Craft Time",
       "tabCostComponents": "Cost Components",
       "tabUsedIn": "Used in Recipes",
+      "tabDependencyGraph": "Dependency Graph",
       "usedInEmpty": "No recipes in this build use this recipe's primary product.",
       "bonusesApplied": "Bonuses Applied",
       "metric": {
@@ -178,6 +180,13 @@
         "ingredients": "ingredients",
         "products": "products"
       }
+    },
+    "dependencyGraph": {
+      "selectRecipe": "Recipe",
+      "selectTagItem": "Item",
+      "openItem": "Open Item Details",
+      "openRecipe": "Open Recipe Details",
+      "cycleEdgeLabel": "Circular dependency"
     }
   },
   "gameNews": {
