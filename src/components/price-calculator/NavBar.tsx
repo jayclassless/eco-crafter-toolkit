@@ -1,4 +1,5 @@
 import { Button } from 'primereact/button'
+import { Tag } from 'primereact/tag'
 import { useTranslation } from 'react-i18next'
 
 import { NewsBadgeButton } from '@/components/game-news/NewsBadgeButton'
@@ -45,6 +46,7 @@ export function NavBar({
         className="block"
         style={{ height: '2rem', width: 'auto' }}
       />
+      <Tag severity="warning" value="BETA" />
       <span className="font-semibold text-color-secondary">{datasetName}</span>
       <BuildSelector
         datasetId={datasetId}

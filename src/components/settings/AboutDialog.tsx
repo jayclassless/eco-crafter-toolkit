@@ -1,4 +1,5 @@
 import { Dialog } from 'primereact/dialog'
+import { Tag } from 'primereact/tag'
 import { useTranslation } from 'react-i18next'
 
 interface Props {
@@ -18,6 +19,7 @@ export function AboutDialog({ visible, onHide }: Props) {
       />
       <span>{t('common.title')}</span>
       <span className="text-color-secondary text-base font-normal">v{__APP_VERSION__}</span>
+      <Tag severity="warning" value="BETA" />
     </div>
   )
 
