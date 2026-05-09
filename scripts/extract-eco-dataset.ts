@@ -856,7 +856,7 @@ function emitVariantRecipes() {
       CraftMinutes: cloneDynamic(parent.CraftMinutes),
       RequiredSkill: parent.RequiredSkill,
       RequiredSkillLevel: parent.RequiredSkillLevel,
-      IsBlueprint: parent.IsBlueprint,
+      IsBlueprint: false,
       IsDefault: parent.IsDefault,
       Labor: cloneDynamic(parent.Labor),
       CraftingTable: craftingTable,
@@ -864,6 +864,91 @@ function emitVariantRecipes() {
       Products: v.products,
     })
   }
+}
+
+// ---------------------------------------------------------------------------
+// Strange Cloud paid items list ("blueprint" recipes)
+//
+// EcoServer ships a static `PaidItemsEmbeddedList.List` of class basenames whose
+// recipes are gated by Strange Cloud / "Strange Blueprint" ownership. The
+// per-recipe `Recipe.RequiresStrangeBlueprint` flag is populated asynchronously
+// at boot, so it's unreliable for static extraction. The embedded list isn't
+// exposed in source either, but the names appear as a contiguous run of
+// length-prefixed UTF-16LE strings inside the EcoServer ELF — we anchor on a
+// known first entry and read forward.
+//
+// Layout per .NET UserString-style entry (verified against v12.0.7 / v13.0.3):
+//   [length_byte = chars*2 + 1] [N-1 bytes of UTF-16LE chars] [trailer_byte = 0x00 or 0x01]
+// Adjacent entries follow back-to-back. Walk forward by reading length, then
+// chars, then trailer; stop when the next string isn't a CamelCase identifier.
+//
+// Returns an empty Set on any failure (missing binary, anchor not found,
+// pre-feature versions like v11). Callers fall back to IsBlueprint=false.
+
+const PAID_ITEMS_ANCHOR = 'ZenGarden'
+
+function readDotNetLengthPrefixedAt(
+  buf: Buffer,
+  off: number
+): { str: string; next: number } | null {
+  if (off < 0 || off >= buf.length) return null
+  const len = buf[off]
+  // Paid item names are short; reject multi-byte ECMA length encodings.
+  if (len === 0 || (len & 0x80) !== 0) return null
+  const charBytes = len - 1
+  if (charBytes <= 0 || charBytes % 2 !== 0) return null
+  if (off + 1 + charBytes + 1 > buf.length) return null
+  const chars: number[] = []
+  for (let k = 0; k < charBytes; k += 2) {
+    const lo = buf[off + 1 + k]
+    const hi = buf[off + 1 + k + 1]
+    if (hi !== 0 || lo < 0x20 || lo > 0x7e) return null
+    chars.push(lo)
+  }
+  return { str: String.fromCharCode(...chars), next: off + 1 + charBytes + 1 }
+}
+
+async function findPaidItems(ecoRoot: string): Promise<Set<string>> {
+  const binPath = path.join(ecoRoot, 'Eco_Data', 'Server', 'EcoServer')
+  let buf: Buffer
+  try {
+    buf = await fs.readFile(binPath)
+  } catch {
+    console.warn(`[extract] cannot read EcoServer at ${binPath}; IsBlueprint=false for all recipes`)
+    return new Set()
+  }
+
+  const anchorBytes = Buffer.from(PAID_ITEMS_ANCHOR, 'utf16le')
+  const expectedLenByte = PAID_ITEMS_ANCHOR.length * 2 + 1
+  // Find an occurrence whose preceding byte is the exact length prefix —
+  // rejects substring matches (e.g. v11's "ZenGardenCube") and stray data.
+  let cursor = -1
+  let anchorPos = -1
+  while ((cursor = buf.indexOf(anchorBytes, cursor + 1)) !== -1) {
+    if (cursor === 0) continue
+    if (buf[cursor - 1] === expectedLenByte) {
+      anchorPos = cursor
+      break
+    }
+  }
+  if (anchorPos < 0) {
+    console.warn(
+      `[extract] PaidItemsEmbeddedList anchor not found in EcoServer; IsBlueprint=false for all recipes (expected on pre-v12 binaries)`
+    )
+    return new Set()
+  }
+
+  const isItemBasename = (s: string) => /^[A-Z][A-Za-z0-9]{3,39}$/.test(s)
+  const out = new Set<string>()
+  let off = anchorPos - 1 // start at the length byte
+  while (true) {
+    const r = readDotNetLengthPrefixedAt(buf, off)
+    if (!r) break
+    if (!isItemBasename(r.str)) break
+    out.add(r.str)
+    off = r.next
+  }
+  return out
 }
 
 // ---------------------------------------------------------------------------
@@ -1084,7 +1169,27 @@ async function main() {
     console.log(`[extract] emitted ${variants.length} recipe variants via AddTagProduct`)
   }
 
-  // Pass 1b: v13 bonus system lives outside AutoGen in __core__/Benefits.
+  // Pass 1b: flag blueprint recipes from PaidItemsEmbeddedList (v12+).
+  // A recipe is a blueprint iff any of its products' class basenames (with
+  // trailing "Item" stripped) appears in the embedded paid-items list. The
+  // in-game `Recipe.RequiresStrangeBlueprint` flag is populated asynchronously
+  // by EcoMarketplaceManager and isn't reachable from the static C# we parse.
+  const paidItems = await findPaidItems(args.ecoRoot)
+  let blueprintCount = 0
+  if (paidItems.size > 0) {
+    for (const r of recipes) {
+      const isBp = r.Products.some((p) => paidItems.has(p.ItemOrTag.replace(/Item$/, '')))
+      if (isBp) {
+        r.IsBlueprint = true
+        blueprintCount++
+      }
+    }
+    console.log(
+      `[extract] paid items list: ${paidItems.size} entries; flagged ${blueprintCount} blueprint recipe(s)`
+    )
+  }
+
+  // Pass 1c: v13 bonus system lives outside AutoGen in __core__/Benefits.
   // Each hand-written file declares `public partial class <X>Talent` whose
   // constructor registers Bonus objects; absent in v11/v12.
   const benefitsDir = path.join(coreRoot, 'Benefits')
@@ -1110,7 +1215,7 @@ async function main() {
     console.warn('[extract] TagDefinitions.cs missing:', (e as Error).message)
   }
 
-  // Pass 1c: recipe-derived display fallback for items whose class lives only
+  // Pass 1d: recipe-derived display fallback for items whose class lives only
   // in a compiled DLL (no .cs source anywhere — e.g. HomesteadClaimStakeItem).
   // When a recipe `<X>Recipe` produces `<X>Item` and the item still has no
   // [LocDisplayName]-derived display, adopt the recipe's displayName.
