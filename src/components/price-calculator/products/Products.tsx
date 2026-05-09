@@ -36,6 +36,7 @@ import type { PriceMode } from '@/types/solver'
 
 import { MaterialDialog } from '../materials/MaterialDialog'
 import { AddRecipeDialog } from './AddRecipeDialog'
+import { buildProductRows } from './build-product-rows'
 import { ItemCostCell } from './ItemCostCell'
 import { ItemSaleCell } from './ItemSaleCell'
 import { MarginCell } from './MarginCell'
@@ -124,6 +125,7 @@ function productEquals(a: Product, b: Product): boolean {
 }
 
 function groupEquals(a: ProductGroup, b: ProductGroup): boolean {
+  if (a.familyName !== b.familyName) return false
   if (a.parent === null) {
     if (b.parent !== null) return false
   } else {
@@ -412,50 +414,10 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
     ]
   )
 
-  const rows = useMemo<Row[]>(() => {
-    const q = debouncedSearch.trim().toLowerCase()
-    const out: Row[] = []
-    for (const g of groups) {
-      const matchesSearch = (c: Product, parentName: string) =>
-        !q ||
-        c.recipeName.toLowerCase().includes(q) ||
-        c.primaryProductName.toLowerCase().includes(q) ||
-        parentName.toLowerCase().includes(q)
-
-      if (g.parent) {
-        const parent = g.parent
-        const visibleChildren = g.children.filter(
-          (c) => childVisible(c) && matchesSearch(c, parent.primaryProductName)
-        )
-        if (visibleChildren.length === 0) continue
-        out.push({
-          kind: 'parent',
-          rowKey: `parent::${parent.primaryProductId}`,
-          parent,
-          childCount: visibleChildren.length,
-          childUserRecipeIds: visibleChildren.map((c) => c.userRecipeId),
-        })
-        for (const c of visibleChildren) {
-          out.push({
-            kind: 'child',
-            rowKey: `child::${parent.primaryProductId}::${c.userRecipeId}`,
-            product: c,
-            parent,
-          })
-        }
-      } else {
-        const c = g.children[0]
-        if (!childVisible(c)) continue
-        if (!matchesSearch(c, c.primaryProductName)) continue
-        out.push({
-          kind: 'flat',
-          rowKey: `flat::${c.userRecipeId}::${c.primaryProductId}`,
-          product: c,
-        })
-      }
-    }
-    return out
-  }, [groups, debouncedSearch, childVisible])
+  const rows = useMemo<Row[]>(
+    () => buildProductRows(groups, debouncedSearch, childVisible),
+    [groups, debouncedSearch, childVisible]
+  )
 
   const productRowCount = useMemo(
     () => rows.filter((r) => r.kind === 'parent' || r.kind === 'flat').length,
@@ -642,9 +604,24 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
 
   const nameTemplate = useCallback(
     (row: Row) => {
-      if (row.kind === 'parent') {
+      if (row.kind === 'family') {
         return (
           <div className="flex align-items-center gap-2">
+            <ParentFavoriteStar
+              buildStore={buildStore}
+              childUserRecipeIds={row.childUserRecipeIds}
+              onToggleAll={handleToggleAllFavorites}
+            />
+            <span className="font-bold">{row.familyName}</span>
+          </div>
+        )
+      }
+      if (row.kind === 'parent') {
+        return (
+          <div
+            className="flex align-items-center gap-2"
+            style={row.inFamily ? { paddingLeft: '1.5rem' } : undefined}
+          >
             <ParentFavoriteStar
               buildStore={buildStore}
               childUserRecipeIds={row.childUserRecipeIds}
@@ -663,7 +640,10 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       if (row.kind === 'child') {
         const p = row.product
         return (
-          <div className="flex align-items-center gap-2" style={{ paddingLeft: '1.5rem' }}>
+          <div
+            className="flex align-items-center gap-2"
+            style={{ paddingLeft: row.inFamily ? '3rem' : '1.5rem' }}
+          >
             <RecipeFavoriteStar
               buildStore={buildStore}
               userRecipeId={p.userRecipeId}
@@ -690,7 +670,10 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       // flat
       const p = row.product
       return (
-        <div className="flex align-items-center gap-2">
+        <div
+          className="flex align-items-center gap-2"
+          style={row.inFamily ? { paddingLeft: '1.5rem' } : undefined}
+        >
           <RecipeFavoriteStar
             buildStore={buildStore}
             userRecipeId={p.userRecipeId}
@@ -716,6 +699,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
 
   const costTemplate = useCallback(
     (row: Row) => {
+      if (row.kind === 'family') return null
       if (row.kind === 'parent') {
         return (
           <div className="flex align-items-center justify-content-end gap-1">
@@ -761,6 +745,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
 
   const marginTemplate = useCallback(
     (row: Row) => {
+      if (row.kind === 'family') return null
       if (row.kind === 'parent') {
         return (
           <MarginCell
@@ -784,6 +769,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
 
   const saleTemplate = useCallback(
     (row: Row) => {
+      if (row.kind === 'family') return null
       if (row.kind === 'parent') {
         return <ItemSaleCell signal={priceSignal} itemId={row.parent.primaryProductId} />
       }
@@ -795,6 +781,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
 
   const actionsTemplate = useCallback(
     (row: Row) => {
+      if (row.kind === 'family') return null
       if (row.kind === 'parent') {
         return (
           <RowActionsMenu

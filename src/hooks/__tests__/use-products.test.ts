@@ -734,6 +734,305 @@ describe('buildProductGroups', () => {
     expect(group.parent?.userPriceId).toBe('')
     expect(group.parent?.productUserMarginId).toBe('')
   })
+
+  describe('family clustering', () => {
+    // Custom getName so product names sort the way real localized names do
+    // (Board < Hardwood Board < Iron Ore < Softwood Board), letting us
+    // observe whether clustering kept Softwood Board adjacent to its family.
+    const namedFakeName = (entityType: string, entityId: string) => {
+      const names: Record<string, string> = {
+        'item-board': 'Board',
+        'item-hardwood-board': 'Hardwood Board',
+        'item-softwood-board': 'Softwood Board',
+        'item-iron': 'Iron Ore',
+      }
+      return names[entityId] ?? `${entityType}:${entityId}`
+    }
+
+    function addBoardFamily(opts: { hardwood: boolean; softwood: boolean }) {
+      const variants: Array<{ id: string; recipe: string; ur: string }> = [
+        { id: 'item-board', recipe: 'recipe-board', ur: 'ur-board' },
+      ]
+      if (opts.hardwood) {
+        variants.push({
+          id: 'item-hardwood-board',
+          recipe: 'recipe-hardwood-board',
+          ur: 'ur-hardwood-board',
+        })
+      }
+      if (opts.softwood) {
+        variants.push({
+          id: 'item-softwood-board',
+          recipe: 'recipe-softwood-board',
+          ur: 'ur-softwood-board',
+        })
+      }
+      for (const v of variants) {
+        gameDataStore.setRow('items', v.id, {
+          id: v.id,
+          datasetId: 'ds1',
+          name: v.id,
+          isTag: false,
+        })
+        gameDataStore.setRow('recipes', v.recipe, {
+          id: v.recipe,
+          datasetId: 'ds1',
+          name: v.recipe,
+          familyName: 'Board',
+          skillId: 'skill-mining',
+          requiredSkillLevel: 1,
+          isBlueprint: false,
+          isDefault: true,
+          craftingTableId: 'ct1',
+          baseCraftTime: 1,
+          baseLaborCost: 1,
+        })
+        gameDataStore.setRow('recipeElements', `re-${v.recipe}`, {
+          id: `re-${v.recipe}`,
+          datasetId: 'ds1',
+          recipeId: v.recipe,
+          itemOrTagId: v.id,
+          baseQuantity: 1,
+          isProduct: true,
+          index: 0,
+        })
+        buildStore.setRow('userRecipes', v.ur, {
+          id: v.ur,
+          buildId: BUILD_ID,
+          recipeId: v.recipe,
+          roundFactor: 0,
+        })
+      }
+      // Iron is in the base fixture but needs a userRecipes row to appear.
+      buildStore.setRow('userRecipes', 'ur-iron', {
+        id: 'ur-iron',
+        buildId: BUILD_ID,
+        recipeId: 'recipe-iron',
+        roundFactor: 0,
+      })
+    }
+
+    it('clusters family variants adjacently when 2+ family members are visible', () => {
+      addBoardFamily({ hardwood: true, softwood: true })
+
+      const groups = buildProductGroups(buildStore, gameDataStore, BUILD_ID, namedFakeName)
+      const order = groups.map((g) => g.children[0].primaryProductName)
+      // Without clustering: [Board, Hardwood Board, Iron Ore, Softwood Board].
+      // With clustering, Board family stays adjacent.
+      expect(order).toEqual(['Board', 'Hardwood Board', 'Softwood Board', 'Iron Ore'])
+    })
+
+    it('keeps lone family members in alphabetical product order', () => {
+      addBoardFamily({ hardwood: true, softwood: false })
+
+      const groups = buildProductGroups(buildStore, gameDataStore, BUILD_ID, namedFakeName)
+      const order = groups.map((g) => g.children[0].primaryProductName)
+      // Family "Board" has 2 visible members → still clusters.
+      expect(order).toEqual(['Board', 'Hardwood Board', 'Iron Ore'])
+    })
+
+    it('does not cluster a single family member', () => {
+      // Only Hardwood Board from the family — Board family has count 1.
+      gameDataStore.setRow('items', 'item-hardwood-board', {
+        id: 'item-hardwood-board',
+        datasetId: 'ds1',
+        name: 'item-hardwood-board',
+        isTag: false,
+      })
+      gameDataStore.setRow('recipes', 'recipe-hardwood-board', {
+        id: 'recipe-hardwood-board',
+        datasetId: 'ds1',
+        name: 'recipe-hardwood-board',
+        familyName: 'Board',
+        skillId: 'skill-mining',
+        requiredSkillLevel: 1,
+        isBlueprint: false,
+        isDefault: true,
+        craftingTableId: 'ct1',
+        baseCraftTime: 1,
+        baseLaborCost: 1,
+      })
+      gameDataStore.setRow('recipeElements', 're-hardwood-board', {
+        id: 're-hardwood-board',
+        datasetId: 'ds1',
+        recipeId: 'recipe-hardwood-board',
+        itemOrTagId: 'item-hardwood-board',
+        baseQuantity: 1,
+        isProduct: true,
+        index: 0,
+      })
+      buildStore.setRow('userRecipes', 'ur-hardwood-board', {
+        id: 'ur-hardwood-board',
+        buildId: BUILD_ID,
+        recipeId: 'recipe-hardwood-board',
+        roundFactor: 0,
+      })
+      buildStore.setRow('userRecipes', 'ur-iron', {
+        id: 'ur-iron',
+        buildId: BUILD_ID,
+        recipeId: 'recipe-iron',
+        roundFactor: 0,
+      })
+
+      const groups = buildProductGroups(buildStore, gameDataStore, BUILD_ID, namedFakeName)
+      const order = groups.map((g) => g.children[0].primaryProductName)
+      // Hardwood Board is the only Board-family member; sorts by its own
+      // product name alongside Iron Ore.
+      expect(order).toEqual(['Hardwood Board', 'Iron Ore'])
+    })
+
+    it('clusters via canonical family when build-recipe is in a different family', () => {
+      // Two families both cover all three Board items at the dataset level:
+      //   "Board"  → BoardRecipe, HardwoodBoardRecipe, SoftwoodBoardRecipe
+      //   "Boards" → BoardsRecipe2, HardwoodBoardsRecipe2, SoftwoodBoardsRecipe2
+      // Both have size 3 → tie broken alphabetically → canonical "Board" for
+      // all three items.
+      addBoardFamily({ hardwood: true, softwood: true })
+      // Add a parallel "Boards" family at the dataset level (no userRecipes
+      // yet — we only put one of these recipes into the build below).
+      const parallel: Array<{ id: string; itemId: string; recipeId: string }> = [
+        { id: 'item-board', itemId: 'item-board', recipeId: 'recipe-boards-2' },
+        {
+          id: 'item-hardwood-board',
+          itemId: 'item-hardwood-board',
+          recipeId: 'recipe-hardwood-boards-2',
+        },
+        {
+          id: 'item-softwood-board',
+          itemId: 'item-softwood-board',
+          recipeId: 'recipe-softwood-boards-2',
+        },
+      ]
+      for (const p of parallel) {
+        gameDataStore.setRow('recipes', p.recipeId, {
+          id: p.recipeId,
+          datasetId: 'ds1',
+          name: p.recipeId,
+          familyName: 'Boards',
+          skillId: 'skill-mining',
+          requiredSkillLevel: 1,
+          isBlueprint: false,
+          isDefault: true,
+          craftingTableId: 'ct1',
+          baseCraftTime: 1,
+          baseLaborCost: 1,
+        })
+        gameDataStore.setRow('recipeElements', `re-${p.recipeId}`, {
+          id: `re-${p.recipeId}`,
+          datasetId: 'ds1',
+          recipeId: p.recipeId,
+          itemOrTagId: p.itemId,
+          baseQuantity: 1,
+          isProduct: true,
+          index: 0,
+        })
+      }
+      // Replace the Softwood Board build-recipe with the "Boards"-family
+      // variant — the only Softwood-Board producer in this build now sits
+      // in family "Boards", not "Board".
+      buildStore.delRow('userRecipes', 'ur-softwood-board')
+      buildStore.setRow('userRecipes', 'ur-softwood-via-boards', {
+        id: 'ur-softwood-via-boards',
+        buildId: BUILD_ID,
+        recipeId: 'recipe-softwood-boards-2',
+        roundFactor: 0,
+      })
+
+      const groups = buildProductGroups(buildStore, gameDataStore, BUILD_ID, namedFakeName)
+      const order = groups.map((g) => g.children[0].primaryProductName)
+      // All three Board items resolve to canonical family "Board" (size 3,
+      // alphabetically before "Boards") regardless of which family produced
+      // them in the build, so Softwood Board stays adjacent to its siblings.
+      expect(order).toEqual(['Board', 'Hardwood Board', 'Softwood Board', 'Iron Ore'])
+    })
+
+    it('treats empty familyName as never clustering', () => {
+      // Two recipes with empty familyName — even though they share an empty
+      // string, they should not cluster.
+      gameDataStore.setRow('items', 'item-zzz', {
+        id: 'item-zzz',
+        datasetId: 'ds1',
+        name: 'item-zzz',
+        isTag: false,
+      })
+      gameDataStore.setRow('items', 'item-aaa', {
+        id: 'item-aaa',
+        datasetId: 'ds1',
+        name: 'item-aaa',
+        isTag: false,
+      })
+      gameDataStore.setRow('recipes', 'recipe-zzz', {
+        id: 'recipe-zzz',
+        datasetId: 'ds1',
+        name: 'recipe-zzz',
+        familyName: '',
+        skillId: 'skill-mining',
+        requiredSkillLevel: 1,
+        isBlueprint: false,
+        isDefault: true,
+        craftingTableId: 'ct1',
+        baseCraftTime: 1,
+        baseLaborCost: 1,
+      })
+      gameDataStore.setRow('recipes', 'recipe-aaa', {
+        id: 'recipe-aaa',
+        datasetId: 'ds1',
+        name: 'recipe-aaa',
+        familyName: '',
+        skillId: 'skill-mining',
+        requiredSkillLevel: 1,
+        isBlueprint: false,
+        isDefault: true,
+        craftingTableId: 'ct1',
+        baseCraftTime: 1,
+        baseLaborCost: 1,
+      })
+      gameDataStore.setRow('recipeElements', 're-zzz', {
+        id: 're-zzz',
+        datasetId: 'ds1',
+        recipeId: 'recipe-zzz',
+        itemOrTagId: 'item-zzz',
+        baseQuantity: 1,
+        isProduct: true,
+        index: 0,
+      })
+      gameDataStore.setRow('recipeElements', 're-aaa', {
+        id: 're-aaa',
+        datasetId: 'ds1',
+        recipeId: 'recipe-aaa',
+        itemOrTagId: 'item-aaa',
+        baseQuantity: 1,
+        isProduct: true,
+        index: 0,
+      })
+      buildStore.setRow('userRecipes', 'ur-zzz', {
+        id: 'ur-zzz',
+        buildId: BUILD_ID,
+        recipeId: 'recipe-zzz',
+        roundFactor: 0,
+      })
+      buildStore.setRow('userRecipes', 'ur-aaa', {
+        id: 'ur-aaa',
+        buildId: BUILD_ID,
+        recipeId: 'recipe-aaa',
+        roundFactor: 0,
+      })
+      buildStore.setRow('userRecipes', 'ur-iron', {
+        id: 'ur-iron',
+        buildId: BUILD_ID,
+        recipeId: 'recipe-iron',
+        roundFactor: 0,
+      })
+
+      const groups = buildProductGroups(buildStore, gameDataStore, BUILD_ID, fakeName)
+      const order = groups.map((g) => g.children[0].primaryProductId)
+      // Empty familyName never clusters even with multiple empty-family
+      // recipes; iron's family ("Iron") has count 1 so it doesn't cluster
+      // either. Pure alphabetical by product name
+      // (item:item-aaa < item:item-iron < item:item-zzz).
+      expect(order).toEqual(['item-aaa', 'item-iron', 'item-zzz'])
+    })
+  })
 })
 
 describe('getRecipeSkillInfo', () => {

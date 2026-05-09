@@ -57,6 +57,11 @@ export interface ProductGroup {
   parent: ProductParent | null
   /** Always >= 1; one entry per userRecipe. */
   children: Product[]
+  /** Canonical recipe family of the group's primary product, resolved
+   * dataset-wide (see `canonicalFamilyByItemId`). Empty when no family-bearing
+   * recipe in the dataset produces this product. Drives both sort clustering
+   * and the family-header tier in the row builder. */
+  familyName: string
 }
 
 export interface MarginOption {
@@ -333,8 +338,21 @@ export function buildProducts(
  * product-level margin looked up once. Single-recipe groups keep parent=null
  * and render as a flat row.
  *
- * Sorted by product name (with single-recipe groups using the recipe name as
- * fallback), then children within each group by skillName,recipeName.
+ * Children within each group sort by skillName then recipeName.
+ *
+ * Top-level group order clusters recipe-family variants (e.g. Board /
+ * Hardwood Board / Softwood Board) adjacently when 2+ members of the same
+ * family appear in the build: the family name becomes the cluster's sort
+ * key, and members within the cluster sort by their own product name. Lone
+ * variants (only one family member visible) fall back to product-name
+ * sorting so they stay where users expect alphabetically.
+ *
+ * Each item's family is resolved dataset-wide via
+ * `canonicalFamilyByItemId`, not from the recipe in the user's build —
+ * otherwise variants whose only build-recipe sits in a different family
+ * (e.g. Softwood Board produced via SoftwoodBoardsRecipe in family
+ * "Boards" rather than SoftwoodBoardRecipe in family "Board") would split
+ * off from their substrate group.
  */
 export function buildProductGroups(
   buildStore: Store,
@@ -343,6 +361,7 @@ export function buildProductGroups(
   getName: (entityType: string, entityId: string) => string
 ): ProductGroup[] {
   const flat = buildProducts(buildStore, gameDataStore, buildId, getName)
+  const canonicalFamilyByItemId = getGameDataIndexes(gameDataStore).canonicalFamilyByItemId
 
   // userPrices indexed by itemOrTagId for this build.
   const userPriceByItemId = new Map<string, string>()
@@ -374,8 +393,9 @@ export function buildProductGroups(
 
   const groups: ProductGroup[] = []
   for (const [productId, children] of byProductId) {
+    const familyName = canonicalFamilyByItemId.get(productId) ?? ''
     if (children.length === 1) {
-      groups.push({ parent: null, children })
+      groups.push({ parent: null, children, familyName })
       continue
     }
     children.sort(
@@ -392,14 +412,30 @@ export function buildProductGroups(
         productUserMarginId: productMarginByItemId.get(productId) ?? '',
       },
       children,
+      familyName,
     })
   }
 
-  groups.sort((a, b) => {
-    const an = a.parent ? a.parent.primaryProductName : a.children[0].primaryProductName
-    const bn = b.parent ? b.parent.primaryProductName : b.children[0].primaryProductName
-    return an.localeCompare(bn)
-  })
+  // Count groups per family. Only families with 2+ groups in the current
+  // build cluster — a lone variant stays in alphabetical product order.
+  const groupCountByFamily = new Map<string, number>()
+  for (const g of groups) {
+    if (!g.familyName) continue
+    groupCountByFamily.set(g.familyName, (groupCountByFamily.get(g.familyName) ?? 0) + 1)
+  }
+
+  const productNameOf = (g: ProductGroup): string =>
+    g.parent ? g.parent.primaryProductName : g.children[0].primaryProductName
+  const clusterKeyOf = (g: ProductGroup): string => {
+    if (g.familyName && (groupCountByFamily.get(g.familyName) ?? 0) >= 2) return g.familyName
+    return productNameOf(g)
+  }
+
+  groups.sort(
+    (a, b) =>
+      clusterKeyOf(a).localeCompare(clusterKeyOf(b)) ||
+      productNameOf(a).localeCompare(productNameOf(b))
+  )
 
   return groups
 }

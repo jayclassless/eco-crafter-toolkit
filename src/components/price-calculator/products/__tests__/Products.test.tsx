@@ -317,6 +317,82 @@ describe('Products (smoke)', () => {
     })
   })
 
+  it('renders a family header row for a 2+ member family cluster, with the favorite toggle and indented child rows', () => {
+    const stores = makeStores()
+    // Three products in the "Board" recipe family. Each has its own primary
+    // product item, so they form three separate groups. Family cluster size
+    // is 3 → buildProductRows must emit a "Board" header above them.
+    const variants = [
+      { item: 'it-board', recipe: 'r-board', ur: 'ur-board' },
+      { item: 'it-hwb', recipe: 'r-hwb', ur: 'ur-hwb' },
+      { item: 'it-swb', recipe: 'r-swb', ur: 'ur-swb' },
+    ]
+    for (const v of variants) {
+      stores.gameDataStore.setRow('items', v.item, {
+        id: v.item,
+        datasetId: DS,
+        name: v.item,
+        isTag: false,
+      })
+      stores.gameDataStore.setRow('recipes', v.recipe, {
+        id: v.recipe,
+        datasetId: DS,
+        name: v.recipe,
+        familyName: 'Board',
+        skillId: 'sk-mine',
+        requiredSkillLevel: 1,
+        isBlueprint: false,
+        isDefault: true,
+        craftingTableId: 'ct-anvil',
+        baseCraftTime: 1,
+        baseLaborCost: 0,
+      })
+      stores.gameDataStore.setRow('recipeElements', `re-p-${v.recipe}`, {
+        id: `re-p-${v.recipe}`,
+        datasetId: DS,
+        recipeId: v.recipe,
+        itemOrTagId: v.item,
+        baseQuantity: 1,
+        isProduct: true,
+        index: 0,
+      })
+      stores.buildStore.setRow('userRecipes', v.ur, {
+        id: v.ur,
+        buildId: BUILD,
+        recipeId: v.recipe,
+        roundFactor: 0,
+      })
+    }
+    renderProducts(stores)
+
+    // Family header row + 3 board flats + 1 iron flat from the base fixture.
+    const rows = Array.from(
+      document.body.querySelectorAll('.p-datatable-tbody tr')
+    ) as HTMLElement[]
+    expect(rows).toHaveLength(5)
+
+    // The family header row contains the text "Board" alongside a single
+    // favorite-star button (the family-level toggle) and nothing else — no
+    // margin dropdown, no kebab menu.
+    const familyRowIdx = rows.findIndex((r) => within(r).queryByText('Board', { selector: 'span' }))
+    expect(familyRowIdx).toBeGreaterThanOrEqual(0)
+    const familyRow = rows[familyRowIdx]
+    expect(within(familyRow).getByText('Board')).toBeInTheDocument()
+    const familyButtons = familyRow.querySelectorAll('button')
+    expect(familyButtons).toHaveLength(1)
+    expect(familyButtons[0].querySelector('.pi-star,.pi-star-fill')).not.toBeNull()
+    expect(familyRow.querySelectorAll('input,select')).toHaveLength(0)
+
+    // The three rows immediately following the family header are the
+    // in-family Board variants — their name-cell div carries inline
+    // padding-left signalling indentation.
+    for (let i = familyRowIdx + 1; i <= familyRowIdx + 3; i++) {
+      const nameCell = rows[i].querySelector('td:first-child > div') as HTMLElement | null
+      expect(nameCell).not.toBeNull()
+      expect(nameCell!.style.paddingLeft).toBe('1.5rem')
+    }
+  })
+
   it('toggles a tag filter via the filter overlay', () => {
     const stores = makeStores()
     // Add a tag the recipe consumes so a tag option appears.

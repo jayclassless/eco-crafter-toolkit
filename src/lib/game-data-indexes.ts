@@ -37,6 +37,15 @@ interface GameDataIndexes {
    * `buildProducts` and MaterialDialog). Used by the dependency graph to
    * enumerate which recipes can produce a given item. */
   primaryRecipeIdsByItemId: Map<string, string[]>
+  /** Per-item "canonical" recipe family — used by Products list ordering to
+   * cluster substrate variants (Board / Hardwood Board / Softwood Board)
+   * adjacently. An item can be produced by recipes in multiple families
+   * (e.g. BoardItem comes from "Board", "Boards", "Saw Boards", "Particle
+   * Boards"); we pick the family with the largest dataset-level item-set,
+   * ties broken alphabetically. Computed dataset-wide so an item resolves
+   * to the same family regardless of which recipe the user has in their
+   * build. Items with no family-bearing producer are absent from the map. */
+  canonicalFamilyByItemId: Map<string, string>
   recipeIndexes: RecipeIndexes
   /** Convenience: talents bucketed by their owning skill — this is the same
    * Map exposed inside `recipeIndexes.talentsBySkillId`, hoisted here so
@@ -95,6 +104,54 @@ function buildPrimaryRecipeIdsByItemId(
   return map
 }
 
+function buildCanonicalFamilyByItemId(
+  store: Store,
+  productItemIdsByRecipeId: Map<string, string[]>,
+  ingredientItemIdsByRecipeId: Map<string, Set<string>>
+): Map<string, string> {
+  // family → distinct PRIMARY products of its recipes. Using only the primary
+  // product (first non-reintegrated, mirroring `buildPrimaryRecipeIdsByItemId`)
+  // avoids spurious cross-cluster linkage via shared byproducts: e.g. all
+  // ore-concentrate Lv2 families produce WetTailings as a secondary, and
+  // counting it would conflate Copper / Iron / Gold concentrates into one
+  // "Concentrate Copper Lv2" cluster.
+  const itemsByFamily = new Map<string, Set<string>>()
+  for (const [recipeId, productIds] of productItemIdsByRecipeId) {
+    if (productIds.length === 0) continue
+    const familyName = (store.getCell('recipes', recipeId, 'familyName') as string) ?? ''
+    if (!familyName) continue
+    const ingredients = ingredientItemIdsByRecipeId.get(recipeId)
+    const primary = productIds.find((id) => !ingredients?.has(id)) ?? productIds[0]
+    let set = itemsByFamily.get(familyName)
+    if (!set) {
+      set = new Set()
+      itemsByFamily.set(familyName, set)
+    }
+    set.add(primary)
+  }
+
+  // Invert: itemId → list of (family, family-size) candidates. Then per item
+  // pick the largest-family candidate, alphabetical tiebreak.
+  const candidatesByItem = new Map<string, Array<{ family: string; size: number }>>()
+  for (const [family, items] of itemsByFamily) {
+    const size = items.size
+    for (const itemId of items) {
+      let list = candidatesByItem.get(itemId)
+      if (!list) {
+        list = []
+        candidatesByItem.set(itemId, list)
+      }
+      list.push({ family, size })
+    }
+  }
+  const result = new Map<string, string>()
+  for (const [itemId, list] of candidatesByItem) {
+    list.sort((a, b) => b.size - a.size || a.family.localeCompare(b.family))
+    result.set(itemId, list[0].family)
+  }
+  return result
+}
+
 function buildItemIdsByTagId(store: Store): Map<string, string[]> {
   const map = new Map<string, string[]>()
   for (const tiId of store.getRowIds('tagItems')) {
@@ -121,6 +178,11 @@ function build(store: Store): GameDataIndexes {
     tagIdsByItemId: buildTagIdsByItemId(store),
     itemIdsByTagId: buildItemIdsByTagId(store),
     primaryRecipeIdsByItemId: buildPrimaryRecipeIdsByItemId(
+      productItemIdsByRecipeId,
+      ingredientItemIdsByRecipeId
+    ),
+    canonicalFamilyByItemId: buildCanonicalFamilyByItemId(
+      store,
       productItemIdsByRecipeId,
       ingredientItemIdsByRecipeId
     ),
