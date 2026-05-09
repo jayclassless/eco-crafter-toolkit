@@ -1,6 +1,7 @@
 import { Button } from 'primereact/button'
 import { Checkbox } from 'primereact/checkbox'
 import { OverlayPanel } from 'primereact/overlaypanel'
+import { SelectButton } from 'primereact/selectbutton'
 import { memo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -31,6 +32,8 @@ interface Props {
   onSetAllTags: (hideAll: boolean) => void
   onlyLevelAccessible: boolean
   onToggleOnlyLevelAccessible: () => void
+  blueprintMode: 'include' | 'exclude' | 'only'
+  onSetBlueprintMode: (mode: 'include' | 'exclude' | 'only') => void
 }
 
 export const RecipeFilterButton = memo(function RecipeFilterButton({
@@ -54,6 +57,8 @@ export const RecipeFilterButton = memo(function RecipeFilterButton({
   onSetAllTags,
   onlyLevelAccessible,
   onToggleOnlyLevelAccessible,
+  blueprintMode,
+  onSetBlueprintMode,
 }: Props) {
   const { t } = useTranslation()
   const op = useRef<OverlayPanel>(null)
@@ -64,7 +69,13 @@ export const RecipeFilterButton = memo(function RecipeFilterButton({
     hiddenTags.size > 0 ||
     !showParts ||
     !showUntagged ||
-    onlyLevelAccessible
+    onlyLevelAccessible ||
+    blueprintMode !== 'include'
+  const blueprintOptions = [
+    { label: t('priceCalculator.products.recipeFilter.blueprintInclude'), value: 'include' },
+    { label: t('priceCalculator.products.recipeFilter.blueprintExclude'), value: 'exclude' },
+    { label: t('priceCalculator.products.recipeFilter.blueprintOnly'), value: 'only' },
+  ]
   return (
     <>
       <Button
@@ -211,7 +222,7 @@ export const RecipeFilterButton = memo(function RecipeFilterButton({
               </div>
             </div>
           </div>
-          <div className="flex align-items-center gap-2 border-top-1 surface-border pt-2">
+          <div className="flex align-items-center gap-2 surface-border pt-2">
             <Checkbox
               inputId="recipe-filter-only-level-accessible"
               checked={onlyLevelAccessible}
@@ -220,6 +231,20 @@ export const RecipeFilterButton = memo(function RecipeFilterButton({
             <label htmlFor="recipe-filter-only-level-accessible" className="text-sm cursor-pointer">
               {t('priceCalculator.products.onlyLevelAccessible')}
             </label>
+          </div>
+          <div className="flex align-items-center gap-2 surface-border pt-2">
+            <span className="text-sm font-semibold">
+              {t('priceCalculator.products.recipeFilter.blueprintSection')}
+            </span>
+            <SelectButton
+              value={blueprintMode}
+              options={blueprintOptions}
+              onChange={(e) => {
+                if (e.value) onSetBlueprintMode(e.value)
+              }}
+              allowEmpty={false}
+              pt={{ button: { className: 'p-button-sm py-1' } }}
+            />
           </div>
         </div>
       </OverlayPanel>

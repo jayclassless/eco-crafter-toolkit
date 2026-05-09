@@ -32,6 +32,8 @@ const baseProps = {
   onSetAllTags: vi.fn(),
   onlyLevelAccessible: false,
   onToggleOnlyLevelAccessible: vi.fn(),
+  blueprintMode: 'include' as const,
+  onSetBlueprintMode: vi.fn(),
 }
 
 describe('RecipeFilterButton', () => {

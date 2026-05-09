@@ -85,6 +85,7 @@ export function createBuildStore() {
       showUntagged: { type: 'boolean', default: true },
       showOnlyFavorites: { type: 'boolean', default: false },
       defaultShareForSecondaryItems: { type: 'number', default: 20 },
+      blueprintMode: { type: 'string', default: 'include' },
     },
     computedPrices: {
       id: { type: 'string' },

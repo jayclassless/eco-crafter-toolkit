@@ -11,6 +11,8 @@ export interface Product {
   recipeName: string
   /** Recipe is user-authored — used to swap its row icon for `pi pi-book`. */
   recipeIsCustom: boolean
+  /** Recipe is a blueprint — drives the blueprint include/exclude/only filter. */
+  recipeIsBlueprint: boolean
   skillId: string
   skillName: string
   skillRawName: string
@@ -280,6 +282,7 @@ export function buildProducts(
     const requiredSkillLevel = (recipe.requiredSkillLevel as number) ?? 0
     const recipeName = getName('recipe', recipeId)
     const recipeIsCustom = !!recipe.isCustom
+    const recipeIsBlueprint = !!recipe.isBlueprint
 
     const productItemIds = productsByRecipeId.get(recipeId) ?? []
     const ingredientIds = ingredientsByRecipeId.get(recipeId)
@@ -304,6 +307,7 @@ export function buildProducts(
         recipeId,
         recipeName,
         recipeIsCustom,
+        recipeIsBlueprint,
         skillId,
         skillName,
         skillRawName,

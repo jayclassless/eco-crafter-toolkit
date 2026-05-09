@@ -113,7 +113,11 @@
         "tagSection": "Tag",
         "unskilled": "Unskilled",
         "part": "Part",
-        "untagged": "Untagged"
+        "untagged": "Untagged",
+        "blueprintSection": "Blueprints",
+        "blueprintInclude": "Include",
+        "blueprintExclude": "Exclude",
+        "blueprintOnly": "Only"
       },
       "favorite": {
         "toggleOn": "Mark as favorite",

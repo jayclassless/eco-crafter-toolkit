@@ -119,6 +119,7 @@ function productEquals(a: Product, b: Product): boolean {
     a.primaryProductName === b.primaryProductName &&
     a.userPriceId === b.userPriceId &&
     a.userMarginId === b.userMarginId &&
+    a.recipeIsBlueprint === b.recipeIsBlueprint &&
     arrayEquals(a.productItemIds, b.productItemIds, (x, y) => x === y) &&
     arrayEquals(a.unlockingTalentIds, b.unlockingTalentIds, (x, y) => x === y)
   )
@@ -198,6 +199,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
     let showUntaggedFlag = true
     let levelOnly = false
     let onlyFavorites = false
+    let blueprintModeValue: 'include' | 'exclude' | 'only' = 'include'
     for (const rowId of buildStore.getRowIds('userSettings')) {
       const row = buildStore.getRow('userSettings', rowId)
       if (row.buildId !== buildId) continue
@@ -206,6 +208,8 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       showUntaggedFlag = row.showUntagged as boolean
       levelOnly = row.onlyLevelAccessible as boolean
       onlyFavorites = row.showOnlyFavorites as boolean
+      const mode = row.blueprintMode as string
+      if (mode === 'exclude' || mode === 'only') blueprintModeValue = mode
       break
     }
     // Skill levels and active talents only feed `childVisible` when
@@ -274,6 +278,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       showUntagged: showUntaggedFlag,
       onlyLevelAccessible: levelOnly,
       showOnlyFavorites: onlyFavorites,
+      blueprintMode: blueprintModeValue,
       userSkillLevels: skillLevels,
       activeTalentIds: activeTalents,
       hiddenSkills: hidden,
@@ -284,8 +289,14 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildStore, buildId, filterRev, favoriteCellRev])
 
-  const { showUnskilledRecipes, showParts, showUntagged, onlyLevelAccessible, showOnlyFavorites } =
-    filterRaw
+  const {
+    showUnskilledRecipes,
+    showParts,
+    showUntagged,
+    onlyLevelAccessible,
+    showOnlyFavorites,
+    blueprintMode,
+  } = filterRaw
   const userSkillLevels = useStableContent(filterRaw.userSkillLevels, mapEquals)
   const activeTalentIds = useStableContent(filterRaw.activeTalentIds, setEquals)
   const hiddenSkills = useStableContent(filterRaw.hiddenSkills, setEquals)
@@ -378,6 +389,8 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
           return false
         }
       }
+      if (blueprintMode === 'exclude' && c.recipeIsBlueprint) return false
+      if (blueprintMode === 'only' && !c.recipeIsBlueprint) return false
       if (hiddenSkills.has(c.skillId)) return false
       if (hiddenCraftingTables.has(c.craftingTableId)) return false
       const tags = tagIdsByItemId.get(c.primaryProductId)
@@ -404,6 +417,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
       onlyLevelAccessible,
       userSkillLevels,
       activeTalentIds,
+      blueprintMode,
       hiddenSkills,
       hiddenCraftingTables,
       hiddenTags,
@@ -837,6 +851,8 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
           onToggleOnlyLevelAccessible={() =>
             settingsMgmt.setSetting('onlyLevelAccessible', !onlyLevelAccessible)
           }
+          blueprintMode={blueprintMode}
+          onSetBlueprintMode={(mode) => settingsMgmt.setSetting('blueprintMode', mode)}
         />
         <Button
           icon={showOnlyFavorites ? 'pi pi-star-fill' : 'pi pi-star'}

@@ -9,6 +9,7 @@ const product = (overrides: Partial<Product> = {}): Product => ({
   recipeId: '',
   recipeName: '',
   recipeIsCustom: false,
+  recipeIsBlueprint: false,
   skillId: '',
   skillName: '',
   skillRawName: '',

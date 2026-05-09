@@ -393,6 +393,85 @@ describe('Products (smoke)', () => {
     }
   })
 
+  function addBlueprintRecipe(stores: ReturnType<typeof makeStores>) {
+    stores.gameDataStore.setRow('items', 'it-bp-product', {
+      id: 'it-bp-product',
+      datasetId: DS,
+      name: 'BlueprintProduct',
+      isTag: false,
+    })
+    stores.gameDataStore.setRow('recipes', 'r-bp', {
+      id: 'r-bp',
+      datasetId: DS,
+      name: 'BlueprintRecipe',
+      familyName: 'Blueprint',
+      skillId: 'sk-mine',
+      requiredSkillLevel: 1,
+      isBlueprint: true,
+      isDefault: true,
+      craftingTableId: 'ct-anvil',
+      baseCraftTime: 1,
+      baseLaborCost: 0,
+    })
+    stores.gameDataStore.setRow('recipeElements', 're-bp-p', {
+      id: 're-bp-p',
+      datasetId: DS,
+      recipeId: 'r-bp',
+      itemOrTagId: 'it-bp-product',
+      baseQuantity: 1,
+      isProduct: true,
+      index: 0,
+    })
+    stores.buildStore.setRow('userRecipes', 'ur-bp', {
+      id: 'ur-bp',
+      buildId: BUILD,
+      recipeId: 'r-bp',
+      roundFactor: 0,
+    })
+  }
+
+  function countProductRows(): number {
+    // Parent / flat / child rows; family-header rows have no margin select but
+    // counting bodies is enough since we don't seed a multi-member family.
+    return document.body.querySelectorAll('.p-datatable-tbody tr').length
+  }
+
+  it('blueprint filter default (include) shows both blueprint and non-blueprint recipes', () => {
+    const stores = makeStores()
+    addBlueprintRecipe(stores)
+    renderProducts(stores)
+    expect(countProductRows()).toBe(2)
+  })
+
+  it('blueprint filter set to exclude hides blueprint recipes', () => {
+    const stores = makeStores()
+    addBlueprintRecipe(stores)
+    stores.buildStore.setCell('userSettings', 'st1', 'blueprintMode', 'exclude')
+    renderProducts(stores)
+    expect(countProductRows()).toBe(1)
+  })
+
+  it('blueprint filter set to only shows just the blueprint recipes', () => {
+    const stores = makeStores()
+    addBlueprintRecipe(stores)
+    stores.buildStore.setCell('userSettings', 'st1', 'blueprintMode', 'only')
+    renderProducts(stores)
+    expect(countProductRows()).toBe(1)
+  })
+
+  it('changing the blueprint SelectButton writes the userSettings.blueprintMode cell', async () => {
+    const stores = makeStores()
+    addBlueprintRecipe(stores)
+    renderProducts(stores)
+    const filterBtn = document.body
+      .querySelector('.pi-filter')!
+      .closest('button') as HTMLButtonElement
+    fireEvent.click(filterBtn)
+    const excludeBtn = await waitFor(() => screen.getByText('Exclude'))
+    fireEvent.click(excludeBtn)
+    expect(stores.buildStore.getCell('userSettings', 'st1', 'blueprintMode')).toBe('exclude')
+  })
+
   it('toggles a tag filter via the filter overlay', () => {
     const stores = makeStores()
     // Add a tag the recipe consumes so a tag option appears.
