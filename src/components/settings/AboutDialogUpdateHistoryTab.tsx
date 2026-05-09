@@ -1,0 +1,84 @@
+import { Button } from 'primereact/button'
+import { Message } from 'primereact/message'
+import { ProgressSpinner } from 'primereact/progressspinner'
+import { memo, useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
+import { fetchGitHubReleases, type GitHubRelease } from '@/lib/github-releases'
+
+import { AboutDialogReleasePanel } from './AboutDialogReleasePanel'
+
+import './AboutDialogUpdateHistoryTab.css'
+
+function AboutDialogUpdateHistoryTabImpl() {
+  const { t } = useTranslation()
+
+  const [items, setItems] = useState<GitHubRelease[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setLoading(true)
+    setError(null)
+    fetchGitHubReleases()
+      .then((fetched) => {
+        if (controller.signal.aborted) return
+        setItems(fetched)
+        setLoading(false)
+      })
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return
+        setError(err instanceof Error ? err.message : String(err))
+        setLoading(false)
+      })
+    return () => {
+      controller.abort()
+    }
+  }, [reloadKey])
+
+  const handleRetry = useCallback(() => {
+    setReloadKey((k) => k + 1)
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex justify-content-center p-5">
+        <ProgressSpinner aria-label={t('settings.about.loadingHistory')} />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-column align-items-center gap-3 p-4">
+        <Message severity="error" text={t('settings.about.historyErrorTitle')} className="w-full" />
+        <Message severity="error" text={error} className="w-full" />
+        <Button
+          label={t('settings.about.historyRetry')}
+          icon="pi pi-refresh"
+          onClick={handleRetry}
+        />
+      </div>
+    )
+  }
+
+  if (!items || items.length === 0) {
+    return (
+      <div className="p-3">
+        <Message severity="info" text={t('settings.about.historyEmpty')} className="w-full" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-column gap-4">
+      {items.map((release) => (
+        <AboutDialogReleasePanel key={release.id} release={release} />
+      ))}
+    </div>
+  )
+}
+
+export const AboutDialogUpdateHistoryTab = memo(AboutDialogUpdateHistoryTabImpl)

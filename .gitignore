@@ -4,6 +4,6 @@ dist
 build
 .env*
 *.tsbuildinfo
-.claude/settings.local.json
+.claude
 eco-game-files
 infra/cdk.out

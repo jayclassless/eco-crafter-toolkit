@@ -1,0 +1,36 @@
+.about-update-history-body img {
+  max-width: 100%;
+  height: auto;
+}
+
+.about-update-history-body h1,
+.about-update-history-body h2,
+.about-update-history-body h3,
+.about-update-history-body h4 {
+  margin: 0.75rem 0 0.5rem;
+}
+
+.about-update-history-body ul,
+.about-update-history-body ol {
+  padding-left: 1.5rem;
+}
+
+.about-update-history-body code {
+  background: var(--surface-100);
+  border-radius: 3px;
+  padding: 0 0.25rem;
+}
+
+.about-update-history-body pre code {
+  display: block;
+  padding: 0.5rem;
+  overflow-x: auto;
+}
+
+.about-update-history-body > *:first-child {
+  margin-top: 0;
+}
+
+.about-update-history-body > *:last-child {
+  margin-bottom: 0;
+}

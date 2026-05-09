@@ -324,6 +324,15 @@
       "save": "Save",
       "cancel": "Cancel",
       "delete": "Delete"
+    },
+    "about": {
+      "tabAbout": "About",
+      "tabUpdateHistory": "Update History",
+      "loadingHistory": "Loading…",
+      "historyErrorTitle": "Could not load update history.",
+      "historyRetry": "Retry",
+      "historyEmpty": "No releases yet.",
+      "noNotes": "No release notes provided."
     }
   }
 }
