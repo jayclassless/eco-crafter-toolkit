@@ -254,7 +254,12 @@
       "updateSuccessSummary": "Update complete",
       "updateSuccessDetail": "{name} updated to revision {rev}.",
       "updateErrorSummary": "Update failed",
-      "updateErrorDetail": "Could not update {name}. Please try again."
+      "updateErrorDetail": "Could not update {name}. Please try again.",
+      "storageFullSummary": "Browser storage full",
+      "storageFullDetail": "There isn't enough room in this browser's storage to finish. Delete a dataset you don't need and try again.",
+      "storageLabel": "Browser storage",
+      "storageUsageDetail": "{used} MB of ~{total} MB used ({percent}%)",
+      "storageAdvisory": "Estimated by the browser. Delete unused datasets to free space."
     },
     "deleteDataset": {
       "title": "Delete dataset?",

@@ -12,12 +12,14 @@ import { useLocalization } from '@/hooks/use-localization'
 import { countCustomEntities } from '@/lib/custom-entities'
 import { countBuildsByDataset, getDatasetIdsByBundledId } from '@/lib/dataset-utils'
 import { fetchDatasetManifest } from '@/lib/fetch-manifest'
+import { isQuotaExceeded } from '@/lib/storage-quota'
 import { useStores } from '@/stores/providers'
 import type { DatasetManifest } from '@/types/dataset-manifest'
 
 import { CustomEntitiesDialog } from './CustomEntitiesDialog'
 import { DatasetActionsMenu } from './DatasetActionsMenu'
 import { DeleteDatasetConfirmDialog } from './DeleteDatasetConfirmDialog'
+import { StorageUsageRow } from './StorageUsageRow'
 import type { DatasetRow } from './types'
 
 interface Props {
@@ -110,24 +112,34 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
   }, [manifest, storeTick, gameDataStore, buildStore, activeDatasetId])
 
   const handleDownloadError = useCallback(
-    (name: string) => {
+    (name: string, err: unknown) => {
+      const quota = isQuotaExceeded(err)
       toastRef.current?.show({
         severity: 'error',
-        summary: t('settings.datasets.downloadErrorSummary'),
-        detail: t('settings.datasets.downloadErrorDetail', { name }),
-        life: 5000,
+        summary: quota
+          ? t('settings.datasets.storageFullSummary')
+          : t('settings.datasets.downloadErrorSummary'),
+        detail: quota
+          ? t('settings.datasets.storageFullDetail')
+          : t('settings.datasets.downloadErrorDetail', { name }),
+        life: 8000,
       })
     },
     [t]
   )
 
   const handleUpdateError = useCallback(
-    (name: string) => {
+    (name: string, err: unknown) => {
+      const quota = isQuotaExceeded(err)
       toastRef.current?.show({
         severity: 'error',
-        summary: t('settings.datasets.updateErrorSummary'),
-        detail: t('settings.datasets.updateErrorDetail', { name }),
-        life: 5000,
+        summary: quota
+          ? t('settings.datasets.storageFullSummary')
+          : t('settings.datasets.updateErrorSummary'),
+        detail: quota
+          ? t('settings.datasets.storageFullDetail')
+          : t('settings.datasets.updateErrorDetail', { name }),
+        life: 8000,
       })
     },
     [t]
@@ -205,30 +217,33 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
         </div>
       )}
       {loadState === 'idle' && manifest !== null && (
-        <DataTable value={rows} dataKey="manifestId" size="small">
-          <Column header={t('settings.datasets.columnName')} body={nameTemplate} />
-          <Column
-            field="updatedAt"
-            header={t('settings.datasets.columnUpdated')}
-            style={{ width: '8rem' }}
-          />
-          <Column
-            header={t('settings.datasets.columnBuilds')}
-            body={buildsTemplate}
-            style={{ width: '7rem' }}
-          />
-          <Column
-            header={t('settings.datasets.columnCustomItems')}
-            body={customItemsTemplate}
-            style={{ width: '7rem' }}
-          />
-          <Column
-            header={t('settings.datasets.columnCustomRecipes')}
-            body={customRecipesTemplate}
-            style={{ width: '7rem' }}
-          />
-          <Column body={actionTemplate} style={{ width: '3rem' }} />
-        </DataTable>
+        <>
+          <DataTable value={rows} dataKey="manifestId" size="small">
+            <Column header={t('settings.datasets.columnName')} body={nameTemplate} />
+            <Column
+              field="updatedAt"
+              header={t('settings.datasets.columnUpdated')}
+              style={{ width: '8rem' }}
+            />
+            <Column
+              header={t('settings.datasets.columnBuilds')}
+              body={buildsTemplate}
+              style={{ width: '7rem' }}
+            />
+            <Column
+              header={t('settings.datasets.columnCustomItems')}
+              body={customItemsTemplate}
+              style={{ width: '7rem' }}
+            />
+            <Column
+              header={t('settings.datasets.columnCustomRecipes')}
+              body={customRecipesTemplate}
+              style={{ width: '7rem' }}
+            />
+            <Column body={actionTemplate} style={{ width: '3rem' }} />
+          </DataTable>
+          <StorageUsageRow refreshKey={storeTick} />
+        </>
       )}
       <DeleteDatasetConfirmDialog target={deleteTarget} onHide={() => setDeleteTarget(null)} />
       <CustomEntitiesDialog

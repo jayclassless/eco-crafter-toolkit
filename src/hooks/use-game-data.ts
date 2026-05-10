@@ -3,6 +3,7 @@ import type { Store } from 'tinybase'
 
 import { generateId } from '@/lib/ids'
 import type { ParsedDataset } from '@/lib/import-dataset'
+import { isQuotaExceeded, StorageQuotaError } from '@/lib/storage-quota'
 import { deleteLocalizedNamesForDataset, saveLocalizedNames } from '@/stores/localized-name-store'
 import { useStores } from '@/stores/providers'
 
@@ -25,6 +26,38 @@ export function createGameDataOps(gameDataStore: Store) {
     // its own transaction and the IndexedDB persister rewrites the entire
     // store on each, queueing thousands of full-store writes that saturate
     // the main thread for many seconds after import completes.
+    const rollback = () => {
+      // Roll the in-memory store back to a consistent state. The TinyBase
+      // auto-save will then push the rollback through to IDB; we can't await
+      // it (the persister doesn't expose a save promise to callers here), but
+      // an inconsistent store-vs-IDB snapshot is recoverable on next launch
+      // because deleteDataset's gameData rows haven't been re-written yet.
+      gameDataStore.transaction(() => {
+        for (const table of [
+          'skills',
+          'talents',
+          'talentBonuses',
+          'items',
+          'itemParts',
+          'tagItems',
+          'craftingTables',
+          'pluginModules',
+          'craftingTablePluginModules',
+          'recipes',
+          'recipeElements',
+          'modifiers',
+          'recipeUnlocks',
+        ] as const) {
+          for (const rowId of gameDataStore.getRowIds(table)) {
+            if (gameDataStore.getCell(table, rowId, 'datasetId') === datasetId) {
+              gameDataStore.delRow(table, rowId)
+            }
+          }
+        }
+        gameDataStore.delRow('datasets', datasetId)
+      })
+    }
+
     gameDataStore.transaction(() => {
       gameDataStore.setRow('datasets', datasetId, {
         id: datasetId,
@@ -91,7 +124,15 @@ export function createGameDataOps(gameDataStore: Store) {
       }
     })
 
-    await saveLocalizedNames(datasetId, parsed.localizedNames)
+    try {
+      await saveLocalizedNames(datasetId, parsed.localizedNames)
+    } catch (err) {
+      rollback()
+      if (isQuotaExceeded(err)) {
+        throw err instanceof StorageQuotaError ? err : new StorageQuotaError(err)
+      }
+      throw err
+    }
 
     return datasetId
   }
@@ -123,7 +164,16 @@ export function createGameDataOps(gameDataStore: Store) {
       }
       gameDataStore.delRow('datasets', datasetId)
     })
-    await deleteLocalizedNamesForDataset(datasetId)
+    try {
+      await deleteLocalizedNamesForDataset(datasetId)
+    } catch (err) {
+      // A delete that quota-fails is unusual but possible (IDB writes a
+      // tombstone). Surface it the same way as import so the UI can warn.
+      if (isQuotaExceeded(err)) {
+        throw err instanceof StorageQuotaError ? err : new StorageQuotaError(err)
+      }
+      throw err
+    }
   }
 
   return { getDatasets, importDataset, deleteDataset }

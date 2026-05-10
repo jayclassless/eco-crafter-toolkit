@@ -8,6 +8,7 @@
 - Added release notes to the About dialog.
 - Fixed a couple path routing issues in the Dependency Graph visualizer, in an
   attempt to reduce how often things overlap.
+- Added some safeguards around browser storage limits.
 
 ## 0.1.0 (2026-05-02)
 

@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 import type { ParsedDataset } from '@/lib/import-dataset'
+import { StorageQuotaError } from '@/lib/storage-quota'
 import { createGameDataStore } from '@/stores/game-data-store'
+import * as localizedNameStore from '@/stores/localized-name-store'
 import { __resetLocalizedNameStore, loadIndex } from '@/stores/localized-name-store'
 
 import { createGameDataOps } from '../use-game-data'
@@ -207,6 +209,47 @@ describe('createGameDataOps', () => {
       await ops.importDataset(emptyParsed(), 'A')
       await ops.importDataset(emptyParsed(), 'B')
       expect(ops.getDatasets()).toHaveLength(2)
+    })
+  })
+
+  describe('importDataset quota handling', () => {
+    it('rethrows as StorageQuotaError and rolls back the in-memory store when localized-name save quota-fails', async () => {
+      const ops = createGameDataOps(store)
+      const parsed = emptyParsed()
+      parsed.skills.push({
+        id: 's1',
+        name: 'Mining',
+        profession: '',
+        maxLevel: 7,
+        laborReducePercent: [1, 0.9],
+      } as ParsedDataset['skills'][number])
+      parsed.items.push({
+        id: 'i1',
+        name: 'Iron',
+        isTag: false,
+      } as ParsedDataset['items'][number])
+
+      const spy = vi
+        .spyOn(localizedNameStore, 'saveLocalizedNames')
+        .mockRejectedValueOnce(new DOMException('full', 'QuotaExceededError'))
+
+      await expect(ops.importDataset(parsed, 'X')).rejects.toBeInstanceOf(StorageQuotaError)
+
+      // Rollback: no dataset, skill, or item rows for the failed import.
+      expect(store.getRowIds('datasets')).toHaveLength(0)
+      expect(store.getRow('skills', 's1')).toEqual({})
+      expect(store.getRow('items', 'i1')).toEqual({})
+
+      spy.mockRestore()
+    })
+
+    it('rethrows non-quota errors verbatim without wrapping', async () => {
+      const ops = createGameDataOps(store)
+      const generic = new Error('disk read failed')
+      const spy = vi.spyOn(localizedNameStore, 'saveLocalizedNames').mockRejectedValueOnce(generic)
+
+      await expect(ops.importDataset(emptyParsed(), 'X')).rejects.toBe(generic)
+      spy.mockRestore()
     })
   })
 

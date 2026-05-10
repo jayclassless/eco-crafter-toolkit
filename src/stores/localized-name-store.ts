@@ -1,3 +1,4 @@
+import { toStoreError } from '@/lib/storage-quota'
 import type { LocalizedName } from '@/types/game-data'
 
 const DB_NAME = 'eco-crafter-localized-names'
@@ -67,7 +68,7 @@ export async function loadIndex(datasetId: string, locale: string): Promise<Loca
     const tx = db.transaction(STORE_NAME, 'readonly')
     const req = tx.objectStore(STORE_NAME).get(cacheKey)
     req.onsuccess = () => resolve(req.result as StoredValue | undefined)
-    req.onerror = () => reject(req.error)
+    req.onerror = () => reject(toStoreError(req.error))
   })
 
   const index: LocalizedNameIndex = new Map()
@@ -106,7 +107,8 @@ export async function saveLocalizedNames(datasetId: string, rows: LocalizedName[
       os.put(value, `${datasetId}:${locale}`)
     }
     tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
+    tx.onerror = () => reject(toStoreError(tx.error))
+    tx.onabort = () => reject(toStoreError(tx.error))
   })
 
   for (const key of cache.keys()) {
@@ -161,10 +163,11 @@ export async function upsertLocalizedNames(
         os.put(value, key)
         pending--
       }
-      getReq.onerror = () => reject(getReq.error)
+      getReq.onerror = () => reject(toStoreError(getReq.error))
     }
     tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
+    tx.onerror = () => reject(toStoreError(tx.error))
+    tx.onabort = () => reject(toStoreError(tx.error))
   })
 
   for (const key of cache.keys()) {
@@ -200,9 +203,10 @@ export async function removeLocalizedName(
       }
       cursor.continue()
     }
-    cursorReq.onerror = () => reject(cursorReq.error)
+    cursorReq.onerror = () => reject(toStoreError(cursorReq.error))
     tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
+    tx.onerror = () => reject(toStoreError(tx.error))
+    tx.onabort = () => reject(toStoreError(tx.error))
   })
 
   for (const key of cache.keys()) {
@@ -240,9 +244,10 @@ export async function readLocalizedNamesForEntity(
       }
       cursor.continue()
     }
-    cursorReq.onerror = () => reject(cursorReq.error)
+    cursorReq.onerror = () => reject(toStoreError(cursorReq.error))
     tx.oncomplete = () => resolve(out)
-    tx.onerror = () => reject(tx.error)
+    tx.onerror = () => reject(toStoreError(tx.error))
+    tx.onabort = () => reject(toStoreError(tx.error))
   })
 }
 
@@ -255,7 +260,8 @@ export async function deleteLocalizedNamesForDataset(datasetId: string): Promise
     const range = IDBKeyRange.bound(`${datasetId}:`, `${datasetId}:\uffff`, false, false)
     tx.objectStore(STORE_NAME).delete(range)
     tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
+    tx.onerror = () => reject(toStoreError(tx.error))
+    tx.onabort = () => reject(toStoreError(tx.error))
   })
   for (const key of cache.keys()) {
     if (key.startsWith(`${datasetId}:`)) cache.delete(key)

@@ -166,8 +166,10 @@ describe('DatasetActionsMenu', () => {
     openMenu()
     fireEvent.click(await findItem(/download/i))
     // Stub fetch returns ok:false so the download fails — the error callback
-    // should fire with the dataset's display name.
-    await waitFor(() => expect(onDownloadError).toHaveBeenCalledWith('Eco v13.0.2'))
+    // should fire with the dataset's display name and the underlying error.
+    await waitFor(() =>
+      expect(onDownloadError).toHaveBeenCalledWith('Eco v13.0.2', expect.any(Error))
+    )
   })
 
   it('outside click closes the menu', async () => {

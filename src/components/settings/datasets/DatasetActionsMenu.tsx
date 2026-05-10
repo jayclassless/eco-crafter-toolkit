@@ -15,8 +15,8 @@ interface Props {
   onSwitch: (datasetId: string) => void
   onManageCustom: (row: DatasetRow) => void
   onDelete: (row: DatasetRow) => void
-  onDownloadError: (name: string) => void
-  onUpdateError: (name: string) => void
+  onDownloadError: (name: string, err: unknown) => void
+  onUpdateError: (name: string, err: unknown) => void
   onUpdateSuccess: (name: string, revision: number) => void
 }
 
@@ -59,8 +59,8 @@ export function DatasetActionsMenu({
     setBusy(true)
     try {
       await importDatasetFromManifestEntry(row.entry, gameDataStore)
-    } catch {
-      onDownloadError(row.entry.name)
+    } catch (err) {
+      onDownloadError(row.entry.name, err)
     } finally {
       setBusy(false)
     }
@@ -73,7 +73,7 @@ export function DatasetActionsMenu({
       onUpdateSuccess(row.entry.name, row.entry.revision)
     } catch (err) {
       console.error('Dataset update failed', err)
-      onUpdateError(row.entry.name)
+      onUpdateError(row.entry.name, err)
     } finally {
       setBusy(false)
     }
