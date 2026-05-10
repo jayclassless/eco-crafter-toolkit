@@ -4,7 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Requirements
 
-- Changes to the project are not complete unless quality is verified. Run `mise exec -- aube run fullcheck` (lint + knip + typecheck + format + test:coverage). All must pass; resolve issues they surface.
+- Changes to the project are not complete unless quality is verified. Run each of the following scripts in `package.json` in order. Review their entire output, and address any issues they surface.
+  1. `typecheck`
+  2. `knip`
+  3. `format`
+  4. `lint`
+  5. `test`
 - When implementing features and changes, keep in mind the following order of priorities:
   1. Correctness: It is absolutely critical that the data and mathematics presented to the user is correct. Flaws in calculations are not acceptable.
   2. Performance: Aim to make the UI as responsive and quick as possible for the users.
