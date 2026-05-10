@@ -9,6 +9,7 @@ import {
 } from '@/components/price-calculator/recipe-dependency-graph/dependency-graph-context'
 import { DepItemNode } from '@/components/price-calculator/recipe-dependency-graph/DepItemNode'
 import { DepRecipeNode } from '@/components/price-calculator/recipe-dependency-graph/DepRecipeNode'
+import { DepShortcutEdge } from '@/components/price-calculator/recipe-dependency-graph/DepShortcutEdge'
 import { layoutTree } from '@/components/price-calculator/recipe-dependency-graph/recipe-dependency-layout'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useStoreRevision } from '@/hooks/use-store-revision'
@@ -24,6 +25,7 @@ interface Props {
 }
 
 const NODE_TYPES = { depRecipe: DepRecipeNode, depItem: DepItemNode }
+const EDGE_TYPES = { depShortcut: DepShortcutEdge }
 const GAME_TABLES = ['recipes', 'recipeElements', 'items', 'tagItems'] as const
 
 function targetKey(target: DependencyTreeStart): string {
@@ -145,6 +147,7 @@ export function RecipeDependencyGraph({ target, datasetId, onOpenRecipe, onOpenM
           nodes={nodes}
           edges={layout.edges}
           nodeTypes={NODE_TYPES}
+          edgeTypes={EDGE_TYPES}
           onNodesChange={onNodesChange}
           fitView
           minZoom={0.2}

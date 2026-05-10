@@ -53,6 +53,23 @@ interface SubtreeMeta {
   height: number
 }
 
+interface NodeBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/** Margin between an obstructing node and the peak of a shortcut edge's
+ * arc. Big enough that the edge is visually separated from the node,
+ * small enough that the arc isn't gratuitously tall. */
+const SHORTCUT_CLEARANCE = 30
+/** Inflation of the source-target y band when picking obstructing nodes
+ * — a node touching the smoothstep's horizontal segment by 1px isn't
+ * really obstructing, but a node within a few pixels reads as a near
+ * miss visually. */
+const SHORTCUT_BAND_MARGIN = 4
+
 /**
  * Compute a horizontal tree layout for a `DepNode` plus its shortcut
  * edges.
@@ -69,9 +86,15 @@ export function layoutTree(root: DepNode, shortcutEdges: ShortcutEdge[]): Layout
 
   const nodes: Node<DepNodeData>[] = []
   const edges: Edge[] = []
-  place(root, 0, 0, meta, nodes, edges)
+  const bounds = new Map<string, NodeBounds>()
+  place(root, 0, 0, meta, nodes, edges, bounds)
 
   for (const se of shortcutEdges) {
+    const peakY = computeShortcutPeakY(se.fromNodeId, se.toNodeId, bounds)
+    // peakY === null means no intermediate node sits in the smoothstep's
+    // y-band — a regular smoothstep routes around fine, no arc needed.
+    const type = peakY === null ? 'smoothstep' : 'depShortcut'
+    const data = peakY === null ? undefined : { peakY }
     if (se.isCycle) {
       edges.push({
         id: `cycle:${se.fromNodeId}->${se.toNodeId}`,
@@ -79,8 +102,9 @@ export function layoutTree(root: DepNode, shortcutEdges: ShortcutEdge[]): Layout
         target: se.toNodeId,
         sourceHandle: 'right',
         targetHandle: 'left',
-        type: 'smoothstep',
+        type,
         animated: true,
+        data,
         style: { stroke: 'var(--orange-500)', strokeDasharray: '6 4' },
       })
     } else {
@@ -90,7 +114,8 @@ export function layoutTree(root: DepNode, shortcutEdges: ShortcutEdge[]): Layout
         target: se.toNodeId,
         sourceHandle: 'right',
         targetHandle: 'left',
-        type: 'smoothstep',
+        type,
+        data,
       })
     }
   }
@@ -138,7 +163,8 @@ function place(
   yTop: number,
   meta: Map<string, SubtreeMeta>,
   nodes: Node<DepNodeData>[],
-  edges: Edge[]
+  edges: Edge[],
+  bounds: Map<string, NodeBounds>
 ): void {
   const own = nodeHeight(node)
   const subtreeHeight = meta.get(node.nodeId)?.height ?? own
@@ -150,6 +176,7 @@ function place(
     position: { x, y },
     data: toNodeData(node),
   })
+  bounds.set(node.nodeId, { x, y, width: NODE_WIDTH, height: own })
 
   let cy = yTop
   for (const child of node.children) {
@@ -161,10 +188,75 @@ function place(
       targetHandle: 'left',
       type: 'smoothstep',
     })
-    place(child, x + NODE_WIDTH + H_GAP, cy, meta, nodes, edges)
+    place(child, x + NODE_WIDTH + H_GAP, cy, meta, nodes, edges, bounds)
     const childHeight = meta.get(child.nodeId)?.height ?? nodeHeight(child)
     cy += childHeight + V_GAP
   }
+}
+
+/**
+ * Pick a `y` for a shortcut edge's arc, OR return null if a regular
+ * smoothstep would already route cleanly between source and target.
+ *
+ * A smoothstep edge crosses intermediate columns at the source's y
+ * (between source and the kink) and the target's y (between the kink
+ * and target). A node only obstructs if its y-range overlaps the band
+ * spanned by [sourceCenterY, targetCenterY]. When that happens, we arc
+ * over (above) or under (below) the obstruction — whichever side is
+ * the shorter detour from the band's center.
+ */
+function computeShortcutPeakY(
+  srcId: string,
+  tgtId: string,
+  bounds: Map<string, NodeBounds>
+): number | null {
+  const src = bounds.get(srcId)
+  const tgt = bounds.get(tgtId)
+  if (!src || !tgt) return null
+
+  // Arc / smoothstep traverses the x-strip from just past the leftmost
+  // endpoint's right side to just before the rightmost endpoint's left
+  // side. For forward edges that's (src.x_right, tgt.x_left); for back
+  // edges (cycle) it's (tgt.x_right, src.x_left). The min/max forms here
+  // produce the narrower interpretation, which is what we want — only
+  // strictly-between nodes obstruct.
+  const xMin = Math.min(src.x + src.width, tgt.x + tgt.width)
+  const xMax = Math.max(src.x, tgt.x)
+  if (xMin >= xMax) return null
+
+  const srcCenter = src.y + src.height / 2
+  const tgtCenter = tgt.y + tgt.height / 2
+  const bandMin = Math.min(srcCenter, tgtCenter) - SHORTCUT_BAND_MARGIN
+  const bandMax = Math.max(srcCenter, tgtCenter) + SHORTCUT_BAND_MARGIN
+
+  let topMost = Number.POSITIVE_INFINITY
+  let bottomMost = Number.NEGATIVE_INFINITY
+  for (const [id, b] of bounds) {
+    if (id === srcId || id === tgtId) continue
+    const xOverlap = b.x + b.width > xMin && b.x < xMax
+    if (!xOverlap) continue
+    const yOverlap = b.y < bandMax && b.y + b.height > bandMin
+    if (!yOverlap) continue
+    if (b.y < topMost) topMost = b.y
+    if (b.y + b.height > bottomMost) bottomMost = b.y + b.height
+  }
+  if (topMost === Number.POSITIVE_INFINITY) return null
+
+  const minST = Math.min(srcCenter, tgtCenter)
+  const maxST = Math.max(srcCenter, tgtCenter)
+  const overPeak = topMost - SHORTCUT_CLEARANCE
+  const underPeak = bottomMost + SHORTCUT_CLEARANCE
+  // Score each direction by how far the peak strays OUTSIDE the natural
+  // source-target y range. A peak that sits between src and tgt scores 0
+  // (no detour beyond the line); above min(src, tgt) or below max(src,
+  // tgt) costs the distance. This prefers routing through the gap
+  // between obstructions and the source/target rather than over the
+  // entire diagram.
+  const overOutside = Math.max(0, minST - overPeak)
+  const underOutside = Math.max(0, underPeak - maxST)
+  // Tie -> over (matches the original fix's behaviour for symmetric
+  // small-recipe cases).
+  return overOutside <= underOutside ? overPeak : underPeak
 }
 
 function toNodeData(node: DepNode): DepNodeData {

@@ -6,6 +6,8 @@
   "Hardwood Board", and "Softwood Board") are grouped together.
 - Added the ability to filter the Products lists by Blueprints.
 - Added release notes to the About dialog.
+- Fixed a couple path routing issues in the Dependency Graph visualizer, in an
+  attempt to reduce how often things overlap.
 
 ## 0.1.0 (2026-05-02)
 
