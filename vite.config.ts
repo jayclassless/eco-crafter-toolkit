@@ -11,6 +11,7 @@ import pkg from './package.json' with { type: 'json' }
 const MOCK_USING_TEST_FILES = [
   'src/components/price-calculator/__tests__/NavBar.test.tsx',
   'src/components/price-calculator/__tests__/PriceCalculator.test.tsx',
+  'src/components/price-calculator/recipe-dependency-graph/__tests__/DepItemNode.test.tsx',
   'src/components/price-calculator/recipe-dependency-graph/__tests__/RecipeDependencyGraph.test.tsx',
   'src/components/settings/datasets/__tests__/DeleteDatasetConfirmDialog.test.tsx',
   'src/workers/__tests__/price-solver.worker.test.ts',

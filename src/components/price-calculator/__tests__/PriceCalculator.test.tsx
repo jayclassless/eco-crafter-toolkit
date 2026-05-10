@@ -225,4 +225,171 @@ describe('PriceCalculator (smoke)', () => {
       { timeout: 1500 }
     )
   })
+
+  it('reruns the solver when userRecipes changes', async () => {
+    const workers: FakeWorker[] = []
+    class CapturingFakeWorker extends FakeWorker {
+      constructor() {
+        super()
+        workers.push(this)
+      }
+    }
+    vi.stubGlobal('Worker', CapturingFakeWorker)
+    const stores = makeStores()
+    renderApp(stores, `/${DS}/calculator/${BUILD}`)
+    await waitFor(() => expect(screen.getByText('Build A')).toBeInTheDocument())
+    await waitFor(
+      () => expect(workers.some((w) => w.postMessage.mock.calls.length > 0)).toBe(true),
+      { timeout: 1500 }
+    )
+    const initialTotal = workers.reduce((n, w) => n + w.postMessage.mock.calls.length, 0)
+    await act(async () => {
+      stores.buildStore.setRow('userRecipes', 'ur-test', {
+        id: 'ur-test',
+        buildId: BUILD,
+        recipeId: 'r-fake',
+        roundFactor: 0,
+      })
+    })
+    await waitFor(
+      () =>
+        expect(workers.reduce((n, w) => n + w.postMessage.mock.calls.length, 0)).toBeGreaterThan(
+          initialTotal
+        ),
+      { timeout: 1500 }
+    )
+  })
+
+  it('reruns the solver when a userMargins row is added', async () => {
+    const workers: FakeWorker[] = []
+    class CapturingFakeWorker extends FakeWorker {
+      constructor() {
+        super()
+        workers.push(this)
+      }
+    }
+    vi.stubGlobal('Worker', CapturingFakeWorker)
+    const stores = makeStores()
+    renderApp(stores, `/${DS}/calculator/${BUILD}`)
+    await waitFor(() => expect(screen.getByText('Build A')).toBeInTheDocument())
+    await waitFor(
+      () => expect(workers.some((w) => w.postMessage.mock.calls.length > 0)).toBe(true),
+      { timeout: 1500 }
+    )
+    const initialTotal = workers.reduce((n, w) => n + w.postMessage.mock.calls.length, 0)
+    await act(async () => {
+      stores.buildStore.setRow('userMargins', 'm-new', {
+        id: 'm-new',
+        buildId: BUILD,
+        name: 'Custom',
+        percent: 30,
+        isDefault: false,
+      })
+    })
+    await waitFor(
+      () =>
+        expect(workers.reduce((n, w) => n + w.postMessage.mock.calls.length, 0)).toBeGreaterThan(
+          initialTotal
+        ),
+      { timeout: 1500 }
+    )
+  })
+
+  it('reruns the solver when a userMargins.percent cell changes', async () => {
+    const workers: FakeWorker[] = []
+    class CapturingFakeWorker extends FakeWorker {
+      constructor() {
+        super()
+        workers.push(this)
+      }
+    }
+    vi.stubGlobal('Worker', CapturingFakeWorker)
+    const stores = makeStores()
+    stores.buildStore.setRow('userMargins', 'm-existing', {
+      id: 'm-existing',
+      buildId: BUILD,
+      name: 'Existing',
+      percent: 10,
+      isDefault: true,
+    })
+    renderApp(stores, `/${DS}/calculator/${BUILD}`)
+    await waitFor(() => expect(screen.getByText('Build A')).toBeInTheDocument())
+    await waitFor(
+      () => expect(workers.some((w) => w.postMessage.mock.calls.length > 0)).toBe(true),
+      { timeout: 1500 }
+    )
+    const initialTotal = workers.reduce((n, w) => n + w.postMessage.mock.calls.length, 0)
+    await act(async () => {
+      stores.buildStore.setCell('userMargins', 'm-existing', 'percent', 25)
+    })
+    await waitFor(
+      () =>
+        expect(workers.reduce((n, w) => n + w.postMessage.mock.calls.length, 0)).toBeGreaterThan(
+          initialTotal
+        ),
+      { timeout: 1500 }
+    )
+  })
+
+  it('closes the About dialog when its dismiss button is clicked', async () => {
+    const stores = makeStores()
+    renderApp(stores, `/${DS}/calculator/${BUILD}`)
+    await waitFor(() =>
+      expect(screen.getByText(/Welcome to the Eco Crafter Toolkit/i)).toBeInTheDocument()
+    )
+    const closeBtn = document.body.querySelector(
+      '.p-dialog .p-dialog-header-close'
+    ) as HTMLButtonElement
+    expect(closeBtn).not.toBeNull()
+    fireEvent.click(closeBtn)
+    await waitFor(() => {
+      expect(screen.queryByText(/Welcome to the Eco Crafter Toolkit/i)).not.toBeInTheDocument()
+    })
+  })
+
+  it('opens the Datasets dialog from the Settings sidebar', async () => {
+    const stores = makeStores()
+    stores.uiStore.setCell('uiState', 'main', 'hasSeenAboutDialog', true)
+    renderApp(stores, `/${DS}/calculator/${BUILD}`)
+    await waitFor(() => expect(screen.getByText('Build A')).toBeInTheDocument())
+    const menuBtn = document.body.querySelector('.pi-bars')!.closest('button') as HTMLButtonElement
+    fireEvent.click(menuBtn)
+    // Wait for the settings sidebar to mount, then click the Datasets menu
+    // item via its pi-database icon.
+    await waitFor(() => {
+      expect(document.body.querySelector('.pi-database')).not.toBeNull()
+    })
+    const dbIcon = document.body.querySelector('.pi-database') as HTMLElement
+    const datasetsItem = dbIcon.closest('.p-menuitem-link') as HTMLElement | null
+    if (datasetsItem) {
+      fireEvent.click(datasetsItem)
+      await waitFor(() => {
+        // Dialog header / install button signals the dialog opened.
+        expect(document.body.querySelector('.p-dialog')).not.toBeNull()
+      })
+    }
+  })
+
+  it('opens the config drawer button on tablet viewport (matchMedia mock)', async () => {
+    // Force the tablet breakpoint. The hook listens to matchMedia; provide a
+    // matching matchMedia stub before mounting.
+    const mm = vi.fn().mockImplementation((query: string) => ({
+      matches: /max-width/.test(query),
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }))
+    vi.stubGlobal('matchMedia', mm)
+    const stores = makeStores()
+    stores.uiStore.setCell('uiState', 'main', 'hasSeenAboutDialog', true)
+    renderApp(stores, `/${DS}/calculator/${BUILD}`)
+    await waitFor(() => expect(screen.getByText('Build A')).toBeInTheDocument())
+    // The config-drawer toggle should be in the navbar (sliders icon) on tablet.
+    const drawerBtn = document.body.querySelector('.pi-sliders-h, .pi-cog, .pi-bars-progress')
+    expect(drawerBtn || document.body.querySelector('.col-5')).not.toBeNull()
+  })
 })

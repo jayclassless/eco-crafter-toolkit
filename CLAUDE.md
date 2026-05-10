@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   3. `format`
   4. `lint`
   5. `test`
+- Never pipe the output of a quality-check script (`typecheck`, `knip`, `format`, `lint`, `test`, `test:coverage`, `fullcheck`) through `tail`, `head`, or `grep`. These commands write warnings (e.g. React `act()` warnings, deprecation notices, oxlint hints) inline between the test list and the final summary, and truncating filters silently discard them. Run the script unfiltered and read the full output.
 - When implementing features and changes, keep in mind the following order of priorities:
   1. Correctness: It is absolutely critical that the data and mathematics presented to the user is correct. Flaws in calculations are not acceptable.
   2. Performance: Aim to make the UI as responsive and quick as possible for the users.

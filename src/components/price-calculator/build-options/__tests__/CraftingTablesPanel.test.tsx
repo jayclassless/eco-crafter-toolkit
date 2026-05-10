@@ -201,6 +201,139 @@ describe('CraftingTablesPanel (smoke)', () => {
     expect(input.value).toBe('pott')
   })
 
+  it('opens the autocomplete via the dropdown button to drive completeMethod with profession grouping', async () => {
+    const stores = makeStores()
+    // Add a skill linked to a profession, plus two tables that share that
+    // profession, so the grouped output paths run.
+    stores.gameDataStore.setRow('skills', 'sk-smith', {
+      id: 'sk-smith',
+      datasetId: DS,
+      name: 'BlacksmithSkill',
+      profession: 'Blacksmith',
+      maxLevel: 7,
+      laborReducePercent: '[1,1,1,1,1,1,1,1]',
+    })
+    stores.gameDataStore.setRow('craftingTables', 'ct-pottery', {
+      id: 'ct-pottery',
+      datasetId: DS,
+      name: 'PotteryWheel',
+    })
+    stores.gameDataStore.setRow('craftingTables', 'ct-anvil2', {
+      id: 'ct-anvil2',
+      datasetId: DS,
+      name: 'AnvilItem2',
+    })
+    // Recipes linking tables to a skill / profession.
+    stores.gameDataStore.setRow('recipes', 'r-smith', {
+      id: 'r-smith',
+      datasetId: DS,
+      name: 'SmithRecipe',
+      familyName: 'Smith',
+      skillId: 'sk-smith',
+      requiredSkillLevel: 0,
+      isBlueprint: false,
+      isDefault: true,
+      craftingTableId: 'ct-anvil2',
+      baseCraftTime: 0,
+      baseLaborCost: 0,
+    })
+    renderPanel(stores)
+    // Clicking the dropdown trigger fires completeMethod with empty query —
+    // the search builds the grouped list internally.
+    const dropdownTrigger = document.body.querySelector(
+      '.p-autocomplete-dropdown'
+    ) as HTMLButtonElement
+    expect(dropdownTrigger).not.toBeNull()
+    fireEvent.click(dropdownTrigger)
+    await waitFor(() => {
+      // The grouped output paths produced "Other" (no profession for some
+      // tables) and "Blacksmith" labels in the suggestions panel — that's
+      // proof that searchTables ran and grouped at least one table by
+      // profession.
+      const text = document.body.textContent ?? ''
+      expect(text).toMatch(/Blacksmith/)
+      expect(text).toMatch(/Other/)
+    })
+  })
+
+  it('renders the plugin-module dropdown with two sorted modules and picks the vanilla one first', async () => {
+    const stores = makeStores()
+    // Two plugin modules: one vanilla (no skill), one specialized.
+    stores.gameDataStore.setRow('pluginModules', 'pm-vanilla', {
+      id: 'pm-vanilla',
+      datasetId: DS,
+      name: 'VanillaUpgrade',
+      pluginType: 'Resource',
+      percent: 0.9,
+      skillId: '',
+    })
+    stores.gameDataStore.setRow('pluginModules', 'pm-special', {
+      id: 'pm-special',
+      datasetId: DS,
+      name: 'SpecialUpgrade',
+      pluginType: 'Resource',
+      percent: 0.5,
+      skillId: 'sk-smith',
+    })
+    stores.gameDataStore.setRow('craftingTablePluginModules', 'ctpm-v', {
+      id: 'ctpm-v',
+      datasetId: DS,
+      craftingTableId: 'ct-anvil',
+      pluginModuleId: 'pm-vanilla',
+    })
+    stores.gameDataStore.setRow('craftingTablePluginModules', 'ctpm-s', {
+      id: 'ctpm-s',
+      datasetId: DS,
+      craftingTableId: 'ct-anvil',
+      pluginModuleId: 'pm-special',
+    })
+    renderPanel(stores)
+    const dropdown = document.body.querySelector('.p-dropdown') as HTMLElement
+    fireEvent.click(dropdown)
+    await waitFor(() => {
+      expect(screen.getByText(/VanillaUpgrade/)).toBeInTheDocument()
+      expect(screen.getByText(/SpecialUpgrade/)).toBeInTheDocument()
+    })
+  })
+
+  it('skips userCraftingTables rows belonging to other builds', () => {
+    const stores = makeStores()
+    // Add a userCraftingTables row from another build — must NOT render.
+    stores.buildStore.setRow('userCraftingTables', 'uct-other', {
+      id: 'uct-other',
+      buildId: 'other-build',
+      craftingTableId: 'ct-anvil',
+      pluginModuleId: '',
+      costPerMinute: 0.99,
+    })
+    renderPanel(stores)
+    const inputs = Array.from(document.body.querySelectorAll('input')) as HTMLInputElement[]
+    // Only the original build's costPerMinute (0.05) appears, not 0.99.
+    expect(inputs.some((i) => i.value === '0.99')).toBe(false)
+  })
+
+  it('skips plugin modules whose name is empty', () => {
+    const stores = makeStores()
+    // pluginModule without a name should be filtered out.
+    stores.gameDataStore.setRow('pluginModules', 'pm-nameless', {
+      id: 'pm-nameless',
+      datasetId: DS,
+      name: '',
+      pluginType: 'Resource',
+      percent: 0.9,
+    })
+    stores.gameDataStore.setRow('craftingTablePluginModules', 'ctpm-x', {
+      id: 'ctpm-x',
+      datasetId: DS,
+      craftingTableId: 'ct-anvil',
+      pluginModuleId: 'pm-nameless',
+    })
+    renderPanel(stores)
+    // Since the nameless module is the only one, the table still falls back
+    // to the N/A indicator.
+    expect(document.body.textContent).toMatch(/N\/A/i)
+  })
+
   it('clicking the cancel button in the delete dialog closes it without deleting', async () => {
     const stores = makeStores()
     stores.gameDataStore.setRow('recipes', 'r1', {

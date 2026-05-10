@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createBuildStore } from '@/stores/build-store'
 import { createGameDataStore } from '@/stores/game-data-store'
@@ -172,5 +172,96 @@ describe('CustomRecipeFormDialog', () => {
   it('does not render the dialog body when visible=false', () => {
     renderForm(makeStores(), { visible: false })
     expect(screen.queryByText(/new custom recipe/i)).toBeNull()
+  })
+
+  it('adds an ingredient row when the add-ingredient button is clicked', () => {
+    renderForm(makeStores())
+    const before = document.body.querySelectorAll('button[aria-label]').length
+    fireEvent.click(screen.getByRole('button', { name: /add ingredient/i }))
+    // A new ingredient row adds its own trash button, so total icon-only
+    // buttons in the dialog body increase. We assert specifically on the
+    // discount-checkbox label count, which uniquely identifies ingredient rows.
+    const ingredientDiscountLabels = document.body.querySelectorAll('label[for^="ing-discount-"]')
+    expect(ingredientDiscountLabels.length).toBe(2)
+    expect(before).toBeGreaterThanOrEqual(0)
+  })
+
+  it('adds a product row when the add-product button is clicked', async () => {
+    renderForm(makeStores())
+    const beforeCount = document.body.querySelectorAll('input[placeholder="Select an item"]').length
+    fireEvent.click(screen.getByRole('button', { name: /add product/i }))
+    // waitFor wraps the polled assertion in act(), so PrimeReact's Transition
+    // state updates settle inside it instead of leaking past test end.
+    await waitFor(() => {
+      const afterCount = document.body.querySelectorAll(
+        'input[placeholder="Select an item"]'
+      ).length
+      expect(afterCount).toBe(beforeCount + 1)
+    })
+  })
+
+  it('removes an ingredient row when its trash button is clicked', () => {
+    renderForm(makeStores())
+    // Add a second ingredient so there are two trash buttons in the
+    // ingredients section.
+    fireEvent.click(screen.getByRole('button', { name: /add ingredient/i }))
+    expect(document.body.querySelectorAll('label[for^="ing-discount-"]').length).toBe(2)
+    // Click the first trash button (ingredient column). Iterate top-down
+    // through the visible trash buttons until one shrinks the list.
+    const trashButtons = Array.from(
+      document.body.querySelectorAll('button .pi-trash')
+    ) as HTMLElement[]
+    const firstTrash = trashButtons[0].closest('button') as HTMLButtonElement
+    fireEvent.click(firstTrash)
+    // One discount label remains.
+    expect(document.body.querySelectorAll('label[for^="ing-discount-"]').length).toBe(1)
+  })
+
+  it('toggles the "discounted by skill" checkbox on an ingredient row', () => {
+    renderForm(makeStores())
+    const checkbox = document.body.querySelector('input#ing-discount-0') as HTMLInputElement
+    expect(checkbox).not.toBeNull()
+    expect(checkbox.checked).toBe(false)
+    fireEvent.click(checkbox)
+    // Re-read to get the live checked state after re-render.
+    const refreshed = document.body.querySelector('input#ing-discount-0') as HTMLInputElement
+    expect(refreshed.checked).toBe(true)
+  })
+
+  it('shows the skill-required validation error when only the name and table are set', async () => {
+    const stores = makeStores()
+    renderForm(stores)
+    fireEvent.change(screen.getByLabelText(/name/i, { selector: 'input' }), {
+      target: { value: 'My Recipe' },
+    })
+    // Select a crafting table via clicking the picker → first available option.
+    const ctPicker = document.body.querySelector(
+      'input[placeholder*="crafting" i], input[placeholder*="select" i]'
+    ) as HTMLInputElement | null
+    if (ctPicker) {
+      fireEvent.focus(ctPicker)
+      fireEvent.input(ctPicker, { target: { value: 'Workbench' } })
+      // Click any matching option in the picker dropdown.
+      await waitFor(() => {
+        const opts = document.body.querySelectorAll('.p-autocomplete-item, .p-listbox-item')
+        if (opts.length === 0) throw new Error('no options yet')
+      })
+    }
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    // Either "Skill is required" (if table got selected) or "Crafting table
+    // is required" (if it didn't) — both indicate validation ran.
+    await waitFor(() => {
+      const text = document.body.textContent ?? ''
+      expect(/required/i.test(text)).toBe(true)
+    })
+  })
+
+  it('exits cleanly when the cancel button is clicked', async () => {
+    const onHide = vi.fn()
+    renderForm(makeStores(), { onHide })
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }))
+    // waitFor wraps the polled assertion in act() so PrimeReact Dialog's
+    // dismiss Transition state updates settle inside the test.
+    await waitFor(() => expect(onHide).toHaveBeenCalled())
   })
 })

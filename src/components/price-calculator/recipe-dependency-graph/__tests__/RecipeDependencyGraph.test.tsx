@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -12,6 +12,10 @@ import { createUIStore } from '@/stores/ui-store'
 // that don't fully work in jsdom. Mock the package down to a passthrough
 // that just renders the resolved nodes — that's enough for the smoke test
 // to verify the graph wires through tree → layout → custom node components.
+// Exposes the most recent ReactFlow `onNodesChange` callback so tests can
+// drive node-change application without simulating real drag events.
+const reactFlowState: { onNodesChange?: (changes: unknown) => void } = {}
+
 vi.mock('@xyflow/react', () => {
   const passThroughComponent = (name: string) =>
     function Mock({ children }: { children?: React.ReactNode }) {
@@ -26,8 +30,10 @@ vi.mock('@xyflow/react', () => {
     nodes: MockNode[]
     nodeTypes?: Record<string, React.ComponentType<{ id: string; data: unknown }>>
     children?: React.ReactNode
+    onNodesChange?: (changes: unknown) => void
   }
-  function MockReactFlow({ nodes, nodeTypes, children }: MockReactFlowProps) {
+  function MockReactFlow({ nodes, nodeTypes, children, onNodesChange }: MockReactFlowProps) {
+    reactFlowState.onNodesChange = onNodesChange
     return (
       <div data-testid="react-flow">
         {nodes.map((n) => {
@@ -187,5 +193,144 @@ describe('RecipeDependencyGraph', () => {
     const openButtons = screen.getAllByLabelText('Open Recipe Details')
     fireEvent.click(openButtons[0])
     expect(onOpenRecipe).toHaveBeenCalledWith('r-bar')
+  })
+
+  it('applies node changes through onNodesChange without throwing', async () => {
+    render(
+      <StoreContext.Provider
+        value={{
+          ...stores,
+          gameDataPersister: stubPersister(),
+          buildPersister: stubPersister(),
+          uiPersister: stubPersister(),
+        }}
+      >
+        <RecipeDependencyGraph
+          target={{ type: 'recipe', recipeId: 'r-bar' }}
+          buildId={BUILD_ID}
+          datasetId={DS}
+        />
+      </StoreContext.Provider>
+    )
+    await waitFor(() => expect(screen.getByText('Smelt Bar')).toBeTruthy())
+    expect(reactFlowState.onNodesChange).toBeDefined()
+    // Drive a synthetic change array through — the mock applyNodeChanges
+    // returns the same nodes unchanged, so the only thing that matters is
+    // that the setNodes callback runs without throwing. Wrap in act() since
+    // the callback triggers a setNodes state update.
+    act(() => {
+      reactFlowState.onNodesChange!([])
+    })
+  })
+
+  it('switches the rendered selection when a multi-recipe dropdown option is clicked', async () => {
+    // Add a second recipe that produces iron-ore so the DepItemNode for
+    // iron-ore renders a recipe dropdown. Picking the alternative writes a
+    // selection into the parent graph's selections state and triggers a
+    // layout recompute.
+    stores.gameDataStore.setRow('recipes', 'r-bar-2', {
+      id: 'r-bar-2',
+      datasetId: DS,
+      name: 'Smelt Bar Alt',
+    })
+    stores.gameDataStore.setRow('recipeElements', 'rp-2', {
+      id: 'rp-2',
+      datasetId: DS,
+      recipeId: 'r-bar-2',
+      itemOrTagId: 'iron-bar',
+      isProduct: true,
+      baseQuantity: 1,
+      index: 0,
+    })
+    await saveLocalizedNames(DS, [
+      {
+        id: '10',
+        entityType: 'recipe',
+        entityId: 'r-bar-2',
+        locale: 'en-US',
+        name: 'Smelt Bar Alt',
+      },
+    ])
+    render(
+      <StoreContext.Provider
+        value={{
+          ...stores,
+          gameDataPersister: stubPersister(),
+          buildPersister: stubPersister(),
+          uiPersister: stubPersister(),
+        }}
+      >
+        <RecipeDependencyGraph
+          target={{ type: 'item', itemId: 'iron-bar' }}
+          buildId={BUILD_ID}
+          datasetId={DS}
+        />
+      </StoreContext.Provider>
+    )
+    await waitFor(() => expect(screen.getByText('Iron Bar')).toBeTruthy())
+    // Open the recipe dropdown and pick the alt. We don't assert on the
+    // post-change layout (the mock layout is unchanged) — just that the
+    // onSelectRecipe path inside the parent runs to completion.
+    await waitFor(() => {
+      expect(document.body.querySelectorAll('.p-dropdown').length).toBeGreaterThanOrEqual(1)
+    })
+    const dropdown = document.body.querySelector('.p-dropdown') as HTMLElement
+    fireEvent.click(dropdown)
+    const altOption = await waitFor(() => screen.getByText('Smelt Bar Alt'))
+    fireEvent.click(altOption)
+  })
+
+  it('renders inside a .p-dialog ancestor to exercise the maximize-height effect', async () => {
+    // jsdom doesn't ship ResizeObserver. Provide a minimal one for the
+    // duration of this test so the maximize-height effect can run.
+    const originalRO = (globalThis as { ResizeObserver?: unknown }).ResizeObserver
+    class FakeRO {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    ;(globalThis as { ResizeObserver?: unknown }).ResizeObserver = FakeRO
+    try {
+      // Mount with a .p-dialog wrapper so the ResizeObserver /
+      // MutationObserver path in the useEffect kicks in. We don't assert on
+      // layout values — the goal here is to drive the effect body without
+      // throwing.
+      const Wrapper = () => (
+        <div className="p-dialog">
+          <div className="p-dialog-content">
+            <RecipeDependencyGraph
+              target={{ type: 'recipe', recipeId: 'r-bar' }}
+              buildId={BUILD_ID}
+              datasetId={DS}
+            />
+          </div>
+        </div>
+      )
+      render(
+        <StoreContext.Provider
+          value={{
+            ...stores,
+            gameDataPersister: stubPersister(),
+            buildPersister: stubPersister(),
+            uiPersister: stubPersister(),
+          }}
+        >
+          <Wrapper />
+        </StoreContext.Provider>
+      )
+      await waitFor(() => expect(screen.getByText('Smelt Bar')).toBeTruthy())
+      // Toggle the maximized class to drive the MutationObserver callback —
+      // the body of `measure` runs, querying `.p-dialog-content`. The
+      // observer's setMaximizedHeight state update fires inside act() so
+      // React doesn't warn about an unwrapped update.
+      const dialog = document.querySelector('.p-dialog') as HTMLElement
+      await act(async () => {
+        dialog.classList.add('p-dialog-maximized')
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      expect(document.body.querySelector('.dependency-graph-wrapper')).not.toBeNull()
+    } finally {
+      ;(globalThis as { ResizeObserver?: unknown }).ResizeObserver = originalRO
+    }
   })
 })

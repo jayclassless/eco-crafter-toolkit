@@ -150,4 +150,103 @@ describe('SkillsPanel (smoke)', () => {
     // The input value should be set (the AutoComplete debounces actual filter).
     expect(input.value).toBe('smel')
   })
+
+  it('opening the autocomplete dropdown groups results by profession with skill labels', async () => {
+    const stores = makeStores()
+    // Two additional skills under two different professions (no matching
+    // profession-skill row, so the raw profession name is the label fallback).
+    stores.gameDataStore.setRow('skills', 'sk-smelting', {
+      id: 'sk-smelting',
+      datasetId: DS,
+      name: 'SmeltingSkill',
+      profession: 'Mining',
+      maxLevel: 7,
+      laborReducePercent: '[1]',
+    })
+    stores.gameDataStore.setRow('skills', 'sk-cooking', {
+      id: 'sk-cooking',
+      datasetId: DS,
+      name: 'CookingSkill',
+      profession: 'Foodie',
+      maxLevel: 7,
+      laborReducePercent: '[1]',
+    })
+    renderPanel(stores)
+    const dropdown = document.body.querySelector('.p-autocomplete-dropdown') as HTMLButtonElement
+    fireEvent.click(dropdown)
+    // Two professions appear as group headers in the dropdown panel — proves
+    // the grouped-by-profession path ran with profession-label resolution.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(document.body.textContent).toMatch(/Mining/)
+    expect(document.body.textContent).toMatch(/Foodie/)
+  })
+
+  it('skips userSkills rows from other builds', () => {
+    const stores = makeStores()
+    // Foreign-build row must NOT render.
+    stores.buildStore.setRow('userSkills', 'us-other', {
+      id: 'us-other',
+      buildId: 'other-build',
+      skillId: 'sk-self',
+      level: 7,
+    })
+    renderPanel(stores)
+    // Only the original 'us-mine' row appears.
+    const rows = document.body.querySelectorAll('.p-datatable-tbody tr')
+    expect(rows.length).toBe(1)
+  })
+
+  it('renders talent rows when the skill has talents', () => {
+    const stores = makeStores()
+    // Attach two talents to the mining skill, ensuring the talentRow mapping
+    // logic and talent-level sort runs.
+    stores.gameDataStore.setRow('talents', 't-1', {
+      id: 't-1',
+      datasetId: DS,
+      skillId: 'sk-mine',
+      name: 'TalentOne',
+      level: 1,
+      talentGroupName: 'Group',
+      isLevelable: false,
+      maxTalentLevel: 0,
+    })
+    stores.gameDataStore.setRow('talents', 't-2', {
+      id: 't-2',
+      datasetId: DS,
+      skillId: 'sk-mine',
+      name: 'TalentTwo',
+      level: 2,
+      talentGroupName: 'Group',
+      isLevelable: false,
+      maxTalentLevel: 0,
+    })
+    renderPanel(stores)
+    // Talents column appears in the table body — at least one talent chip
+    // renders for the row.
+    expect(document.body.textContent).toMatch(/Group|Talent/i)
+  })
+
+  it('ignores userTalents rows from other builds in the talent bucket', () => {
+    const stores = makeStores()
+    stores.gameDataStore.setRow('talents', 't-1', {
+      id: 't-1',
+      datasetId: DS,
+      skillId: 'sk-mine',
+      name: 'TalentOne',
+      level: 1,
+      talentGroupName: 'Group',
+      isLevelable: false,
+      maxTalentLevel: 0,
+    })
+    stores.buildStore.setRow('userTalents', 'ut-other', {
+      id: 'ut-other',
+      buildId: 'other-build',
+      talentId: 't-1',
+      enabled: true,
+    })
+    renderPanel(stores)
+    // No throw — the foreign userTalent row was excluded from the lookup.
+    const rows = document.body.querySelectorAll('.p-datatable-tbody tr')
+    expect(rows.length).toBe(1)
+  })
 })

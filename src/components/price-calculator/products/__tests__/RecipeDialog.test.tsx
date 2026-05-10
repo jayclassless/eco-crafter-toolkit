@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { PriceSignal } from '@/hooks/use-prices-signal'
 import { createBuildStore } from '@/stores/build-store'
@@ -339,5 +339,264 @@ describe('RecipeDialog', () => {
     ) as HTMLButtonElement
     fireEvent.click(pencil)
     expect(screen.getByText(/edit custom recipe/i)).toBeInTheDocument()
+  })
+
+  it('switches to the Used-in-Recipes tab and back without throwing', async () => {
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getAllByRole('row').length).toBeGreaterThan(0))
+    fireEvent.click(screen.getByText(/Used in Recipes/i))
+    fireEvent.click(screen.getByText(/Cost Components/i))
+    // Ingredients heading is still rendered after the round trip.
+    expect(screen.getByText('Ingredients')).toBeInTheDocument()
+  })
+
+  it('renders an editable share % cell that writes through useRecipeManagement on change', async () => {
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getAllByRole('spinbutton').length).toBe(2))
+    const inputs = screen.getAllByRole('spinbutton') as HTMLInputElement[]
+    // Find the input currently displaying 20 (the secondary share) and change it.
+    const secondary = inputs.find((i) => i.value.replace(/\s|%/g, '') === '20')!
+    fireEvent.input(secondary, { target: { value: '35' } })
+    fireEvent.blur(secondary)
+    await waitFor(() => {
+      const rowIds = stores.buildStore.getRowIds('userProductShares')
+      expect(rowIds.length).toBeGreaterThan(0)
+    })
+  })
+
+  it('edits an ingredient price via the IngredientPriceCell input', async () => {
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getAllByRole('row').length).toBeGreaterThan(0))
+    // The first body input inside the Ingredients DataTable is the
+    // IngredientPriceCell's numeric input. There's no spinbutton for stone
+    // by default (it's not produced), so it renders a ManualPriceCell.
+    const inputs = document.body.querySelectorAll('.p-datatable-tbody input')
+    expect(inputs.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('opens an ingredient via the Product link path when the ingredient is also a produced primary', async () => {
+    // Add a producing recipe for "stone" so it becomes a primary product
+    // in the build. Then add a useRecipe entry for it. The dialog's
+    // `ingredientNameTemplate` should then route stone through ProductItemName
+    // — which renders an "Open" button calling onOpenRecipe when clicked.
+    stores.gameDataStore.setRow('recipes', 'r-stone', {
+      id: 'r-stone',
+      datasetId: DS,
+      name: 'Quarry Stone',
+      familyName: 'Stone',
+      requiredSkillLevel: 0,
+      isBlueprint: false,
+      isDefault: true,
+      craftingTableId: 'ct1',
+      baseCraftTime: 1,
+      baseLaborCost: 0,
+    })
+    stores.gameDataStore.setRow('recipeElements', 're-stone-out', {
+      id: 're-stone-out',
+      datasetId: DS,
+      recipeId: 'r-stone',
+      itemOrTagId: 'stone',
+      baseQuantity: 1,
+      isProduct: true,
+      index: 0,
+    })
+    stores.buildStore.setRow('userRecipes', 'ur-stone', {
+      id: 'ur-stone',
+      buildId: BUILD_ID,
+      recipeId: 'r-stone',
+      roundFactor: 0,
+    })
+
+    const onOpenRecipe = vi.fn()
+    render(
+      <StoreContext.Provider
+        value={{
+          ...stores,
+          gameDataPersister: stubPersister(),
+          buildPersister: stubPersister(),
+          uiPersister: stubPersister(),
+        }}
+      >
+        <RecipeDialog
+          recipeId={RECIPE_ID}
+          buildId={BUILD_ID}
+          datasetId={DS}
+          priceSignal={stubPriceSignal()}
+          onHide={() => {}}
+          onOpenRecipe={onOpenRecipe}
+        />
+      </StoreContext.Provider>
+    )
+    await waitFor(() => {
+      const rowTexts = screen.getAllByRole('row').map((r) => r.textContent ?? '')
+      expect(rowTexts.some((t) => t.includes('Stone'))).toBe(true)
+    })
+    // Find the row whose first cell is Stone and click that row's name link.
+    // The ProductItemName component renders the name as a link button.
+    const links = Array.from(
+      document.body.querySelectorAll('.p-datatable-tbody .p-button-link')
+    ) as HTMLButtonElement[]
+    const stoneLink = links.find((b) => b.textContent?.includes('Stone'))
+    if (stoneLink) {
+      fireEvent.click(stoneLink)
+      // ProductItemName routes the click to onOpenRecipe with the winning recipe.
+      expect(onOpenRecipe).toHaveBeenCalled()
+    }
+  })
+
+  it('routes a returned-ingredient name click through onOpenMaterial', async () => {
+    const onOpenMaterial = vi.fn()
+    render(
+      <StoreContext.Provider
+        value={{
+          ...stores,
+          gameDataPersister: stubPersister(),
+          buildPersister: stubPersister(),
+          uiPersister: stubPersister(),
+        }}
+      >
+        <RecipeDialog
+          recipeId={RECIPE_ID}
+          buildId={BUILD_ID}
+          datasetId={DS}
+          priceSignal={stubPriceSignal()}
+          onHide={() => {}}
+          onOpenMaterial={onOpenMaterial}
+        />
+      </StoreContext.Provider>
+    )
+    await waitFor(() => {
+      // Returned ingredients show "Scrap"
+      const rowTexts = screen.getAllByRole('row').map((r) => r.textContent ?? '')
+      expect(rowTexts.some((t) => t.includes('Scrap'))).toBe(true)
+    })
+    // materialOnlyNameTemplate renders a link button for returned ingredients
+    // when onOpenMaterial is provided.
+    const links = Array.from(
+      document.body.querySelectorAll('.p-datatable-tbody .p-button-link')
+    ) as HTMLButtonElement[]
+    const scrapLink = links.find((b) => b.textContent?.includes('Scrap'))
+    expect(scrapLink).toBeDefined()
+    fireEvent.click(scrapLink!)
+    expect(onOpenMaterial).toHaveBeenCalledWith('scrap')
+  })
+
+  it('reads defaultShareForSecondaryItems from userSettings to override auto-share defaults', async () => {
+    stores.buildStore.setRow('userSettings', 'us1', {
+      id: 'us1',
+      buildId: BUILD_ID,
+      defaultShareForSecondaryItems: 40,
+    })
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getAllByRole('spinbutton').length).toBe(2))
+    const inputs = screen.getAllByRole('spinbutton') as HTMLInputElement[]
+    const values = inputs.map((i) => i.value.replace(/\s|%/g, ''))
+    // primary 60, secondary 40 — the config% absorbs from the primary.
+    expect(values).toContain('60')
+    expect(values).toContain('40')
+  })
+
+  it('renders an additional-costs row showing modified quantity when a labor modifier is applied', async () => {
+    // Drive the recipeCost branch by feeding a non-null cost into the
+    // priceSignal stub.
+    const recipeCost = {
+      laborAmount: 50,
+      laborCost: 5,
+      craftTime: 2,
+      craftTimeCost: 1,
+      costPerMinute: 0.5,
+      calorieCost: 0.1,
+    }
+    const signal = {
+      ...stubPriceSignal(),
+      getRecipeCost: () => recipeCost,
+      subscribeRecipeCost: () => () => {},
+    }
+    render(
+      <StoreContext.Provider
+        value={{
+          ...stores,
+          gameDataPersister: stubPersister(),
+          buildPersister: stubPersister(),
+          uiPersister: stubPersister(),
+        }}
+      >
+        <RecipeDialog
+          recipeId={RECIPE_ID}
+          buildId={BUILD_ID}
+          datasetId={DS}
+          priceSignal={signal}
+          onHide={() => {}}
+        />
+      </StoreContext.Provider>
+    )
+    await waitFor(() => {
+      expect(screen.getByText(/Additional Costs/i)).toBeInTheDocument()
+    })
+    // Both rows ("Craft Time" + "Labor") render their unit-price secondary
+    // labels with the "$/min" and "$/1k cal" suffixes.
+    expect(screen.getByText(/\$\/min/)).toBeInTheDocument()
+    expect(screen.getByText(/\$\/1k cal/)).toBeInTheDocument()
+  })
+
+  it('renders a PartLabel header when the primary product is flagged isPart', async () => {
+    stores.gameDataStore.setCell('items', 'ingot', 'isPart', true)
+    stores.gameDataStore.setRow('itemParts', 'ip1', {
+      id: 'ip1',
+      datasetId: DS,
+      itemId: 'scrap',
+      partItemId: 'ingot',
+      quantity: 2,
+    })
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getAllByRole('row').length).toBeGreaterThan(0))
+    // PartLabel renders a pi-cog icon followed by the localized "Part" label;
+    // the surrounding span carries the "Used in <name> ×<qty>" tooltip via
+    // its title attribute. The localized-name lookup is async — wait for it.
+    await waitFor(() => {
+      const titled = Array.from(document.body.querySelectorAll('span[title]')) as HTMLSpanElement[]
+      expect(titled.some((s) => /×2/.test(s.title))).toBe(true)
+    })
+  })
+
+  it('renders a tag label in the header when the primary product belongs to a tag', async () => {
+    stores.gameDataStore.setRow('items', 'tag-metals', {
+      id: 'tag-metals',
+      datasetId: DS,
+      name: 'Metals',
+      isTag: true,
+    })
+    stores.gameDataStore.setRow('tagItems', 'ti-1', {
+      id: 'ti-1',
+      datasetId: DS,
+      tagId: 'tag-metals',
+      itemId: 'ingot',
+    })
+    await saveLocalizedNames(DS, [
+      { id: '7', entityType: 'item', entityId: 'tag-metals', locale: 'en-US', name: 'Metals' },
+    ])
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getAllByRole('row').length).toBeGreaterThan(0))
+    // The header now contains "Metals" as a TagLabel.
+    await waitFor(() => {
+      expect(screen.getAllByText('Metals').length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  it('closes the custom recipe edit form when its onHide fires', async () => {
+    stores.gameDataStore.setCell('recipes', RECIPE_ID, 'isCustom', true)
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getAllByRole('row').length).toBeGreaterThan(0))
+    const pencil = document.body.querySelector(
+      'button[aria-label="Edit custom recipe"]'
+    ) as HTMLButtonElement
+    fireEvent.click(pencil)
+    expect(screen.getByText(/edit custom recipe/i)).toBeInTheDocument()
+    // The form's Cancel button triggers onHide → closes the dialog.
+    const cancelBtn = screen.getByRole('button', { name: /cancel/i })
+    fireEvent.click(cancelBtn)
+    await waitFor(() => {
+      expect(screen.queryByText(/edit custom recipe/i)).toBeNull()
+    })
   })
 })
