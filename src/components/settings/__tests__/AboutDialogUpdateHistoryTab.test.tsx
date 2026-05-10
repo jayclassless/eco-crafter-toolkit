@@ -1,11 +1,51 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { ReactElement } from 'react'
+import type { Store } from 'tinybase'
+import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { _resetGitHubReleasesCacheForTests } from '@/lib/github-releases'
+import { createBuildStore } from '@/stores/build-store'
+import { createGameDataStore } from '@/stores/game-data-store'
+import { StoreContext } from '@/stores/providers'
+import { createUIStore } from '@/stores/ui-store'
 
 import { AboutDialogUpdateHistoryTab } from '../AboutDialogUpdateHistoryTab'
 
 import '@/i18n'
+
+function stubPersister(): IndexedDbPersister {
+  return { save: async () => {} } as unknown as IndexedDbPersister
+}
+
+function makeStores() {
+  return {
+    gameDataStore: createGameDataStore(),
+    buildStore: createBuildStore(),
+    uiStore: createUIStore(),
+  }
+}
+
+function renderWith(
+  ui: ReactElement,
+  stores: { gameDataStore: Store; buildStore: Store; uiStore: Store } = makeStores()
+) {
+  return {
+    stores,
+    ...render(
+      <StoreContext.Provider
+        value={{
+          ...stores,
+          gameDataPersister: stubPersister(),
+          buildPersister: stubPersister(),
+          uiPersister: stubPersister(),
+        }}
+      >
+        {ui}
+      </StoreContext.Provider>
+    ),
+  }
+}
 
 const SAMPLE_RELEASES = [
   {
@@ -44,7 +84,7 @@ describe('AboutDialogUpdateHistoryTab', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       () => new Promise(() => {}) // never resolves
     )
-    render(<AboutDialogUpdateHistoryTab />)
+    renderWith(<AboutDialogUpdateHistoryTab />)
     expect(screen.getByLabelText('Loading…')).toBeInTheDocument()
   })
 
@@ -52,7 +92,7 @@ describe('AboutDialogUpdateHistoryTab', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(JSON.stringify(SAMPLE_RELEASES), { status: 200 })
     )
-    render(<AboutDialogUpdateHistoryTab />)
+    renderWith(<AboutDialogUpdateHistoryTab />)
 
     await waitFor(() => {
       expect(screen.getByText('Release 0.2.0')).toBeInTheDocument()
@@ -72,7 +112,7 @@ describe('AboutDialogUpdateHistoryTab', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(JSON.stringify([]), { status: 200 })
     )
-    render(<AboutDialogUpdateHistoryTab />)
+    renderWith(<AboutDialogUpdateHistoryTab />)
     await waitFor(() => {
       expect(screen.getByText('No releases yet.')).toBeInTheDocument()
     })
@@ -84,7 +124,7 @@ describe('AboutDialogUpdateHistoryTab', () => {
       .mockResolvedValueOnce(new Response('boom', { status: 500, statusText: 'Server Error' }))
       .mockResolvedValueOnce(new Response(JSON.stringify(SAMPLE_RELEASES), { status: 200 }))
 
-    render(<AboutDialogUpdateHistoryTab />)
+    renderWith(<AboutDialogUpdateHistoryTab />)
 
     await waitFor(() => {
       expect(screen.getByText('Could not load update history.')).toBeInTheDocument()
@@ -97,5 +137,30 @@ describe('AboutDialogUpdateHistoryTab', () => {
       expect(screen.getByText('Release 0.2.0')).toBeInTheDocument()
     })
     expect(fetchSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('writes the latest release timestamp to lastReleasesViewedAt after a successful fetch', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify(SAMPLE_RELEASES), { status: 200 })
+    )
+    const { stores } = renderWith(<AboutDialogUpdateHistoryTab />)
+
+    await waitFor(() => {
+      expect(stores.uiStore.getCell('uiState', 'main', 'lastReleasesViewedAt')).toBe(
+        Date.parse('2026-04-01T12:00:00Z')
+      )
+    })
+  })
+
+  it('does not write lastReleasesViewedAt when no releases are returned', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify([]), { status: 200 })
+    )
+    const { stores } = renderWith(<AboutDialogUpdateHistoryTab />)
+
+    await waitFor(() => {
+      expect(screen.getByText('No releases yet.')).toBeInTheDocument()
+    })
+    expect(stores.uiStore.getCell('uiState', 'main', 'lastReleasesViewedAt')).toBe(0)
   })
 })

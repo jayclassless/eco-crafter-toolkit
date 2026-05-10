@@ -3,6 +3,8 @@ import { Tag } from 'primereact/tag'
 import { useTranslation } from 'react-i18next'
 
 import { NewsBadgeButton } from '@/components/game-news/NewsBadgeButton'
+import { useLocalization } from '@/hooks/use-localization'
+import { useReleasesBadgeCount } from '@/hooks/use-releases-badge'
 import { useStores } from '@/stores/providers'
 
 import { BuildSelector } from './BuildSelector'
@@ -25,8 +27,10 @@ export function NavBar({
   onOpenConfig,
 }: Props) {
   const { t } = useTranslation()
+  const { formatNumber } = useLocalization()
   const { gameDataStore } = useStores()
   const datasetName = (gameDataStore.getCell('datasets', datasetId, 'name') as string) ?? ''
+  const releasesCount = useReleasesBadgeCount()
 
   return (
     <div className="flex align-items-center gap-3 p-2 pb-0">
@@ -55,7 +59,13 @@ export function NavBar({
         onDeleted={onDeletedBuild}
       />
       <NewsBadgeButton />
-      <Button icon="pi pi-bars" text onClick={onOpenSettings} />
+      <Button
+        icon="pi pi-bars"
+        text
+        onClick={onOpenSettings}
+        badge={releasesCount > 0 ? formatNumber(releasesCount) : undefined}
+        badgeClassName="p-badge-danger"
+      />
     </div>
   )
 }

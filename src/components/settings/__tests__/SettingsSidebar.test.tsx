@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { Store } from 'tinybase'
 import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { _resetGitHubReleasesCacheForTests } from '@/lib/github-releases'
 import { createBuildStore } from '@/stores/build-store'
 import { createGameDataStore } from '@/stores/game-data-store'
 import { StoreContext } from '@/stores/providers'
@@ -63,6 +64,14 @@ function renderSidebar(opts: {
 describe('SettingsSidebar', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
+    _resetGitHubReleasesCacheForTests()
+    // Default to a never-resolving fetch so the releases-badge hook in the
+    // sidebar menu doesn't hit the network in tests that don't cover it.
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}))
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('opens to the menu view by default', () => {
@@ -114,6 +123,45 @@ describe('SettingsSidebar', () => {
     fireEvent.click(screen.getByText('About this App'))
     expect(onHide).toHaveBeenCalledTimes(1)
     expect(onOpenAbout).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders a danger badge on the About item when releases are unseen', async () => {
+    vi.restoreAllMocks()
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            id: 1,
+            tag_name: 'v0.3.0',
+            name: 'Release 0.3.0',
+            published_at: '2026-05-01T12:00:00Z',
+            body: '',
+            html_url: 'https://example.com/r/v0.3.0',
+            draft: false,
+            prerelease: false,
+          },
+        ]),
+        { status: 200 }
+      )
+    )
+    renderSidebar({})
+    await waitFor(() => {
+      const aboutAnchor = screen.getByText('About this App').closest('a')
+      expect(aboutAnchor?.querySelector('.p-badge')?.textContent).toBe('1')
+    })
+  })
+
+  it('does not render an About badge when no releases are unseen', () => {
+    const stores = makeStores()
+    stores.uiStore.setCell(
+      'uiState',
+      'main',
+      'lastReleasesViewedAt',
+      Date.parse('2099-01-01T00:00:00Z')
+    )
+    renderSidebar({ stores })
+    const aboutAnchor = screen.getByText('About this App').closest('a')
+    expect(aboutAnchor?.querySelector('.p-badge')).toBeNull()
   })
 
   it('resets to the menu view each time the sidebar opens', () => {

@@ -5,6 +5,7 @@ import { memo, useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { fetchGitHubReleases, type GitHubRelease } from '@/lib/github-releases'
+import { useStores } from '@/stores/providers'
 
 import { AboutDialogReleasePanel } from './AboutDialogReleasePanel'
 
@@ -12,6 +13,7 @@ import './AboutDialogUpdateHistoryTab.css'
 
 function AboutDialogUpdateHistoryTabImpl() {
   const { t } = useTranslation()
+  const { uiStore } = useStores()
 
   const [items, setItems] = useState<GitHubRelease[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -27,6 +29,15 @@ function AboutDialogUpdateHistoryTabImpl() {
         if (controller.signal.aborted) return
         setItems(fetched)
         setLoading(false)
+        if (fetched.length > 0) {
+          const latest = fetched.reduce((max, r) => {
+            const t = Date.parse(r.published_at)
+            return Number.isFinite(t) && t > max ? t : max
+          }, 0)
+          if (latest > 0) {
+            uiStore.setCell('uiState', 'main', 'lastReleasesViewedAt', latest)
+          }
+        }
       })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return
@@ -36,7 +47,7 @@ function AboutDialogUpdateHistoryTabImpl() {
     return () => {
       controller.abort()
     }
-  }, [reloadKey])
+  }, [uiStore, reloadKey])
 
   const handleRetry = useCallback(() => {
     setReloadKey((k) => k + 1)

@@ -1,7 +1,12 @@
+import { Badge } from 'primereact/badge'
 import { Dialog } from 'primereact/dialog'
 import { TabPanel, TabView } from 'primereact/tabview'
 import { Tag } from 'primereact/tag'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { useLocalization } from '@/hooks/use-localization'
+import { useReleasesBadgeCount } from '@/hooks/use-releases-badge'
 
 import { AboutDialogUpdateHistoryTab } from './AboutDialogUpdateHistoryTab'
 
@@ -10,8 +15,35 @@ interface Props {
   onHide: () => void
 }
 
+const UPDATE_HISTORY_TAB_INDEX = 1
+
 export function AboutDialog({ visible, onHide }: Props) {
   const { t } = useTranslation()
+  const { formatNumber } = useLocalization()
+  const releasesCount = useReleasesBadgeCount()
+  const [activeIndex, setActiveIndex] = useState(0)
+
+  useEffect(() => {
+    if (visible) setActiveIndex(0)
+  }, [visible])
+
+  const updateHistoryHeader = (
+    <span className="inline-flex align-items-center gap-2">
+      {t('settings.about.tabUpdateHistory')}
+      {releasesCount > 0 && (
+        <Badge
+          severity="danger"
+          value={formatNumber(releasesCount)}
+          style={{
+            height: '1rem',
+            minWidth: '1rem',
+            lineHeight: '1rem',
+            fontSize: '0.625rem',
+          }}
+        />
+      )}
+    </span>
+  )
 
   const header = (
     <div className="flex align-items-center gap-3">
@@ -36,7 +68,7 @@ export function AboutDialog({ visible, onHide }: Props) {
       maximizable
       dismissableMask
     >
-      <TabView>
+      <TabView activeIndex={activeIndex} onTabChange={(e) => setActiveIndex(e.index)}>
         <TabPanel header={t('settings.about.tabAbout')}>
           <p className="mb-2 line-height-3">
             Welcome to the Eco Crafter Toolkit! The goal of this application is to provide players
@@ -104,8 +136,8 @@ export function AboutDialog({ visible, onHide }: Props) {
             .
           </p>
         </TabPanel>
-        <TabPanel header={t('settings.about.tabUpdateHistory')}>
-          {visible && <AboutDialogUpdateHistoryTab />}
+        <TabPanel header={updateHistoryHeader}>
+          {visible && activeIndex === UPDATE_HISTORY_TAB_INDEX && <AboutDialogUpdateHistoryTab />}
         </TabPanel>
       </TabView>
     </Dialog>
