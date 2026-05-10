@@ -45,7 +45,14 @@ interface ResolvedProduct {
   skillId: string | undefined
 }
 
-export function solve(input: SolverInput): SolverOutput {
+export interface SolveOptions {
+  /** Override for the iteration cap. Test seam — production callers should
+   * leave this unset and let the solver use its default of `2N+8` passes,
+   * which is well above any real convergence depth. */
+  maxPasses?: number
+}
+
+export function solve(input: SolverInput, options: SolveOptions = {}): SolverOutput {
   const {
     recipes,
     settings,
@@ -107,13 +114,20 @@ export function solve(input: SolverInput): SolverOutput {
   // passes instead of pushing duplicates or doing findIndex.
   const candidateIndex = new Map<string, number>()
   // Bound passes defensively. Convergence depth is the longest dependency
-  // chain in the build; 2N is well above that even pathologically.
-  const maxPasses = prepared.length * 2 + 8
+  // chain in the build; 2N is well above that even pathologically. The
+  // override is a test seam so the non-convergence path can be exercised.
+  const maxPasses = options.maxPasses ?? prepared.length * 2 + 8
   let pass = 0
   let changed = true
+  // Recipe ids that wrote a new costPrice during the *last* pass. When the
+  // pass cap exhausts (i.e. `changed` is still true), these are the recipes
+  // that were still oscillating — most likely participants in a dependency
+  // cycle. Reset at the top of each pass so we only retain the final pass.
+  let lastPassChangedRecipes = new Set<string>()
   while (changed && pass < maxPasses) {
     changed = false
     pass++
+    lastPassChangedRecipes = new Set<string>()
 
     for (let i = 0; i < prepared.length; i++) {
       const p = prepared[i]
@@ -195,7 +209,10 @@ export function solve(input: SolverInput): SolverOutput {
           const mode = priceModes[prod.itemOrTagId] ?? 'min'
           const primaryRecipeId = primaryRecipeIds[prod.itemOrTagId] ?? ''
           const resolved = resolveProductCost(list, mode, primaryRecipeId)
-          if (costPrices[prod.itemOrTagId] !== resolved.costPrice) changed = true
+          if (costPrices[prod.itemOrTagId] !== resolved.costPrice) {
+            changed = true
+            lastPassChangedRecipes.add(recipe.id)
+          }
           costPrices[prod.itemOrTagId] = resolved.costPrice
           salePrices[prod.itemOrTagId] = resolved.salePrice
           producingSkills[prod.itemOrTagId] = resolved.skillId
@@ -207,8 +224,25 @@ export function solve(input: SolverInput): SolverOutput {
   for (let i = 0; i < prepared.length; i++) {
     if (!handledIds.has(prepared[i].recipe.id)) {
       errors.push({
+        code: 'unresolved',
         recipeId: prepared[i].recipe.id,
         message: 'Could not resolve all ingredient prices',
+      })
+    }
+  }
+
+  // The loop exits when (a) a pass produced no changes (converged) or
+  // (b) the pass cap was hit while changes were still happening. Case (b)
+  // means the prices we return are whatever the last partial pass wrote —
+  // not a stable fixed point. Surface the offending recipes so consumers
+  // know the result is suspect; otherwise the UI shows oscillating numbers
+  // with no indication anything is wrong.
+  if (changed) {
+    for (const recipeId of lastPassChangedRecipes) {
+      errors.push({
+        code: 'non-convergent',
+        recipeId,
+        message: 'Solver did not converge — recipe likely participates in a dependency cycle',
       })
     }
   }
@@ -261,7 +295,7 @@ export function solve(input: SolverInput): SolverOutput {
     }
   }
 
-  return { prices: outputPrices, recipePrices, recipeCosts, elementPrices: {}, errors }
+  return { prices: outputPrices, recipePrices, recipeCosts, errors }
 }
 
 function prepareRecipe(recipe: SolverRecipe, calorieCost: number): PreparedRecipe {

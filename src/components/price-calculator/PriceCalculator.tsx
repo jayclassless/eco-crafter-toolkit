@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Toast } from 'primereact/toast'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 
 import { AboutDialog } from '@/components/settings/AboutDialog'
@@ -19,9 +21,15 @@ import { Products } from './products/Products'
 export function PriceCalculator() {
   const { datasetId, buildId } = useParams<{ datasetId: string; buildId: string }>()
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { gameDataStore, buildStore, uiStore } = useStores()
   const { result, recalculate } = usePriceSolver()
   const { buildSnapshot } = useSolverSnapshot()
+  const solverToastRef = useRef<Toast>(null)
+  // Signature of the last error set we surfaced; lets the effect skip re-
+  // toasting when the solver re-runs and produces the same errors. Using a
+  // ref (not state) because changing it must not trigger another render.
+  const lastErrorSignatureRef = useRef<string>('')
   // Holds the latest computed prices in an out-of-React store. ProductsImpl
   // and Materials' PriceCells subscribe individually, so solver results
   // update only the cells whose price actually changed — the Products
@@ -155,6 +163,36 @@ export function PriceCalculator() {
     priceSignal.setAll(result?.prices ?? {}, result?.recipePrices ?? {}, result?.recipeCosts ?? {})
   }, [result, priceSignal])
 
+  // Surface non-convergent solver errors as a toast. `unresolved` errors are
+  // intentionally NOT toasted — recipes whose ingredients haven't been priced
+  // yet are the default state of the app (users price materials over time),
+  // so toasting them would be constant noise. Non-convergence means the math
+  // is unstable and the displayed prices are suspect, which is genuinely
+  // worth interrupting for. Dedup by a signature of the offending recipe ids
+  // so the same error set across solver re-runs doesn't re-toast on every
+  // unrelated edit.
+  useEffect(() => {
+    const nonConvergent = (result?.errors ?? []).filter((e) => e.code === 'non-convergent')
+    const signature = nonConvergent
+      .map((e) => e.recipeId)
+      .sort()
+      .join('|')
+    if (signature === lastErrorSignatureRef.current) return
+    lastErrorSignatureRef.current = signature
+    solverToastRef.current?.clear()
+    if (nonConvergent.length === 0) return
+
+    solverToastRef.current?.show({
+      severity: 'error',
+      summary: t('priceCalculator.solverError.nonConvergentSummary'),
+      detail: t('priceCalculator.solverError.nonConvergentDetail', {
+        count: nonConvergent.length,
+      }),
+      sticky: true,
+      closable: true,
+    })
+  }, [result, t])
+
   if (!datasetId || !datasetValid) return <Navigate to="/" replace />
   if (!buildId || !buildValid) return <Navigate to={`/${datasetId}/calculator`} replace />
 
@@ -211,6 +249,7 @@ export function PriceCalculator() {
         }}
       />
       <AboutDialog visible={aboutVisible} onHide={() => setAboutVisible(false)} />
+      <Toast ref={solverToastRef} position="top-right" />
     </div>
   )
 }

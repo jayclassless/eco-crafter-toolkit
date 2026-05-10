@@ -1676,6 +1676,57 @@ describe('solve — additional scenarios', () => {
       expect(result.errors).toHaveLength(2)
       const ids = result.errors.map((e) => e.recipeId).sort()
       expect(ids).toEqual(['r1', 'r2'])
+      expect(result.errors.every((e) => e.code === 'unresolved')).toBe(true)
+    })
+
+    it('reports non-convergent errors when the iteration cap is exhausted', () => {
+      // Two-recipe linear chain: seed → r1 prices m1, r2 (consumes m1) prices
+      // m2. With maxPasses=1, r2 cannot resolve in pass 1 because r1 runs
+      // first and writes m1, but r2's ingredient lookup happens on the same
+      // pass and the loop bails before re-running. Actually a 2-recipe chain
+      // needs 2 passes to fully converge: pass 1 writes m1 (changed=true),
+      // pass 2 picks up m1 in r2 (changed=true again on that pass), pass 3
+      // settles. Capping at 1 forces the cap to fire while r2 is still
+      // changing.
+      const r1 = makeRecipe({
+        id: 'r1',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'seed', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'm1', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const r2 = makeRecipe({
+        id: 'r2',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'm1', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'm2', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(makeInput({ recipes: [r1, r2], prices: { seed: 5 } }), { maxPasses: 1 })
+      const nonConvergent = result.errors.filter((e) => e.code === 'non-convergent')
+      expect(nonConvergent.length).toBeGreaterThan(0)
+      expect(nonConvergent.every((e) => e.recipeId === 'r1' || e.recipeId === 'r2')).toBe(true)
+    })
+
+    it('does not emit non-convergent errors on a normally-converging input', () => {
+      const r1 = makeRecipe({
+        id: 'r1',
+        baseLaborCost: 0,
+        baseCraftTime: 0,
+        laborModifiers: [],
+        ingredients: [{ itemOrTagId: 'seed', baseQuantity: -1, modifiers: [] }],
+        products: [
+          { itemOrTagId: 'm1', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+      const result = solve(makeInput({ recipes: [r1], prices: { seed: 5 } }))
+      expect(result.errors.filter((e) => e.code === 'non-convergent')).toHaveLength(0)
     })
 
     it('treats a self-referencing recipe as unresolvable', () => {

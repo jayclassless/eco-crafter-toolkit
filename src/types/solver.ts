@@ -90,7 +90,6 @@ export interface SolverOutput {
    * RecipeDialog reads this to render the "Additional Costs" section with
    * values that match the solver exactly. */
   recipeCosts: Record<string, RecipeCostBreakdown>
-  elementPrices: Record<string, SolverElementPrice>
   errors: SolverError[]
 }
 
@@ -115,15 +114,8 @@ export interface SolverPrice {
   recipeId: string
 }
 
-interface SolverElementPrice {
-  recipeId: string
-  itemOrTagId: string
-  unitPrice: number
-  totalPrice: number
-  isMarginPrice: boolean
-}
-
 export interface SolverError {
+  code: 'unresolved' | 'non-convergent'
   recipeId: string
   message: string
 }

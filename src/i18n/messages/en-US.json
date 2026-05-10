@@ -191,6 +191,11 @@
       "openItem": "Open Item Details",
       "openRecipe": "Open Recipe Details",
       "cycleEdgeLabel": "Circular dependency"
+    },
+    "solverError": {
+      "nonConvergentSummary": "Solver did not converge",
+      "nonConvergentDetail_one": "{count} recipe is part of a dependency cycle. The displayed prices may be unstable.",
+      "nonConvergentDetail_other": "{count} recipes are part of a dependency cycle. The displayed prices may be unstable."
     }
   },
   "gameNews": {

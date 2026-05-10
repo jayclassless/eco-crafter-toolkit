@@ -30,7 +30,6 @@ const fakeOutput: SolverOutput = {
   prices: { iron: { costPrice: 1, salePrice: 2, recipeId: 'r1' } },
   recipePrices: {},
   recipeCosts: {},
-  elementPrices: {},
   errors: [],
 }
 
