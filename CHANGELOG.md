@@ -1,6 +1,6 @@
 # Eco Crafter Toolkit Change Log
 
-## 0.2.0 (TBD)
+## 0.2.0 (2026-05-12)
 
 - Updated the Product list so that recipe families/variants (e.g., "Board",
   "Hardwood Board", and "Softwood Board") are grouped together.
