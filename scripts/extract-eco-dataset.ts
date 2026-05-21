@@ -7,25 +7,27 @@
  *     --eco-root /path/to/EcoServer \
  *     --output   /path/to/eco-vN.json \
  *     [--version  1] \
- *     [--crowdin-token TOKEN] [--crowdin-project 300454] \
+ *     [--translations-zip /path/to/eco.zip] \
  *     [--compare public/data/eco-v12.json]
  *
  * Environment variables (used when the corresponding flag is omitted):
- *   ECO_ROOT        -> --eco-root
- *   CROWDIN_TOKEN   -> --crowdin-token
+ *   ECO_ROOT              -> --eco-root
+ *   ECO_TRANSLATIONS_ZIP  -> --translations-zip
  *
  * The script regex-parses the auto-generated C# under
  *   <eco-root>/Eco_Data/Server/Mods/__core__/AutoGen
  * and emits a DatasetJson matching src/types/dataset-json.ts.
  *
- * Localization: if a Crowdin API token is provided, translations for the
- * Eco project (default id 300454) are downloaded and merged into every
- * entity's LocalizedName. Without a token, only en-US is populated.
+ * Localization: if a translations zip (an export from Eco's translation
+ * platform, containing per-language `eco-game-*.csv` and `eco-ecopedia-*.csv`
+ * files) is provided, translations are merged into every entity's
+ * LocalizedName. Without a zip, only en-US is populated.
  */
 
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 
+import AdmZip from 'adm-zip'
 import yargs from 'yargs'
 import { hideBin } from 'yargs/helpers'
 
@@ -52,8 +54,7 @@ interface Args {
   ecoRoot: string
   output: string
   version: number
-  crowdinToken?: string
-  crowdinProject: number
+  translationsZip?: string
   compare?: string
 }
 
@@ -78,16 +79,12 @@ async function parseArgs(): Promise<Args> {
       describe: 'Dataset version number',
       default: 1,
     })
-    .option('crowdin-token', {
+    .option('translations-zip', {
       type: 'string',
-      describe: 'Crowdin API token (env: CROWDIN_TOKEN)',
-      default: process.env.CROWDIN_TOKEN,
-      defaultDescription: '$CROWDIN_TOKEN',
-    })
-    .option('crowdin-project', {
-      type: 'number',
-      describe: 'Crowdin project id',
-      default: 300454,
+      describe:
+        'Path to translations zip from Eco translation platform (env: ECO_TRANSLATIONS_ZIP)',
+      default: process.env.ECO_TRANSLATIONS_ZIP,
+      defaultDescription: '$ECO_TRANSLATIONS_ZIP',
     })
     .option('compare', {
       type: 'string',
@@ -105,8 +102,7 @@ async function parseArgs(): Promise<Args> {
     ecoRoot: parsed.ecoRoot,
     output: parsed.output,
     version: parsed.version,
-    crowdinToken: parsed.crowdinToken,
-    crowdinProject: parsed.crowdinProject,
+    translationsZip: parsed.translationsZip,
     compare: parsed.compare,
   }
 }
@@ -952,41 +948,25 @@ async function findPaidItems(ecoRoot: string): Promise<Set<string>> {
 }
 
 // ---------------------------------------------------------------------------
-// Crowdin localization
+// Translations zip localization
+//
+// The Eco translation platform exports a zip of per-language CSVs with
+// columns: location,source,target,id,fuzzy,context,translator_comments,
+// developer_comments. We only consume the in-game strings, i.e. files named
+// `eco-game-<locale>.csv` and `eco-ecopedia-<locale>.csv`. Other groups
+// (`eco-web-client-*`, `eco-glossary-*`) are UI-chrome and out of scope.
 
-// Eco's Crowdin project ships its game strings as multi-column CSVs
-// (one column per language). We download the relevant files once and parse the
-// columns directly — no per-language export needed.
-const CROWDIN_HEADER_TO_LOCALE: Record<string, string> = {
-  English: 'en-US',
-  French: 'fr',
-  Spanish: 'es',
-  German: 'de',
-  Korean: 'ko',
-  BrazilianPortuguese: 'pt-BR',
-  SimplifedChinese: 'zh-Hans', // sic — Crowdin column header is misspelled
-  SimplifiedChinese: 'zh-Hans',
-  Russian: 'ru',
-  Italian: 'it',
-  Portuguese: 'pt-PT',
-  Hungarian: 'hu',
-  Japanese: 'ja',
-  Norwegian: 'nn',
-  Polish: 'pl',
-  Dutch: 'nl',
-  Romanian: 'ro',
-  Danish: 'da',
-  Czech: 'cs',
-  Swedish: 'sv',
-  Ukrainian: 'uk',
-  Greek: 'el',
-  Arabic: 'ar-sa',
-  Vietnamese: 'vi',
-  Turkish: 'tr',
+const TRANSLATION_FILE_RE = /^eco-(?:game|ecopedia)-([A-Za-z_]+)\.csv$/
+
+// Map platform locale codes to the canonical codes the app uses.
+function normalizeLocale(code: string): string {
+  // Underscore → hyphen (pt_BR → pt-BR, nb_NO → nb-NO, zh_Hans → zh-Hans).
+  const dashed = code.replace(/_/g, '-')
+  // Bare language codes the rest of the app expects with a region tag.
+  if (dashed === 'en') return 'en-US'
+  if (dashed === 'ar') return 'ar-sa'
+  return dashed
 }
-
-// Source file basenames in the Crowdin project that contain in-game strings.
-const CROWDIN_GAME_FILES = new Set(['defaultstrings.csv', 'EcopediaStrings.csv'])
 
 function parseCsvRow(line: string): string[] {
   const out: string[] = []
@@ -1039,84 +1019,57 @@ function parseCsv(text: string): string[][] {
   return rows
 }
 
-async function fetchCrowdin(
-  token: string,
-  projectId: number
-): Promise<Map<string, LocalizedNames>> {
+function loadTranslationsZip(zipPath: string): Map<string, LocalizedNames> {
   const map = new Map<string, LocalizedNames>()
-  let CrowdinMod: any
-  try {
-    CrowdinMod = await import('@crowdin/crowdin-api-client')
-  } catch (e) {
-    console.warn('[crowdin] @crowdin/crowdin-api-client not installed:', (e as Error).message)
-    return map
-  }
-  try {
-    const { default: Crowdin } = CrowdinMod
-    const client = new Crowdin({ token })
-    const files = await client.sourceFilesApi.listProjectFiles(projectId, { limit: 500 })
-    const matched = files.data
-      .map((f: any) => f.data)
-      .filter((f: any) => CROWDIN_GAME_FILES.has(f.name))
-    if (!matched.length) {
-      console.warn('[crowdin] no game string files found in project')
-      return map
+  const zip = new AdmZip(zipPath)
+  const entries = zip.getEntries()
+  const localeCounts = new Map<string, number>()
+  let fileCount = 0
+
+  for (const entry of entries) {
+    if (entry.isDirectory) continue
+    const base = path.basename(entry.entryName)
+    const m = TRANSLATION_FILE_RE.exec(base)
+    if (!m) continue
+    const locale = normalizeLocale(m[1])
+    const csv = entry.getData().toString('utf8')
+    const rows = parseCsv(csv)
+    if (rows.length < 2) continue
+    const header = rows[0]
+    const srcCol = header.indexOf('source')
+    const tgtCol = header.indexOf('target')
+    if (srcCol < 0 || tgtCol < 0) {
+      console.warn(`[translations] ${base}: missing source/target columns`)
+      continue
     }
-    for (const f of matched) {
-      try {
-        // Eco's CSVs are multi-language; the targetLanguageId is just required
-        // by the API but the returned file contains every column anyway.
-        const built = await client.translationsApi.buildProjectFileTranslation(projectId, f.id, {
-          targetLanguageId: 'fr',
-        })
-        const url = built.data?.url
-        if (!url) continue
-        const res = await fetch(url)
-        if (!res.ok) continue
-        const csv = await res.text()
-        const rows = parseCsv(csv)
-        if (!rows.length) continue
-        const header = rows[0]
-        const colLocale: (string | undefined)[] = header.map(
-          (h) => CROWDIN_HEADER_TO_LOCALE[h.trim()]
-        )
-        const enCol = header.findIndex((h) => h.trim() === 'English')
-        if (enCol < 0) {
-          console.warn(`[crowdin] ${f.name}: no English column`)
-          continue
-        }
-        let added = 0
-        for (let r = 1; r < rows.length; r++) {
-          const row = rows[r]
-          const en = row[enCol]
-          if (!en) continue
-          let entry = map.get(en)
-          if (!entry) {
-            entry = { 'en-US': en }
-            map.set(en, entry)
-            added++
-          }
-          for (let c = 0; c < row.length; c++) {
-            const loc = colLocale[c]
-            if (!loc || loc === 'en-US') continue
-            const val = row[c]
-            if (val) entry[loc] = val
-          }
-        }
-        console.log(`[crowdin] ${f.name}: parsed ${rows.length - 1} rows (+${added} new)`)
-      } catch (e) {
-        console.warn(`[crowdin] ${f.name}: ${(e as Error).message}`)
+    let added = 0
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r]
+      const en = row[srcCol]
+      const tgt = row[tgtCol]
+      if (!en) continue
+      let entry = map.get(en)
+      if (!entry) {
+        entry = { 'en-US': en }
+        map.set(en, entry)
+        added++
       }
+      if (locale !== 'en-US' && tgt) entry[locale] = tgt
     }
-  } catch (e) {
-    console.warn('[crowdin] fetch failed:', (e as Error).message)
+    fileCount++
+    localeCounts.set(locale, (localeCounts.get(locale) ?? 0) + rows.length - 1)
+    console.log(`[translations] ${base}: parsed ${rows.length - 1} rows (+${added} new sources)`)
   }
+
+  console.log(
+    `[translations] loaded ${fileCount} CSV(s) across ${localeCounts.size} locale(s): ${[...localeCounts.keys()].sort().join(', ')}`
+  )
   return map
 }
 
-function mergeLocalized(en: string, crowdin: Map<string, LocalizedNames>): LocalizedNames {
+function mergeLocalized(en: string, translations: Map<string, LocalizedNames>): LocalizedNames {
   const base: LocalizedNames = { 'en-US': en }
-  const found = crowdin.get(en)
+  const found = translations.get(en)
   if (found) Object.assign(base, found)
   return base
 }
@@ -1239,14 +1192,14 @@ async function main() {
     )
   }
 
-  // Pass 2: Crowdin
-  const crowdin = args.crowdinToken
-    ? await fetchCrowdin(args.crowdinToken, args.crowdinProject)
+  // Pass 2: translations
+  const translations = args.translationsZip
+    ? loadTranslationsZip(args.translationsZip)
     : new Map<string, LocalizedNames>()
-  if (!args.crowdinToken) {
-    console.warn('[extract] no --crowdin-token provided; emitting en-US only')
+  if (!args.translationsZip) {
+    console.warn('[extract] no --translations-zip provided; emitting en-US only')
   } else {
-    console.log(`[extract] crowdin source strings cached: ${crowdin.size}`)
+    console.log(`[extract] translation source strings cached: ${translations.size}`)
   }
 
   // Pass 3: cross-link
@@ -1276,7 +1229,7 @@ async function main() {
   for (const s of skills) {
     const json: SkillJson = {
       Name: s.name,
-      LocalizedName: mergeLocalized(s.display, crowdin),
+      LocalizedName: mergeLocalized(s.display, translations),
       Profession: s.profession,
       MaxLevel: s.maxLevel,
       LaborReducePercent: s.laborReducePercent,
@@ -1454,7 +1407,7 @@ async function main() {
       const bonuses = resolveBonuses(tn)
       const tj: TalentJson = {
         Name: tn,
-        LocalizedName: mergeLocalized(tg.display, crowdin),
+        LocalizedName: mergeLocalized(tg.display, translations),
         TalentGroupName: tg.name,
         Value: bonuses.length > 0 ? 0 : (t?.value ?? 0),
         Level: tg.level,
@@ -1493,7 +1446,7 @@ async function main() {
     if (!keep) continue
     const j: ItemJson = {
       Name: it.name,
-      LocalizedName: mergeLocalized(it.display, crowdin),
+      LocalizedName: mergeLocalized(it.display, translations),
     }
     if (it.isPart) j.IsPart = true
     if (it.requiredParts?.length) {
@@ -1530,18 +1483,18 @@ async function main() {
     const td = tagDefByName.get(name)
     tagJsons.push({
       Name: name,
-      LocalizedName: mergeLocalized(td?.display ?? name, crowdin),
+      LocalizedName: mergeLocalized(td?.display ?? name, translations),
       AssociatedItems: [...(tagItems.get(name) ?? [])].sort(),
     })
   }
 
   // 3f) Recipes: localize the names. Parents set LocalizedName['en-US'] to the
   // same string as FamilyName (e.g. "Boards"); variants set it to their own
-  // display name (e.g. "Hardwood Boards"). Using LocalizedName as the Crowdin
-  // lookup key works for both — FamilyName alone would mis-localize variants.
+  // display name (e.g. "Hardwood Boards"). Using LocalizedName as the
+  // translation lookup key works for both — FamilyName alone would mis-localize variants.
   const recipeJsons: RecipeJson[] = recipes.map((r) => ({
     ...r,
-    LocalizedName: mergeLocalized(r.LocalizedName['en-US'] ?? r.FamilyName, crowdin),
+    LocalizedName: mergeLocalized(r.LocalizedName['en-US'] ?? r.FamilyName, translations),
   }))
 
   const dataset: DatasetJson = {

@@ -9,10 +9,11 @@ matching `src/types/dataset-json.ts`.
 ### Prerequisites
 
 - A local Eco server install (the directory containing `Eco_Data/`).
-- `mise exec -- aube install` (the script's deps `tsx` and
-  `@crowdin/crowdin-api-client` live in root `devDependencies`).
-- Optional: a Crowdin API token for translations
-  (https://crowdin.com/settings#api-key). Without it, only `en-US` is populated.
+- `mise exec -- aube install` (the script's deps `tsx` and `adm-zip` live in
+  root `devDependencies`).
+- Optional: a translations zip from Eco's translation platform, downloadable
+  at https://localization.play.eco/download/eco/?format=zip:csv. Without it,
+  only `en-US` is populated.
 
 ### Usage
 
@@ -21,18 +22,20 @@ mise exec -- aube exec tsx scripts/extract-eco-dataset.ts \
   --eco-root /path/to/EcoServer \
   --output   /path/to/eco-vN.json \
   [--version 1] \
-  [--crowdin-token TOKEN] \
-  [--crowdin-project 300454] \
+  [--translations-zip /path/to/eco.zip] \
   [--compare public/data/eco-v12.json]
 ```
 
 `--eco-root` and `--output` are required; everything else has defaults
-(`--version` defaults to `1`, `--crowdin-project` to `300454`).
+(`--version` defaults to `1`). The translations zip is the file served by
+https://localization.play.eco/download/eco/?format=zip:csv; the script
+reads its `eco-game-<locale>.csv` and `eco-ecopedia-<locale>.csv` members
+to populate non-English `LocalizedName` entries.
 
 Environment variable fallbacks (used when the corresponding flag is omitted):
 
 - `ECO_ROOT` → `--eco-root`
-- `CROWDIN_TOKEN` → `--crowdin-token`
+- `ECO_TRANSLATIONS_ZIP` → `--translations-zip`
 
 The script never writes to `public/data/` automatically and never edits
 `datasets-manifest.json` — point `--output` wherever you want, then move and
@@ -68,8 +71,8 @@ spot-check against the source `.cs` files.
   elsewhere will appear with `Value: 0, Level: 0`.
 - Plugin module detection assumes the `EfficiencyModule` constructor signature
   used by the core templates.
-- Crowdin string matching is by exact English source text. New strings without
-  a Crowdin entry stay English-only.
+- Translation matching is by exact English source text. Strings without a
+  matching `source` row in the translations zip stay English-only.
 
 ## Extracting icons from an Eco game install
 

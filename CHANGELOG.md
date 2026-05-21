@@ -1,5 +1,9 @@
 # Eco Crafter Toolkit Change Log
 
+## 0.3.0 (TBD)
+
+- Switched from CrowdIn to Weblate to get translations for Eco dataset items.
+
 ## 0.2.0 (2026-05-12)
 
 - Updated the Product list so that recipe families/variants (e.g., "Board",
