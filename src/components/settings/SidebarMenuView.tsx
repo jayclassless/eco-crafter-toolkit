@@ -9,6 +9,7 @@ import { useNewsBadgeCount } from '@/hooks/use-news-badge'
 import { useReleasesBadgeCount } from '@/hooks/use-releases-badge'
 
 interface Props {
+  onSelectRecipeCalculator: () => void
   onSelectGameNews: () => void
   onSelectDatasets: () => void
   onSelectUiSettings: () => void
@@ -50,6 +51,7 @@ function badgedTemplate(count: number, format: (n: number) => string) {
 }
 
 export function SidebarMenuView({
+  onSelectRecipeCalculator,
   onSelectGameNews,
   onSelectDatasets,
   onSelectUiSettings,
@@ -61,6 +63,11 @@ export function SidebarMenuView({
   const releasesCount = useReleasesBadgeCount()
 
   const items: MenuItem[] = [
+    {
+      label: t('settings.menu.recipeCalculator'),
+      icon: 'pi pi-calculator',
+      command: onSelectRecipeCalculator,
+    },
     {
       label: t('settings.menu.gameNews'),
       icon: 'pi pi-megaphone',

@@ -3,6 +3,8 @@
 ## 0.3.0 (TBD)
 
 - Switched from CrowdIn to Weblate to get translations for Eco dataset items.
+- Added an ad-hoc recipe calculator for when you want to roughly calculate the
+  cost of items that aren't part of your build.
 
 ## 0.2.0 (2026-05-12)
 

@@ -60,9 +60,10 @@ describe('SidebarMenuView', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders the four menu items in order: game news, datasets, ui settings, about', () => {
+  it('renders the menu items in order: recipe calculator, game news, datasets, ui settings, about', () => {
     renderWith(
       <SidebarMenuView
+        onSelectRecipeCalculator={() => {}}
         onSelectGameNews={() => {}}
         onSelectDatasets={() => {}}
         onSelectUiSettings={() => {}}
@@ -70,13 +71,35 @@ describe('SidebarMenuView', () => {
       />
     )
     const labels = screen.getAllByRole('menuitem').map((el) => el.textContent?.trim())
-    expect(labels).toEqual(['Game News', 'Game Datasets', 'UI Settings', 'About this App'])
+    expect(labels).toEqual([
+      'Ad-Hoc Recipe Calculator',
+      'Game News',
+      'Game Datasets',
+      'UI Settings',
+      'About this App',
+    ])
+  })
+
+  it('invokes onSelectRecipeCalculator when the Ad-Hoc Recipe Calculator item is clicked', () => {
+    const onSelectRecipeCalculator = vi.fn()
+    renderWith(
+      <SidebarMenuView
+        onSelectRecipeCalculator={onSelectRecipeCalculator}
+        onSelectGameNews={() => {}}
+        onSelectDatasets={() => {}}
+        onSelectUiSettings={() => {}}
+        onSelectAbout={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByText('Ad-Hoc Recipe Calculator'))
+    expect(onSelectRecipeCalculator).toHaveBeenCalledTimes(1)
   })
 
   it('invokes onSelectGameNews when the Game News menu item is clicked', () => {
     const onSelectGameNews = vi.fn()
     renderWith(
       <SidebarMenuView
+        onSelectRecipeCalculator={() => {}}
         onSelectGameNews={onSelectGameNews}
         onSelectDatasets={() => {}}
         onSelectUiSettings={() => {}}
@@ -112,6 +135,7 @@ describe('SidebarMenuView', () => {
 
     renderWith(
       <SidebarMenuView
+        onSelectRecipeCalculator={() => {}}
         onSelectGameNews={() => {}}
         onSelectDatasets={() => {}}
         onSelectUiSettings={() => {}}
@@ -129,6 +153,7 @@ describe('SidebarMenuView', () => {
     const onSelectAbout = vi.fn()
     renderWith(
       <SidebarMenuView
+        onSelectRecipeCalculator={() => {}}
         onSelectGameNews={() => {}}
         onSelectDatasets={() => {}}
         onSelectUiSettings={() => {}}

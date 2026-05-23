@@ -35,6 +35,7 @@ function makeStores() {
 function renderSidebar(opts: {
   visible?: boolean
   onHide?: () => void
+  onOpenRecipeCalculator?: () => void
   onOpenGameNews?: () => void
   onOpenDatasets?: () => void
   onOpenAbout?: () => void
@@ -53,6 +54,7 @@ function renderSidebar(opts: {
       <SettingsSidebar
         visible={opts.visible ?? true}
         onHide={opts.onHide ?? (() => {})}
+        onOpenRecipeCalculator={opts.onOpenRecipeCalculator ?? (() => {})}
         onOpenGameNews={opts.onOpenGameNews ?? (() => {})}
         onOpenDatasets={opts.onOpenDatasets ?? (() => {})}
         onOpenAbout={opts.onOpenAbout ?? (() => {})}
@@ -183,6 +185,7 @@ describe('SettingsSidebar', () => {
         <SettingsSidebar
           visible={false}
           onHide={() => {}}
+          onOpenRecipeCalculator={() => {}}
           onOpenGameNews={() => {}}
           onOpenDatasets={() => {}}
           onOpenAbout={() => {}}
@@ -203,6 +206,7 @@ describe('SettingsSidebar', () => {
         <SettingsSidebar
           visible={true}
           onHide={() => {}}
+          onOpenRecipeCalculator={() => {}}
           onOpenGameNews={() => {}}
           onOpenDatasets={() => {}}
           onOpenAbout={() => {}}

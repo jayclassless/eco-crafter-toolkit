@@ -11,6 +11,7 @@ import './SettingsSidebar.css'
 interface Props {
   visible: boolean
   onHide: () => void
+  onOpenRecipeCalculator: () => void
   onOpenGameNews: () => void
   onOpenDatasets: () => void
   onOpenAbout: () => void
@@ -21,6 +22,7 @@ type View = 'menu' | 'uiSettings'
 export function SettingsSidebar({
   visible,
   onHide,
+  onOpenRecipeCalculator,
   onOpenGameNews,
   onOpenDatasets,
   onOpenAbout,
@@ -48,6 +50,11 @@ export function SettingsSidebar({
       </div>
     )
 
+  const handleSelectRecipeCalculator = () => {
+    onHide()
+    onOpenRecipeCalculator()
+  }
+
   const handleSelectGameNews = () => {
     onHide()
     onOpenGameNews()
@@ -67,6 +74,7 @@ export function SettingsSidebar({
     <Sidebar visible={visible} onHide={onHide} position="right" header={header}>
       {view === 'menu' ? (
         <SidebarMenuView
+          onSelectRecipeCalculator={handleSelectRecipeCalculator}
           onSelectGameNews={handleSelectGameNews}
           onSelectDatasets={handleSelectDatasets}
           onSelectUiSettings={() => setView('uiSettings')}

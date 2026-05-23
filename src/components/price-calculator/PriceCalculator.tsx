@@ -5,6 +5,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom'
 
 import { AboutDialog } from '@/components/settings/AboutDialog'
 import { DatasetsDialog } from '@/components/settings/datasets/DatasetsDialog'
+import { AdHocRecipeCalculatorDialog } from '@/components/settings/recipe-calculator/AdHocRecipeCalculatorDialog'
 import { SettingsSidebar } from '@/components/settings/SettingsSidebar'
 import { useIsTablet } from '@/hooks/use-is-tablet'
 import { usePriceSolver } from '@/hooks/use-price-solver'
@@ -39,6 +40,7 @@ export function PriceCalculator() {
   const [settingsVisible, setSettingsVisible] = useState(false)
   const [datasetsDialogVisible, setDatasetsDialogVisible] = useState(false)
   const [aboutVisible, setAboutVisible] = useState(false)
+  const [recipeCalculatorVisible, setRecipeCalculatorVisible] = useState(false)
   const [configDrawerVisible, setConfigDrawerVisible] = useState(false)
   const isTablet = useIsTablet()
 
@@ -235,6 +237,7 @@ export function PriceCalculator() {
       <SettingsSidebar
         visible={settingsVisible}
         onHide={() => setSettingsVisible(false)}
+        onOpenRecipeCalculator={() => setRecipeCalculatorVisible(true)}
         onOpenGameNews={() => navigate('/game-news')}
         onOpenDatasets={() => setDatasetsDialogVisible(true)}
         onOpenAbout={() => setAboutVisible(true)}
@@ -249,6 +252,13 @@ export function PriceCalculator() {
         }}
       />
       <AboutDialog visible={aboutVisible} onHide={() => setAboutVisible(false)} />
+      <AdHocRecipeCalculatorDialog
+        visible={recipeCalculatorVisible}
+        onHide={() => setRecipeCalculatorVisible(false)}
+        buildId={buildId}
+        datasetId={datasetId}
+        priceSignal={priceSignal}
+      />
       <Toast ref={solverToastRef} position="top-right" />
     </div>
   )

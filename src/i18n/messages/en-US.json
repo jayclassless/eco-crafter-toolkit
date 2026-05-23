@@ -226,10 +226,18 @@
       "teal": "Teal"
     },
     "menu": {
+      "recipeCalculator": "Ad-Hoc Recipe Calculator",
       "gameNews": "Game News",
       "datasets": "Game Datasets",
       "uiSettings": "UI Settings",
       "about": "About this App"
+    },
+    "adHocRecipeCalculator": {
+      "title": "Ad-Hoc Recipe Calculator",
+      "placeholder": "Search for a recipe…",
+      "costTotal": "Cost Total",
+      "productsTotal": "Products Total",
+      "unresolved": "Some ingredient prices could not be resolved."
     },
     "ui": {
       "title": "UI Settings",
