@@ -1,5 +1,6 @@
 import path from 'path'
 
+import { sentryVitePlugin } from '@sentry/vite-plugin'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vitest/config'
 
@@ -43,7 +44,23 @@ function steamNewsDevProxy(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), steamNewsDevProxy()],
+  plugins: [
+    react(),
+    steamNewsDevProxy(),
+    sentryVitePlugin({
+      org: 'ect-xe',
+      project: 'eco-crafter-toolkit',
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      sourcemaps: {
+        filesToDeleteAfterUpload: [
+          './**/*.map',
+          '.*/**/public/**/*.map',
+          './dist/**/client/**/*.map',
+        ],
+      },
+      telemetry: false,
+    }),
+  ],
   base: '/',
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
