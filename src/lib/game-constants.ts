@@ -11,3 +11,12 @@ export const ZERO_SHARE_SECONDARY_ITEM_NAMES = new Set([
   'TailingsItem',
   'WetTailingsItem',
 ])
+
+// Secondary products that are reusable containers/tools returned to the user
+// after being consumed upstream (e.g. a Barrel that carried the Petroleum a
+// recipe consumes). When one of these is produced as a non-primary product it
+// defaults to reintegrated — its value is credited against the recipe cost
+// rather than treated as a sellable co-product. Identified by raw
+// (non-localized) game name; curated, not auto-derived. Users can still
+// override per-recipe. See `computeReintegratedProductIds`.
+export const AUTO_REINTEGRATE_SECONDARY_ITEM_NAMES = new Set(['BarrelItem'])

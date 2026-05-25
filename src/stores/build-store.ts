@@ -73,6 +73,16 @@ export function createBuildStore() {
       productItemOrTagId: { type: 'string' },
       sharePercent: { type: 'number', default: 0 },
     },
+    // Explicit per-product reintegration overrides. A row exists only when the
+    // user has toggled a product away from its computed default; absence means
+    // "use the default rule" (see `computeReintegratedProductIds`).
+    userReintegratedProducts: {
+      id: { type: 'string' },
+      buildId: { type: 'string' },
+      userRecipeId: { type: 'string' },
+      productItemOrTagId: { type: 'string' },
+      isReintegrated: { type: 'boolean', default: false },
+    },
     userSettings: {
       id: { type: 'string' },
       buildId: { type: 'string' },

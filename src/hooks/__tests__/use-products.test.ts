@@ -244,6 +244,66 @@ describe('buildProducts', () => {
     }
   })
 
+  it('excludes a non-primary BarrelItem product (auto-reintegrated) from the product list', () => {
+    gameDataStore.setRow('items', 'item-barrel', {
+      id: 'item-barrel',
+      datasetId: 'ds1',
+      name: 'BarrelItem',
+      isTag: false,
+    })
+    // Barrel produced as a non-primary product (index 1) → auto-reintegrated.
+    gameDataStore.setRow('recipeElements', 're-barrel', {
+      id: 're-barrel',
+      datasetId: 'ds1',
+      recipeId: 'recipe-iron',
+      itemOrTagId: 'item-barrel',
+      baseQuantity: 3,
+      isProduct: true,
+      index: 1,
+    })
+    buildStore.setRow('userRecipes', 'ur1', {
+      id: 'ur1',
+      buildId: BUILD_ID,
+      recipeId: 'recipe-iron',
+      roundFactor: 0,
+    })
+    const items = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    expect(items.map((i) => i.primaryProductId)).toEqual(['item-iron'])
+  })
+
+  it('includes a container product when a user override turns reintegration off', () => {
+    gameDataStore.setRow('items', 'item-barrel', {
+      id: 'item-barrel',
+      datasetId: 'ds1',
+      name: 'BarrelItem',
+      isTag: false,
+    })
+    gameDataStore.setRow('recipeElements', 're-barrel', {
+      id: 're-barrel',
+      datasetId: 'ds1',
+      recipeId: 'recipe-iron',
+      itemOrTagId: 'item-barrel',
+      baseQuantity: 3,
+      isProduct: true,
+      index: 1,
+    })
+    buildStore.setRow('userRecipes', 'ur1', {
+      id: 'ur1',
+      buildId: BUILD_ID,
+      recipeId: 'recipe-iron',
+      roundFactor: 0,
+    })
+    buildStore.setRow('userReintegratedProducts', 'urp1', {
+      id: 'urp1',
+      buildId: BUILD_ID,
+      userRecipeId: 'ur1',
+      productItemOrTagId: 'item-barrel',
+      isReintegrated: false,
+    })
+    const items = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    expect(items.map((i) => i.primaryProductId).sort()).toEqual(['item-barrel', 'item-iron'])
+  })
+
   it('ignores recipe-margin links that belong to other builds', () => {
     buildStore.setRow('userRecipes', 'ur1', {
       id: 'ur1',

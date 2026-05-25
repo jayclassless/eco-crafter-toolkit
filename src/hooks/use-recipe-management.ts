@@ -3,6 +3,7 @@ import type { Store } from 'tinybase'
 
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { generateId } from '@/lib/ids'
+import { buildReintegrationOverrides, computeReintegratedProductIds } from '@/lib/reintegration'
 import { computeAutoShares, roundSharesPreservingSum } from '@/lib/share-defaults'
 import { useStores } from '@/stores/providers'
 
@@ -15,6 +16,7 @@ interface UseRecipeManagement {
   setProductMargin: (productId: string, marginId: string) => void
   setRoundFactor: (userRecipeId: string, factor: number) => void
   setProductShare: (userRecipeId: string, productItemOrTagId: string, percent: number) => void
+  setProductReintegrated: (userRecipeId: string, productItemOrTagId: string, value: boolean) => void
   setRecipeFavorite: (userRecipeId: string, favorite: boolean) => void
   setRecipesFavorite: (userRecipeIds: readonly string[], favorite: boolean) => void
 }
@@ -96,6 +98,12 @@ export function createRecipeManagement(
           buildStore.delRow('userProductShares', upsId)
         }
       }
+      for (const urpId of buildStore.getRowIds('userReintegratedProducts')) {
+        const urp = buildStore.getRow('userReintegratedProducts', urpId)
+        if (urp.userRecipeId === userRecipeId) {
+          buildStore.delRow('userReintegratedProducts', urpId)
+        }
+      }
       buildStore.delRow('userRecipes', userRecipeId)
     })
   }
@@ -139,15 +147,12 @@ export function createRecipeManagement(
     buildStore.setCell('userRecipes', userRecipeId, 'roundFactor', factor)
   }
 
-  const setProductShare = (userRecipeId: string, productItemOrTagId: string, percent: number) => {
-    // Resolve the recipe's non-reintegrated product item IDs in index order.
-    // Mirrors the solver's definition of "primary = first non-reintegrated
-    // product by recipeElements.index" so defaults line up.
-    const ur = buildStore.getRow('userRecipes', userRecipeId)
-    if (!ur) return
-    const recipeId = ur.recipeId as string
-
-    const ingredientIds = new Set<string>()
+  // Load a recipe's products (in index order), its ingredient item IDs, and the
+  // build's per-product reintegration overrides, then resolve which products are
+  // reintegrated via the shared helper. Used by both share editing and the
+  // reintegration toggle so they agree on the non-reintegrated set.
+  const getRecipeProductInfo = (userRecipeId: string, recipeId: string) => {
+    const ingredientItemIds = new Set<string>()
     const productsInOrder: { itemOrTagId: string; index: number }[] = []
     for (const reId of gameDataStore.getRowIds('recipeElements')) {
       const re = gameDataStore.getRow('recipeElements', reId)
@@ -158,13 +163,38 @@ export function createRecipeManagement(
           index: (re.index as number) ?? 0,
         })
       } else {
-        ingredientIds.add(re.itemOrTagId as string)
+        ingredientItemIds.add(re.itemOrTagId as string)
       }
     }
-    productsInOrder.sort((a, b) => a.index - b.index)
-    const nonReintegrated = productsInOrder
+    const orderedProductItemIds = productsInOrder
+      .sort((a, b) => a.index - b.index)
       .map((p) => p.itemOrTagId)
-      .filter((id) => !ingredientIds.has(id))
+
+    const userOverrides =
+      buildReintegrationOverrides(buildStore, buildId).get(userRecipeId) ??
+      new Map<string, boolean>()
+
+    const autoReintegrateSecondaryItemIds =
+      getGameDataIndexes(gameDataStore).recipeIndexes.autoReintegrateSecondaryItemIds
+    const reintegratedIds = computeReintegratedProductIds({
+      orderedProductItemIds,
+      ingredientItemIds,
+      autoReintegrateSecondaryItemIds,
+      userOverrides,
+    })
+    const nonReintegrated = orderedProductItemIds.filter((id) => !reintegratedIds.has(id))
+    return { orderedProductItemIds, ingredientItemIds, userOverrides, nonReintegrated }
+  }
+
+  const setProductShare = (userRecipeId: string, productItemOrTagId: string, percent: number) => {
+    // Resolve the recipe's non-reintegrated product item IDs in index order.
+    // Mirrors the solver's definition of "primary = first non-reintegrated
+    // product by recipeElements.index" so defaults line up.
+    const ur = buildStore.getRow('userRecipes', userRecipeId)
+    if (!ur) return
+    const recipeId = ur.recipeId as string
+
+    const { nonReintegrated } = getRecipeProductInfo(userRecipeId, recipeId)
 
     if (nonReintegrated.length === 0) return
     if (!nonReintegrated.includes(productItemOrTagId)) return
@@ -271,6 +301,80 @@ export function createRecipeManagement(
     })
   }
 
+  const setProductReintegrated = (
+    userRecipeId: string,
+    productItemOrTagId: string,
+    value: boolean
+  ) => {
+    const ur = buildStore.getRow('userRecipes', userRecipeId)
+    if (!ur) return
+    const recipeId = ur.recipeId as string
+
+    const { orderedProductItemIds, ingredientItemIds, userOverrides } = getRecipeProductInfo(
+      userRecipeId,
+      recipeId
+    )
+    if (!orderedProductItemIds.includes(productItemOrTagId)) return
+
+    // The computed default for this product, ignoring any override currently
+    // stored on it. We only persist an override when it diverges from the
+    // default, and clear it when the user toggles back to the default.
+    const overridesWithoutThis = new Map(userOverrides)
+    overridesWithoutThis.delete(productItemOrTagId)
+    const autoReintegrateSecondaryItemIds =
+      getGameDataIndexes(gameDataStore).recipeIndexes.autoReintegrateSecondaryItemIds
+    const defaultIds = computeReintegratedProductIds({
+      orderedProductItemIds,
+      ingredientItemIds,
+      autoReintegrateSecondaryItemIds,
+      userOverrides: overridesWithoutThis,
+    })
+    const defaultValue = defaultIds.has(productItemOrTagId)
+
+    let existingId = ''
+    for (const urpId of buildStore.getRowIds('userReintegratedProducts')) {
+      const urp = buildStore.getRow('userReintegratedProducts', urpId)
+      if (urp.buildId !== buildId) continue
+      if (urp.userRecipeId !== userRecipeId) continue
+      if (urp.productItemOrTagId !== productItemOrTagId) continue
+      existingId = urpId
+      break
+    }
+
+    // No-op if nothing changes (toggling to the already-effective value).
+    const effective = existingId
+      ? (buildStore.getCell('userReintegratedProducts', existingId, 'isReintegrated') as boolean)
+      : defaultValue
+    if (effective === value) return
+
+    buildStore.transaction(() => {
+      if (value === defaultValue) {
+        if (existingId) buildStore.delRow('userReintegratedProducts', existingId)
+      } else if (existingId) {
+        buildStore.setCell('userReintegratedProducts', existingId, 'isReintegrated', value)
+      } else {
+        const id = generateId()
+        buildStore.setRow('userReintegratedProducts', id, {
+          id,
+          buildId,
+          userRecipeId,
+          productItemOrTagId,
+          isReintegrated: value,
+        })
+      }
+
+      // Reintegration changed the non-reintegrated set, so any stored share
+      // split no longer sums correctly. Drop this recipe's share rows; shares
+      // fall back to the auto-default over the new non-reintegrated set.
+      for (const upsId of buildStore.getRowIds('userProductShares')) {
+        const ups = buildStore.getRow('userProductShares', upsId)
+        if (ups.buildId !== buildId) continue
+        if (ups.userRecipeId !== userRecipeId) continue
+        buildStore.delRow('userProductShares', upsId)
+      }
+    })
+  }
+
   const setRecipeFavorite = (userRecipeId: string, favorite: boolean) => {
     buildStore.setCell('userRecipes', userRecipeId, 'favorite', favorite)
   }
@@ -291,6 +395,7 @@ export function createRecipeManagement(
     setProductMargin,
     setRoundFactor,
     setProductShare,
+    setProductReintegrated,
     setRecipeFavorite,
     setRecipesFavorite,
   }

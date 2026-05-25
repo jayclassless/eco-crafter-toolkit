@@ -442,6 +442,93 @@ describe('createRecipeManagement', () => {
     })
   })
 
+  describe('setProductReintegrated', () => {
+    const setupProducts = (productIds: string[]) => {
+      const recipeId = 'recipe-multi'
+      setupRecipe(recipeId, 'ct-workbench')
+      productIds.forEach((pid, i) => {
+        gameDataStore.setRow('recipeElements', `re-p${i}`, {
+          id: `re-p${i}`,
+          datasetId: DATASET_ID,
+          recipeId,
+          itemOrTagId: pid,
+          baseQuantity: 1,
+          isProduct: true,
+          index: i,
+        })
+      })
+      return mgmt().addRecipe(recipeId)
+    }
+
+    const reintegratedFor = (userRecipeId: string): Record<string, boolean> => {
+      const out: Record<string, boolean> = {}
+      for (const id of buildStore.getRowIds('userReintegratedProducts')) {
+        const r = buildStore.getRow('userReintegratedProducts', id)
+        if (r.buildId !== BUILD_ID) continue
+        if (r.userRecipeId !== userRecipeId) continue
+        out[r.productItemOrTagId as string] = r.isReintegrated as boolean
+      }
+      return out
+    }
+
+    const sharesFor = (userRecipeId: string): Record<string, number> => {
+      const out: Record<string, number> = {}
+      for (const id of buildStore.getRowIds('userProductShares')) {
+        const r = buildStore.getRow('userProductShares', id)
+        if (r.buildId !== BUILD_ID) continue
+        if (r.userRecipeId !== userRecipeId) continue
+        out[r.productItemOrTagId as string] = r.sharePercent as number
+      }
+      return out
+    }
+
+    it('stores an override when turning a non-default product reintegrated', () => {
+      const ur = setupProducts(['a', 'b', 'c'])
+      mgmt().setProductReintegrated(ur, 'b', true)
+      expect(reintegratedFor(ur)).toEqual({ b: true })
+    })
+
+    it('clears the recipe share rows when reintegration changes', () => {
+      const ur = setupProducts(['a', 'b', 'c'])
+      mgmt().setProductShare(ur, 'a', 50)
+      expect(Object.keys(sharesFor(ur)).length).toBeGreaterThan(0)
+      mgmt().setProductReintegrated(ur, 'b', true)
+      expect(sharesFor(ur)).toEqual({})
+    })
+
+    it('stores an override when turning an auto-reintegrated container off', () => {
+      gameDataStore.setRow('items', 'barrel', {
+        id: 'barrel',
+        datasetId: DATASET_ID,
+        name: 'BarrelItem',
+        isTag: false,
+      })
+      const ur = setupProducts(['epoxy', 'barrel', 'sulfur'])
+      // Barrel defaults to reintegrated (non-primary container). Turning it off
+      // diverges from the default, so an override row is written.
+      mgmt().setProductReintegrated(ur, 'barrel', false)
+      expect(reintegratedFor(ur)).toEqual({ barrel: false })
+    })
+
+    it('removes the override when toggling back to the computed default', () => {
+      const ur = setupProducts(['a', 'b', 'c'])
+      mgmt().setProductReintegrated(ur, 'b', true)
+      expect(reintegratedFor(ur)).toEqual({ b: true })
+      // Default for b is false (not an ingredient, not a container) → override
+      // is dropped rather than stored as false.
+      mgmt().setProductReintegrated(ur, 'b', false)
+      expect(reintegratedFor(ur)).toEqual({})
+    })
+
+    it('removeRecipe also clears userReintegratedProducts for the recipe', () => {
+      const ur = setupProducts(['a', 'b', 'c'])
+      mgmt().setProductReintegrated(ur, 'b', true)
+      expect(Object.keys(reintegratedFor(ur))).toHaveLength(1)
+      mgmt().removeRecipe(ur)
+      expect(reintegratedFor(ur)).toEqual({})
+    })
+  })
+
   describe('setRecipeFavorite', () => {
     it('flips the favorite cell from false to true', () => {
       const id = mgmt().addRecipe('recipe-iron')

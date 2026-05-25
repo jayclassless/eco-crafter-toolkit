@@ -149,6 +149,12 @@ export function createCraftingTableManagement(
             buildStore.delRow('userProductShares', upsId)
           }
         }
+        for (const urpId of buildStore.getRowIds('userReintegratedProducts')) {
+          const urp = buildStore.getRow('userReintegratedProducts', urpId)
+          if (affectedUserRecipeIds.has(urp.userRecipeId as string)) {
+            buildStore.delRow('userReintegratedProducts', urpId)
+          }
+        }
         for (const urId of affectedUserRecipeIds) {
           buildStore.delRow('userRecipes', urId)
         }

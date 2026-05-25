@@ -1,8 +1,12 @@
 import { useCallback } from 'react'
 import type { Store } from 'tinybase'
 
-import { ZERO_SHARE_SECONDARY_ITEM_NAMES } from '@/lib/game-constants'
+import {
+  AUTO_REINTEGRATE_SECONDARY_ITEM_NAMES,
+  ZERO_SHARE_SECONDARY_ITEM_NAMES,
+} from '@/lib/game-constants'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
+import { buildReintegrationOverrides, computeReintegratedProductIds } from '@/lib/reintegration'
 import { computeAutoShares } from '@/lib/share-defaults'
 import { useStores } from '@/stores/providers'
 import type { PriceMode, SolverInput, SolverRecipe, SolverModifier } from '@/types/solver'
@@ -34,6 +38,10 @@ export interface RecipeIndexes {
    * waste byproducts stay at 0% even when the build's
    * `defaultShareForSecondaryItems` is non-zero. */
   zeroShareSecondaryItemIds: Set<string>
+  /** Item IDs whose raw name is in `AUTO_REINTEGRATE_SECONDARY_ITEM_NAMES`
+   * (e.g. Barrel). Consumed by `computeReintegratedProductIds` so a non-primary
+   * container product defaults to reintegrated (credited against recipe cost). */
+  autoReintegrateSecondaryItemIds: Set<string>
 }
 
 export interface RecipeBuildState {
@@ -42,6 +50,10 @@ export interface RecipeBuildState {
   userTalentsByTalentId: Map<string, { enabled: boolean; level: number }>
   userCraftingTablesByCTId: Map<string, { pluginModuleId: string; costPerMinute: number }>
   userProductSharesByUserRecipeId: Map<string, Map<string, number>>
+  /** Explicit per-product reintegration overrides, keyed by userRecipeId then
+   * productItemOrTagId. Absence of an item key means "use the default rule"
+   * (see `computeReintegratedProductIds`). */
+  userReintegratedProductsByUserRecipeId: Map<string, Map<string, boolean>>
   /** Build-level config: % of recipe cost split among non-zero secondaries
    * by default. See `computeAutoShares` in `src/lib/share-defaults.ts`. */
   defaultShareForSecondaryItems: number
@@ -171,9 +183,12 @@ export function buildRecipeIndexes(gameDataStore: Store): RecipeIndexes {
   }
 
   const zeroShareSecondaryItemIds = new Set<string>()
+  const autoReintegrateSecondaryItemIds = new Set<string>()
   for (const itemId of gameDataStore.getRowIds('items')) {
     const name = gameDataStore.getCell('items', itemId, 'name') as string | undefined
-    if (name && ZERO_SHARE_SECONDARY_ITEM_NAMES.has(name)) zeroShareSecondaryItemIds.add(itemId)
+    if (!name) continue
+    if (ZERO_SHARE_SECONDARY_ITEM_NAMES.has(name)) zeroShareSecondaryItemIds.add(itemId)
+    if (AUTO_REINTEGRATE_SECONDARY_ITEM_NAMES.has(name)) autoReintegrateSecondaryItemIds.add(itemId)
   }
 
   return {
@@ -185,6 +200,7 @@ export function buildRecipeIndexes(gameDataStore: Store): RecipeIndexes {
     getModifiers,
     computeEffectiveValue,
     zeroShareSecondaryItemIds,
+    autoReintegrateSecondaryItemIds,
   }
 }
 
@@ -245,6 +261,8 @@ export function buildRecipeBuildState(buildStore: Store, buildId: string): Recip
     inner.set(ups.productItemOrTagId as string, ups.sharePercent as number)
   }
 
+  const userReintegratedProductsByUserRecipeId = buildReintegrationOverrides(buildStore, buildId)
+
   let defaultShareForSecondaryItems = 20
   for (const rowId of buildStore.getRowIds('userSettings')) {
     const row = buildStore.getRow('userSettings', rowId)
@@ -259,6 +277,7 @@ export function buildRecipeBuildState(buildStore: Store, buildId: string): Recip
     userTalentsByTalentId,
     userCraftingTablesByCTId,
     userProductSharesByUserRecipeId,
+    userReintegratedProductsByUserRecipeId,
     defaultShareForSecondaryItems,
   }
 }
@@ -325,13 +344,14 @@ export function assembleSolverRecipe(
     }
   }
 
-  // Elements. We also collect ingredient item/tag IDs so products whose item
-  // is also consumed by this recipe (e.g. a returned tool, reclaimed scrap)
-  // can be flagged isReintegrated and have their value subtracted from the
-  // recipe's total cost in solver.ts.
+  // Elements. We also collect ingredient item/tag IDs and the products in
+  // recipeElement `index` order so `computeReintegratedProductIds` can decide
+  // which products are reintegrated (their value is subtracted from the
+  // recipe's total cost in solver.ts rather than priced as a co-product).
   const ingredients: SolverRecipe['ingredients'] = []
   const products: SolverRecipe['products'] = []
   const ingredientItemIds = new Set<string>()
+  const productOrder: { itemOrTagId: string; index: number }[] = []
 
   const elems = indexes.elementsByRecipeId.get(recipeId)
   if (elems) {
@@ -346,6 +366,7 @@ export function assembleSolverRecipe(
           isReintegrated: false,
           modifiers: elemMods,
         })
+        productOrder.push({ itemOrTagId, index: (re.index as number) ?? 0 })
       } else {
         ingredientItemIds.add(itemOrTagId)
         ingredients.push({
@@ -357,8 +378,19 @@ export function assembleSolverRecipe(
     }
   }
 
+  const orderedProductItemIds = productOrder
+    .sort((a, b) => a.index - b.index)
+    .map((p) => p.itemOrTagId)
+  const reintegratedIds = computeReintegratedProductIds({
+    orderedProductItemIds,
+    ingredientItemIds,
+    autoReintegrateSecondaryItemIds: indexes.autoReintegrateSecondaryItemIds,
+    userOverrides: userRecipeId
+      ? buildState.userReintegratedProductsByUserRecipeId.get(userRecipeId)
+      : undefined,
+  })
   for (const prod of products) {
-    if (ingredientItemIds.has(prod.itemOrTagId)) {
+    if (reintegratedIds.has(prod.itemOrTagId)) {
       prod.isReintegrated = true
     }
   }

@@ -56,6 +56,7 @@ export function computeAdHocRecipe(
       [craftingTableId, { pluginModuleId: controls.pluginModuleId, costPerMinute: 0 }],
     ]),
     userProductSharesByUserRecipeId: new Map(),
+    userReintegratedProductsByUserRecipeId: new Map(),
     defaultShareForSecondaryItems,
   }
 

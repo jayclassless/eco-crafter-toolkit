@@ -3,6 +3,7 @@ import type { Store } from 'tinybase'
 
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
+import { buildReintegrationOverrides, computeReintegratedProductIds } from '@/lib/reintegration'
 import { useStores } from '@/stores/providers'
 
 export interface Product {
@@ -237,6 +238,8 @@ export function buildProducts(
   const indexes = getGameDataIndexes(gameDataStore)
   const productsByRecipeId = indexes.productItemIdsByRecipeId
   const ingredientsByRecipeId = indexes.ingredientItemIdsByRecipeId
+  const autoReintegrateSecondaryItemIds = indexes.recipeIndexes.autoReintegrateSecondaryItemIds
+  const reintegrationOverrides = buildReintegrationOverrides(buildStore, buildId)
   const unlockingTalentsByRecipeId = indexes.unlockingTalentsByRecipeId
 
   // Index userRecipeMargins by userRecipeId once (build-scoped).
@@ -295,11 +298,17 @@ export function buildProducts(
       productsByRecipeId
     )
 
-    // Emit one entry per product that is NOT also an ingredient of this
-    // recipe — reintegrated byproducts are consumed internally and shouldn't
-    // appear in the user's product list.
+    // Emit one entry per product that is NOT reintegrated — reintegrated
+    // byproducts (returned tools/scrap or curated containers like Barrel) are
+    // credited against cost, not sold, so they shouldn't appear as products.
+    const reintegratedIds = computeReintegratedProductIds({
+      orderedProductItemIds: productItemIds,
+      ingredientItemIds: ingredientIds ?? new Set<string>(),
+      autoReintegrateSecondaryItemIds,
+      userOverrides: reintegrationOverrides.get(urId),
+    })
     for (const productId of productItemIds) {
-      if (ingredientIds?.has(productId)) continue
+      if (reintegratedIds.has(productId)) continue
       if (excludedItems.has(productId)) continue
       const productRow = gameDataStore.getRow('items', productId)
       items.push({

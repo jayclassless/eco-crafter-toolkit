@@ -17,6 +17,7 @@ import {
   useTableRowIdsRevision,
 } from '@/hooks/use-store-revision'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
+import { buildReintegrationOverrides, computeReintegratedProductIds } from '@/lib/reintegration'
 import { useStores } from '@/stores/providers'
 import type { PriceMode } from '@/types/solver'
 
@@ -48,7 +49,7 @@ interface Props {
 // added/removed (so the view-model picks up the new userPriceId for a
 // previously-unpriced item), which is handled by `useTableRowIdsRevision`
 // below.
-const BUILD_TABLES = ['userRecipes'] as const
+const BUILD_TABLES = ['userRecipes', 'userReintegratedProducts'] as const
 const USER_PRICES_TABLE = ['userPrices'] as const
 const GAME_TABLES = ['recipeElements', 'items', 'tagItems'] as const
 
@@ -89,8 +90,14 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
       // `tagItems` (~1300 rows) on every rebuild, which made a new
       // userPrices row (`userPricesRowIdsRev` bump) trigger a ~600ms
       // synchronous task.
-      const { productItemIdsByRecipeId, ingredientItemIdsByRecipeId, itemIdsByTagId } =
-        getGameDataIndexes(gameDataStore)
+      const {
+        productItemIdsByRecipeId,
+        ingredientItemIdsByRecipeId,
+        itemIdsByTagId,
+        recipeIndexes,
+      } = getGameDataIndexes(gameDataStore)
+      const autoReintegrateSecondaryItemIds = recipeIndexes.autoReintegrateSecondaryItemIds
+      const reintegrationOverrides = buildReintegrationOverrides(buildStore, buildId)
 
       // Index userPrices by itemOrTagId for this build. We only care about
       // `userPriceId` (for cells to subscribe to their own cell) and
@@ -125,17 +132,23 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
         const ownProducts = productItemIdsByRecipeId.get(recipeId)
         if (!ownProducts && !ownIngredients) continue
 
-        // A recipe that consumes its own product (reintegration) is a net
-        // sink, not a source — skip it so the item still gets a manually
-        // priced row in the materials list. Other recipes that cleanly
-        // produce the same item will still mark it as produced.
+        // A reintegrated product (returned tool/scrap or a curated container
+        // like Barrel) is a net sink, not a source — skip it so the item still
+        // gets a manually priced row in the materials list. Other recipes that
+        // cleanly produce the same item will still mark it as produced.
         if (ownIngredients) {
           for (const id of ownIngredients) ingredientIds.add(id)
         }
         if (ownProducts) {
+          const reintegratedIds = computeReintegratedProductIds({
+            orderedProductItemIds: ownProducts,
+            ingredientItemIds: ownIngredients ?? new Set<string>(),
+            autoReintegrateSecondaryItemIds,
+            userOverrides: reintegrationOverrides.get(urId),
+          })
           let foundPrimary = false
           for (const itemId of ownProducts) {
-            if (ownIngredients?.has(itemId)) continue
+            if (reintegratedIds.has(itemId)) continue
             producedItemIds.add(itemId)
             if (!foundPrimary) {
               primaryProductIds.add(itemId)

@@ -163,6 +163,100 @@ describe('Materials (smoke)', () => {
     expect(inputs.length).toBeGreaterThanOrEqual(1)
   })
 
+  // Adds a Barrel produced as a non-primary product of r-iron (auto-reintegrated)
+  // and consumed by a second recipe so it lands in Materials.
+  const addReintegratedBarrel = (stores: {
+    gameDataStore: Store
+    buildStore: Store
+    uiStore: Store
+  }) => {
+    const { gameDataStore, buildStore } = stores
+    gameDataStore.setRow('items', 'it-barrel', {
+      id: 'it-barrel',
+      datasetId: DS,
+      name: 'BarrelItem',
+      isTag: false,
+    })
+    gameDataStore.setRow('items', 'it-plastic', {
+      id: 'it-plastic',
+      datasetId: DS,
+      name: 'PlasticItem',
+      isTag: false,
+    })
+    gameDataStore.setRow('recipeElements', 're-barrel-out', {
+      id: 're-barrel-out',
+      datasetId: DS,
+      recipeId: 'r-iron',
+      itemOrTagId: 'it-barrel',
+      baseQuantity: 1,
+      isProduct: true,
+      index: 2,
+    })
+    gameDataStore.setRow('recipes', 'r-plastic', {
+      id: 'r-plastic',
+      datasetId: DS,
+      name: 'PlasticRecipe',
+      familyName: 'Plastic',
+      skillId: 'sk-mine',
+      requiredSkillLevel: 1,
+      isBlueprint: false,
+      isDefault: true,
+      craftingTableId: 'ct-anvil',
+      baseCraftTime: 1,
+      baseLaborCost: 0,
+    })
+    gameDataStore.setRow('recipeElements', 're-plastic-in', {
+      id: 're-plastic-in',
+      datasetId: DS,
+      recipeId: 'r-plastic',
+      itemOrTagId: 'it-barrel',
+      baseQuantity: -1,
+      isProduct: false,
+      index: 0,
+    })
+    gameDataStore.setRow('recipeElements', 're-plastic-out', {
+      id: 're-plastic-out',
+      datasetId: DS,
+      recipeId: 'r-plastic',
+      itemOrTagId: 'it-plastic',
+      baseQuantity: 1,
+      isProduct: true,
+      index: 1,
+    })
+    buildStore.setRow('userRecipes', 'ur-plastic', {
+      id: 'ur-plastic',
+      buildId: BUILD,
+      recipeId: 'r-plastic',
+      roundFactor: 0,
+    })
+  }
+
+  it('treats a non-primary container product as a manual-priced material, not a produced one', () => {
+    const stores = makeStores()
+    addReintegratedBarrel(stores)
+    renderMaterials(stores)
+    // Barrel is reintegrated in r-iron, so it is NOT "produced" — both Ore and
+    // Barrel render editable manual-price inputs (no computed-price cell).
+    expect(document.body.querySelectorAll('.p-datatable-tbody input')).toHaveLength(2)
+    expect(document.body.querySelectorAll('.computed-price-icon')).toHaveLength(0)
+  })
+
+  it('shows a computed price for a container product when a user override turns reintegration off', () => {
+    const stores = makeStores()
+    addReintegratedBarrel(stores)
+    stores.buildStore.setRow('userReintegratedProducts', 'urp1', {
+      id: 'urp1',
+      buildId: BUILD,
+      userRecipeId: 'ur-iron',
+      productItemOrTagId: 'it-barrel',
+      isReintegrated: false,
+    })
+    renderMaterials(stores)
+    // Override off → Barrel is produced by r-iron and consumed by r-plastic, so
+    // it resolves to a computed price (no manual input). Only Ore stays manual.
+    expect(document.body.querySelectorAll('.p-datatable-tbody input')).toHaveLength(1)
+  })
+
   it('moving a manually-priced item to Products via the row actions menu writes the override flag', async () => {
     const stores = makeStores()
     // Mark the ingredient as a Materials override (so move-to-products is enabled).

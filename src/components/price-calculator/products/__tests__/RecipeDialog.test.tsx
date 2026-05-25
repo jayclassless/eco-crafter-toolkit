@@ -271,6 +271,40 @@ describe('RecipeDialog', () => {
     expect(screen.queryAllByRole('spinbutton')).toHaveLength(0)
   })
 
+  it('auto-reintegrates a non-primary BarrelItem product, leaving a single sellable product', async () => {
+    // Rename the secondary product 'slag' to the curated container name so it
+    // lands in the auto-reintegrate set built by buildRecipeIndexes.
+    stores.gameDataStore.setCell('items', 'slag', 'name', 'BarrelItem')
+    renderDialog(stores)
+    await waitFor(() => {
+      const rowTexts = screen.getAllByRole('row').map((r) => r.textContent ?? '')
+      expect(rowTexts.some((t) => t.includes('Ingot'))).toBe(true)
+    })
+    expect(screen.getByText('Returned Ingredients')).toBeTruthy()
+    // Only Ingot remains a sellable product → no Share % column / spinbuttons.
+    expect(screen.queryAllByRole('spinbutton')).toHaveLength(0)
+  })
+
+  it('moves a returned product back to products via the un-reintegrate toggle', async () => {
+    renderDialog(stores)
+    await waitFor(() => {
+      const rowTexts = screen.getAllByRole('row').map((r) => r.textContent ?? '')
+      expect(rowTexts.some((t) => t.includes('Scrap'))).toBe(true)
+    })
+    // The Returned Ingredients table has one row (scrap) with a move-back arrow.
+    const icon = document.querySelector('.pi-arrow-right')
+    expect(icon).toBeTruthy()
+    fireEvent.click(icon!.closest('button')!)
+    await waitFor(() => {
+      const rows = stores.buildStore
+        .getRowIds('userReintegratedProducts')
+        .map((id) => stores.buildStore.getRow('userReintegratedProducts', id))
+      expect(rows.some((r) => r.productItemOrTagId === 'scrap' && r.isReintegrated === false)).toBe(
+        true
+      )
+    })
+  })
+
   it('does not render the dialog when recipeId is null', () => {
     const { container } = render(
       <StoreContext.Provider

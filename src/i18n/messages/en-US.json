@@ -169,6 +169,8 @@
       "totalCost": "Total",
       "subtotal": "Subtotal",
       "share": "Share %",
+      "reintegrateTooltip": "Treat as a returned material: credit its value against the recipe cost instead of selling it. This lowers the price of the other products.",
+      "stopReintegrateTooltip": "Treat as a sellable product again: stop crediting its value against the recipe cost. This raises the price of the other products.",
       "craftingTable": "Crafting Table",
       "skill": "Skill",
       "labor": "Labor",

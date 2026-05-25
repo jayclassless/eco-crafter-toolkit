@@ -19,6 +19,7 @@ const PER_BUILD_TABLES = [
   'userRecipeMargins',
   'userProductMargins',
   'userProductShares',
+  'userReintegratedProducts',
   'userSettings',
   'computedPrices',
   'hiddenSkills',
@@ -38,6 +39,7 @@ const TABLES_WITH_ID_CELL = new Set([
   'userRecipeMargins',
   'userProductMargins',
   'userProductShares',
+  'userReintegratedProducts',
   'userSettings',
   'computedPrices',
 ])

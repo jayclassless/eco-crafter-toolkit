@@ -369,6 +369,108 @@ describe('buildSolverSnapshot', () => {
     expect(r.laborModifiers).toHaveLength(1)
   })
 
+  // Epoxy-shaped recipe: Petroleum in; Epoxy (primary) + Barrel + Sulfur out.
+  // Barrel is a curated auto-reintegrate item produced as a non-primary product.
+  const setupEpoxyShapedRecipe = () => {
+    setupSettings()
+    game.setRow('skills', 'sk1', {
+      id: 'sk1',
+      datasetId: DS,
+      name: 'OilDrilling',
+      maxLevel: 7,
+      laborReducePercent: '[1,0.9,0.8]',
+    })
+    game.setRow('craftingTables', 'ct1', { id: 'ct1', datasetId: DS, name: 'OilRefinery' })
+    // The Barrel item must carry the raw name the auto-reintegrate set matches.
+    game.setRow('items', 'barrel', { id: 'barrel', datasetId: DS, name: 'BarrelItem' })
+    game.setRow('recipes', 'r1', {
+      id: 'r1',
+      datasetId: DS,
+      name: 'Epoxy',
+      familyName: 'F',
+      skillId: 'sk1',
+      requiredSkillLevel: 0,
+      isBlueprint: false,
+      isDefault: true,
+      craftingTableId: 'ct1',
+      baseCraftTime: 0,
+      baseLaborCost: 0,
+    })
+    game.setRow('recipeElements', 're-i', {
+      id: 're-i',
+      datasetId: DS,
+      recipeId: 'r1',
+      itemOrTagId: 'petroleum',
+      baseQuantity: 4,
+      isProduct: false,
+      index: 0,
+    })
+    game.setRow('recipeElements', 're-p1', {
+      id: 're-p1',
+      datasetId: DS,
+      recipeId: 'r1',
+      itemOrTagId: 'epoxy',
+      baseQuantity: 2,
+      isProduct: true,
+      index: 1,
+    })
+    game.setRow('recipeElements', 're-p2', {
+      id: 're-p2',
+      datasetId: DS,
+      recipeId: 'r1',
+      itemOrTagId: 'barrel',
+      baseQuantity: 3,
+      isProduct: true,
+      index: 2,
+    })
+    game.setRow('recipeElements', 're-p3', {
+      id: 're-p3',
+      datasetId: DS,
+      recipeId: 'r1',
+      itemOrTagId: 'sulfur',
+      baseQuantity: 1,
+      isProduct: true,
+      index: 3,
+    })
+    build.setRow('userRecipes', 'ur1', {
+      id: 'ur1',
+      buildId: BUILD,
+      recipeId: 'r1',
+      roundFactor: 0,
+    })
+  }
+
+  it('auto-reintegrates a non-primary container product and drops it from the share split', () => {
+    setupEpoxyShapedRecipe()
+    const snap = buildSolverSnapshot(game, build, BUILD, DS)!
+    const byId = new Map(snap.recipes[0].products.map((p) => [p.itemOrTagId, p]))
+    expect(byId.get('barrel')!.isReintegrated).toBe(true)
+    expect(byId.get('barrel')!.share).toBe(0)
+    expect(byId.get('epoxy')!.isReintegrated).toBe(false)
+    expect(byId.get('sulfur')!.isReintegrated).toBe(false)
+    // Barrel is out of the split: primary 80%, the lone remaining secondary 20%.
+    expect(byId.get('epoxy')!.share).toBeCloseTo(0.8)
+    expect(byId.get('sulfur')!.share).toBeCloseTo(0.2)
+  })
+
+  it('honors a user override that turns the default reintegration off', () => {
+    setupEpoxyShapedRecipe()
+    build.setRow('userReintegratedProducts', 'urp1', {
+      id: 'urp1',
+      buildId: BUILD,
+      userRecipeId: 'ur1',
+      productItemOrTagId: 'barrel',
+      isReintegrated: false,
+    })
+    const snap = buildSolverSnapshot(game, build, BUILD, DS)!
+    const byId = new Map(snap.recipes[0].products.map((p) => [p.itemOrTagId, p]))
+    expect(byId.get('barrel')!.isReintegrated).toBe(false)
+    // Now all three are co-products: primary 80%, two secondaries 10% each.
+    expect(byId.get('epoxy')!.share).toBeCloseTo(0.8)
+    expect(byId.get('barrel')!.share).toBeCloseTo(0.1)
+    expect(byId.get('sulfur')!.share).toBeCloseTo(0.1)
+  })
+
   it('ignores user recipes belonging to other builds', () => {
     setupSettings()
     game.setRow('recipes', 'r1', {

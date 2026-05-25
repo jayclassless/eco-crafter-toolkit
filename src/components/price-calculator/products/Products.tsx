@@ -63,7 +63,13 @@ import type { Row } from './types'
 // price cell edit doesn't change the view-model. Without that split, every
 // keystroke in a material price cell rebuilt groups and re-rendered the
 // Products DataTable (~9s with 225 user-recipes).
-const GROUPS_BUILD_TABLES = ['userRecipes', 'userRecipeMargins', 'userProductMargins'] as const
+const GROUPS_BUILD_TABLES = [
+  'userRecipes',
+  'userRecipeMargins',
+  'userProductMargins',
+  // Reintegration toggles change which products are shown vs credited.
+  'userReintegratedProducts',
+] as const
 
 const USER_PRICES_TABLE = ['userPrices'] as const
 

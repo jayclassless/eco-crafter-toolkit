@@ -36,6 +36,7 @@ import {
 } from '@/hooks/use-store-revision'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { resolveRecipeModifiers } from '@/lib/recipe-modifiers'
+import { buildReintegrationOverrides, computeReintegratedProductIds } from '@/lib/reintegration'
 import { computeAutoShares } from '@/lib/share-defaults'
 import { computeUsedInRecipes, type UsedInRecipe } from '@/lib/used-in-recipes'
 import { useStores } from '@/stores/providers'
@@ -95,7 +96,8 @@ export function RecipeDialog({
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
   const { formatPrice, formatDuration, formatNumber } = useLocalization()
-  const { setProductShare, setRecipeFavorite } = useRecipeManagement(buildId)
+  const { setProductShare, setProductReintegrated, setRecipeFavorite } =
+    useRecipeManagement(buildId)
   const { setPrice } = usePriceManagement(buildId)
 
   // Resolved modifier context for the current recipe. Rebuilt only when the
@@ -252,6 +254,17 @@ export function RecipeDialog({
 
     const productRaws = rawRows.filter((r) => r.isProduct).sort((a, b) => a.index - b.index)
 
+    // Which products are reintegrated (credited against cost, shown on the
+    // ingredient side) vs sellable. Mirrors the snapshot-side computation in
+    // `assembleSolverRecipe` so the dialog matches what the solver charges.
+    const reintegratedIds = computeReintegratedProductIds({
+      orderedProductItemIds: productRaws.map((r) => r.itemOrTagId),
+      ingredientItemIds,
+      autoReintegrateSecondaryItemIds:
+        getGameDataIndexes(gameDataStore).recipeIndexes.autoReintegrateSecondaryItemIds,
+      userOverrides: buildReintegrationOverrides(buildStore, buildId).get(userRecipeId),
+    })
+
     // Auto-default shares used when the user hasn't edited any share for this
     // recipe. Mirrors the snapshot-side computation in
     // `assembleSolverRecipe` so the dialog displays exactly what the solver
@@ -260,7 +273,7 @@ export function RecipeDialog({
     if (!hasUserShares) {
       const nonReintegratedIds = productRaws
         .map((r) => r.itemOrTagId)
-        .filter((id) => !ingredientItemIds.has(id))
+        .filter((id) => !reintegratedIds.has(id))
       let configPercent = 20
       for (const rowId of buildStore.getRowIds('userSettings')) {
         const row = buildStore.getRow('userSettings', rowId)
@@ -321,7 +334,7 @@ export function RecipeDialog({
       const unitPrice = resolveUnitPrice(r.itemOrTagId, true)
       const totalPrice = unitPrice != null ? unitPrice * modifiedAbs : null
 
-      if (ingredientItemIds.has(r.itemOrTagId)) {
+      if (reintegratedIds.has(r.itemOrTagId)) {
         returnedIngredients.push({
           recipeElementId: r.id,
           itemOrTagId: r.itemOrTagId,
@@ -405,7 +418,7 @@ export function RecipeDialog({
   // userSettings is included so the dialog refreshes when the build's
   // defaultShareForSecondaryItems changes — getElements reads it inline to
   // compute auto-default share percentages for multi-product recipes.
-  useStoreRevision(buildStore, ['userProductShares', 'userSettings'])
+  useStoreRevision(buildStore, ['userProductShares', 'userReintegratedProducts', 'userSettings'])
   // Row-ids-only: the useMemo below only reads userRecipes.recipeId (stable
   // after row creation) and userPrices.itemOrTagId (ditto). Cell edits like
   // a userPrices.price change must not invalidate this memo — doing so
@@ -415,6 +428,14 @@ export function RecipeDialog({
   // — flipping it on an existing row doesn't change row IDs, so subscribe to
   // that one cell across all rows.
   const isOverrideRev = useCellInTableRevision(buildStore, 'userPrices', 'isOverride')
+  // Reintegration overrides affect which products count as "produced" below.
+  // Subscribe to both row adds/removes and isReintegrated cell flips.
+  const reintegrateRowRev = useTableRowIdsRevision(buildStore, ['userReintegratedProducts'])
+  const reintegrateCellRev = useCellInTableRevision(
+    buildStore,
+    'userReintegratedProducts',
+    'isReintegrated'
+  )
   // Re-render whenever the solver pushes a new result, so the inline reads
   // via `priceSignal.get(...)` / `priceSignal.getRecipe(...)` above reflect
   // the new numbers (e.g. when the user edits a share %).
@@ -436,7 +457,7 @@ export function RecipeDialog({
     // Use the cached per-recipe indexes instead of the N×M nested scan over
     // recipeElements — with a full dataset that loop was 225 × 4585 ≈ 1M
     // row reads per rebuild.
-    const { productItemIdsByRecipeId, ingredientItemIdsByRecipeId } =
+    const { productItemIdsByRecipeId, ingredientItemIdsByRecipeId, recipeIndexes } =
       getGameDataIndexes(gameDataStore)
     // Items the user has moved from Products to Materials. They must be
     // treated as not-produced here so the dialog renders an editable price
@@ -451,6 +472,8 @@ export function RecipeDialog({
         excluded.add(up.itemOrTagId as string)
       }
     }
+    // Per-recipe reintegration overrides, keyed by userRecipeId.
+    const reintegrateOverridesByUserRecipe = buildReintegrationOverrides(buildStore, buildId)
     for (const urId of buildStore.getRowIds('userRecipes')) {
       const ur = buildStore.getRow('userRecipes', urId)
       if (ur.buildId !== buildId) continue
@@ -461,8 +484,14 @@ export function RecipeDialog({
       // Produced set excludes reintegrated products (same rule as the
       // Materials list at Materials.tsx:107-140), so a recipe that consumes
       // its own product doesn't lock that ingredient as read-only.
+      const reintegratedIds = computeReintegratedProductIds({
+        orderedProductItemIds: ownProducts,
+        ingredientItemIds: ownIngredients,
+        autoReintegrateSecondaryItemIds: recipeIndexes.autoReintegrateSecondaryItemIds,
+        userOverrides: reintegrateOverridesByUserRecipe.get(urId),
+      })
       for (const itemId of ownProducts) {
-        if (ownIngredients.has(itemId)) continue
+        if (reintegratedIds.has(itemId)) continue
         if (excluded.has(itemId)) continue
         produced.add(itemId)
       }
@@ -474,9 +503,18 @@ export function RecipeDialog({
       if (!excluded.has(primary)) products.add(primary)
     }
     return { productItemIds: products, userPriceIdByItem: priceIds, producedItemIds: produced }
-    // buildRecipesRev / isOverrideRev are the invalidation signals.
+    // buildRecipesRev / isOverrideRev / reintegrate* are the invalidation signals.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildStore, gameDataStore, buildId, recipeId, buildRecipesRev, isOverrideRev])
+  }, [
+    buildStore,
+    gameDataStore,
+    buildId,
+    recipeId,
+    buildRecipesRev,
+    isOverrideRev,
+    reintegrateRowRev,
+    reintegrateCellRev,
+  ])
 
   const gameRev = useStoreRevision(gameDataStore, [
     'recipeElements',
@@ -551,6 +589,11 @@ export function RecipeDialog({
     ing.userPriceId = userPriceIdByItem.get(ing.itemOrTagId) ?? ''
   }
   const showShareColumn = products.length > 1
+  // Show the per-product reintegration toggle on the products table only when
+  // there's something meaningful to do: more than one sellable product (so a
+  // product can be moved to "returned" without leaving zero priced output), or
+  // at least one already-returned product that could be moved back.
+  const showReintegrateControls = products.length > 1 || returnedIngredients.length > 0
 
   // Recipe header icon: first non-reintegrated product's raw name, falling
   // back to the first product if all products are reintegrated.
@@ -796,6 +839,46 @@ export function RecipeDialog({
 
   const headerUserRecipeId = findUserRecipeId()
 
+  // Move a sellable product to the "returned ingredients" (credited) side.
+  // Hidden for the last remaining sellable product so a recipe always keeps at
+  // least one priced output.
+  const reintegrateToggleTemplate = (row: ProductRow) => {
+    if (!row.userRecipeId || products.length <= 1) return null
+    return (
+      <div className="flex justify-content-center">
+        <Button
+          icon="pi pi-arrow-left"
+          text
+          rounded
+          severity="secondary"
+          aria-label={t('priceCalculator.recipe.reintegrateTooltip')}
+          tooltip={t('priceCalculator.recipe.reintegrateTooltip')}
+          tooltipOptions={{ position: 'top' }}
+          onClick={() => setProductReintegrated(row.userRecipeId, row.itemOrTagId, true)}
+        />
+      </div>
+    )
+  }
+
+  // Move a returned/credited product back to the sellable products side.
+  const unreintegrateToggleTemplate = (row: ElementRow) => {
+    if (!headerUserRecipeId) return null
+    return (
+      <div className="flex justify-content-center">
+        <Button
+          icon="pi pi-arrow-right"
+          text
+          rounded
+          severity="secondary"
+          aria-label={t('priceCalculator.recipe.stopReintegrateTooltip')}
+          tooltip={t('priceCalculator.recipe.stopReintegrateTooltip')}
+          tooltipOptions={{ position: 'top' }}
+          onClick={() => setProductReintegrated(headerUserRecipeId, row.itemOrTagId, false)}
+        />
+      </div>
+    )
+  }
+
   const headerNode = (
     <div className="flex align-items-center gap-2">
       {(headerRawName || isCustomRecipe) && (
@@ -924,6 +1007,7 @@ export function RecipeDialog({
                           style={{ width: '6rem' }}
                           headerClassName="p-align-right"
                         />
+                        <Column body={unreintegrateToggleTemplate} style={{ width: '3rem' }} />
                       </DataTable>
                     </>
                   )}
@@ -990,6 +1074,9 @@ export function RecipeDialog({
                       style={{ width: '6rem' }}
                       headerClassName="p-align-right"
                     />
+                    {showReintegrateControls && (
+                      <Column body={reintegrateToggleTemplate} style={{ width: '3rem' }} />
+                    )}
                   </DataTable>
 
                   {resolvedMods && resolvedMods.bonuses.length > 0 && (
