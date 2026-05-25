@@ -134,6 +134,11 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
   // full items list is in itemIdByName (parts are items, not tags).
   const pendingItemParts: { itemId: string; partName: string; quantity: number }[] = []
 
+  // A crop's SeedItem references another item by name; resolve after the full
+  // items list is in itemIdByName. Holds the crop Item object so we can set
+  // its seedItemId in place.
+  const pendingCropSeeds: { crop: Item; seedName: string }[] = []
+
   // Parse skills and talents
   for (const s of data.Skills) {
     const skillId = generateId()
@@ -200,7 +205,25 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
   for (const i of data.Items) {
     const itemId = generateId()
     itemIdByName.set(i.Name, itemId)
-    items.push({ id: itemId, datasetId, name: i.Name, isTag: false, isPart: i.IsPart ?? false })
+    const item: Item = {
+      id: itemId,
+      datasetId,
+      name: i.Name,
+      isTag: false,
+      isPart: i.IsPart ?? false,
+    }
+    // Crop growth data is only present on harvested crop items.
+    if (i.MaturityAgeDays != null) {
+      item.maturityAgeDays = i.MaturityAgeDays
+      item.postHarvestingGrowth = i.PostHarvestingGrowth ?? 0
+      item.pickableAtPercent = i.PickableAtPercent ?? 0
+      item.isTree = i.IsTree ?? false
+      if (i.SeedItem) pendingCropSeeds.push({ crop: item, seedName: i.SeedItem })
+      // The in-world species name is shown in the Crop Tracker picker. Stored
+      // under the 'plant' entity type so it doesn't shadow the item's own name.
+      if (i.PlantName) addLocalizedNames(localizedNames, 'plant', itemId, i.PlantName)
+    }
+    items.push(item)
     addLocalizedNames(localizedNames, 'item', itemId, i.LocalizedName)
 
     if (i.RequiredParts) {
@@ -262,6 +285,12 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
         quantity: pending.quantity,
       })
     }
+  }
+
+  // Resolve each crop's seed item link now that all item ids are known.
+  for (const pending of pendingCropSeeds) {
+    const seedItemId = itemIdByName.get(pending.seedName)
+    if (seedItemId) pending.crop.seedItemId = seedItemId
   }
 
   // Parse tags

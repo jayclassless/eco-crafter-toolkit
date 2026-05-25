@@ -54,6 +54,13 @@ export function createGameDataStore() {
       isTag: { type: 'boolean' },
       isPart: { type: 'boolean', default: false },
       isCustom: { type: 'boolean', default: false },
+      // Crop growth data, present only on harvested crop items. A value of
+      // maturityAgeDays > 0 marks an item as a trackable crop.
+      maturityAgeDays: { type: 'number', default: 0 },
+      postHarvestingGrowth: { type: 'number', default: 0 },
+      pickableAtPercent: { type: 'number', default: 0 },
+      seedItemId: { type: 'string', default: '' },
+      isTree: { type: 'boolean', default: false },
     },
     itemParts: {
       id: { type: 'string' },

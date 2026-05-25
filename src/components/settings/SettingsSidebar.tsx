@@ -11,7 +11,8 @@ import './SettingsSidebar.css'
 interface Props {
   visible: boolean
   onHide: () => void
-  onOpenRecipeCalculator: () => void
+  // Optional: omit in tools without an ad-hoc recipe calculator (Crop Tracker).
+  onOpenRecipeCalculator?: () => void
   onOpenGameNews: () => void
   onOpenDatasets: () => void
   onOpenAbout: () => void
@@ -50,10 +51,12 @@ export function SettingsSidebar({
       </div>
     )
 
-  const handleSelectRecipeCalculator = () => {
-    onHide()
-    onOpenRecipeCalculator()
-  }
+  const handleSelectRecipeCalculator = onOpenRecipeCalculator
+    ? () => {
+        onHide()
+        onOpenRecipeCalculator()
+      }
+    : undefined
 
   const handleSelectGameNews = () => {
     onHide()

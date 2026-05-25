@@ -152,6 +152,12 @@ describe('createBuildOps', () => {
         isOverride: false,
         primaryItemId: '',
       })
+      buildStore.setRow('userPlantings', 'pl1', {
+        id: 'pl1',
+        buildId: id,
+        cropItemId: 'corn',
+        plantedAt: '2026-01-01T00:00:00.000Z',
+      })
       buildStore.setRow('hiddenSkills', 'csg1', { buildId: id, skillName: 'X' })
       buildStore.setRow('hiddenSkills', 'csg2', { buildId: 'other', skillName: 'Y' })
 
@@ -186,6 +192,11 @@ describe('createBuildOps', () => {
         buildStore
           .getRowIds('userSettings')
           .filter((r) => buildStore.getCell('userSettings', r, 'buildId') === id)
+      ).toHaveLength(0)
+      expect(
+        buildStore
+          .getRowIds('userPlantings')
+          .filter((r) => buildStore.getCell('userPlantings', r, 'buildId') === id)
       ).toHaveLength(0)
       expect(buildStore.getRowIds('hiddenSkills')).toEqual(['csg2'])
     })
@@ -224,6 +235,12 @@ describe('createBuildOps', () => {
       buildStore.setRow('hiddenTags', 'ht1', {
         buildId: sourceId,
         tagId: 'tag-foo',
+      })
+      buildStore.setRow('userPlantings', 'pl1', {
+        id: 'pl1',
+        buildId: sourceId,
+        cropItemId: 'corn',
+        plantedAt: '2026-01-01T00:00:00.000Z',
       })
 
       // A foreign-build row in the same tables must not be copied.
@@ -268,6 +285,14 @@ describe('createBuildOps', () => {
         .getRowIds('hiddenTags')
         .filter((r) => buildStore.getCell('hiddenTags', r, 'buildId') === newId)
       expect(clonedHiddenTag).toHaveLength(1)
+
+      const clonedPlanting = buildStore
+        .getRowIds('userPlantings')
+        .map((r) => buildStore.getRow('userPlantings', r))
+        .find((r) => r.buildId === newId)
+      expect(clonedPlanting?.cropItemId).toBe('corn')
+      // Cloned under a fresh row id, not the source's.
+      expect(buildStore.getCell('userPlantings', 'pl1', 'buildId')).toBe(sourceId)
 
       // Default margin is duplicated (createBuild creates one) and remains marked default.
       const clonedMargins = buildStore

@@ -19,6 +19,9 @@ export function createUIStore() {
       lastNewsViewedAt: { type: 'number', default: 0 },
       lastReleasesViewedAt: { type: 'number', default: 0 },
       hasSeenAboutDialog: { type: 'boolean', default: false },
+      // Crop Tracker field sorting.
+      cropSortField: { type: 'string', default: 'name' }, // name | plant | planted | harvest
+      cropSortDir: { type: 'string', default: 'asc' }, // asc | desc
     },
   })
 

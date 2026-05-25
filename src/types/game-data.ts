@@ -39,6 +39,13 @@ export interface Item {
   isTag: boolean
   isPart?: boolean
   isCustom?: boolean
+  // Crop growth data, present only on harvested crop items (denormalized from
+  // the game's PlantSpecies). `maturityAgeDays > 0` marks a trackable crop.
+  maturityAgeDays?: number
+  postHarvestingGrowth?: number // 0 = single harvest, 0.5 = regrows from 50%
+  pickableAtPercent?: number
+  seedItemId?: string // links to the seed item used to plant this crop
+  isTree?: boolean // distinguishes trees from food crops for grouping
 }
 
 export interface ItemPart {

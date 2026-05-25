@@ -80,6 +80,7 @@ function renderNav(
     >
       <MemoryRouter>
         <NavBar
+          tool="calculator"
           datasetId="ds1"
           buildId="b1"
           onSelectBuild={() => {}}
@@ -97,6 +98,12 @@ describe('NavBar', () => {
     const stores = makeStores()
     renderNav(stores)
     expect(screen.getByText('Eco vTest')).toBeInTheDocument()
+  })
+
+  it('renders the tool switcher with both tools', () => {
+    renderNav(makeStores())
+    expect(screen.getByText('Price Calculator')).toBeInTheDocument()
+    expect(screen.getByText('Crop Tracker')).toBeInTheDocument()
   })
 
   it('shows a count badge on the hamburger button when there are unseen releases', async () => {

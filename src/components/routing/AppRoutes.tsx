@@ -1,9 +1,11 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 
+import { CropTracker } from '@/components/crop-tracker/CropTracker'
 import { GameNews } from '@/components/game-news/GameNews'
 import { PriceCalculator } from '@/components/price-calculator/PriceCalculator'
 
 import { BuildRedirect } from './BuildRedirect'
+import { CropsRedirect } from './CropsRedirect'
 import { RootRedirect } from './RootRedirect'
 
 export function AppRoutes() {
@@ -13,6 +15,8 @@ export function AppRoutes() {
       <Route path="/game-news" element={<GameNews />} />
       <Route path="/:datasetId/calculator" element={<BuildRedirect />} />
       <Route path="/:datasetId/calculator/:buildId" element={<PriceCalculator />} />
+      <Route path="/:datasetId/crops" element={<CropsRedirect />} />
+      <Route path="/:datasetId/crops/:buildId" element={<CropTracker />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

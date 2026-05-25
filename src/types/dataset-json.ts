@@ -64,6 +64,14 @@ export interface ItemJson {
   PluginModuleSkillPercent?: number
   IsCraftingTable?: boolean
   CraftingTablePluginModules?: string[]
+  // Crop growth data, merged onto the harvested crop item during extraction
+  // (see scripts/extract-eco-dataset.ts). Absent for non-crop items.
+  MaturityAgeDays?: number
+  PostHarvestingGrowth?: number // 0 = single harvest, 0.5 = regrows from 50%
+  PickableAtPercent?: number
+  SeedItem?: string // item Name link to the seed
+  PlantName?: LocalizedNames // the in-world species name (e.g. "Oak" vs item "Oak Log")
+  IsTree?: boolean
 }
 
 export interface TagJson {

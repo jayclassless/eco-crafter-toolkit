@@ -42,6 +42,25 @@ function makeMinimalDataset(): DatasetJson {
         IsCraftingTable: true,
         CraftingTablePluginModules: ['BasicUpgradeItem'],
       },
+      {
+        Name: 'CornItem',
+        LocalizedName: { 'en-US': 'Corn' },
+        MaturityAgeDays: 0.8,
+        PostHarvestingGrowth: 0,
+        PickableAtPercent: 0,
+        SeedItem: 'CornSeedItem',
+        PlantName: { 'en-US': 'Corn' },
+      },
+      { Name: 'CornSeedItem', LocalizedName: { 'en-US': 'Corn Seed' } },
+      {
+        Name: 'OakLogItem',
+        LocalizedName: { 'en-US': 'Oak Log' },
+        MaturityAgeDays: 7,
+        PostHarvestingGrowth: 0,
+        PickableAtPercent: 0,
+        PlantName: { 'en-US': 'Oak' },
+        IsTree: true,
+      },
     ],
     Tags: [
       {
@@ -166,6 +185,36 @@ describe('parseDataset', () => {
     expect(result.talents[0].isLevelable).toBe(false)
     expect(result.talents[0].maxTalentLevel).toBe(0)
     expect(result.talentBonuses).toHaveLength(0)
+  })
+
+  it('merges crop growth fields onto the harvested item and resolves the seed link', () => {
+    const result = parseDataset(makeMinimalDataset(), 'test-dataset')
+    const corn = result.items.find((i) => i.name === 'CornItem')!
+    const cornSeed = result.items.find((i) => i.name === 'CornSeedItem')!
+
+    expect(corn.maturityAgeDays).toBe(0.8)
+    expect(corn.postHarvestingGrowth).toBe(0)
+    expect(corn.pickableAtPercent).toBe(0)
+    expect(corn.seedItemId).toBe(cornSeed.id)
+    expect(corn.isTree).toBe(false)
+  })
+
+  it('records the in-world species name under the plant entity type', () => {
+    const result = parseDataset(makeMinimalDataset(), 'test-dataset')
+    const oak = result.items.find((i) => i.name === 'OakLogItem')!
+    const plantName = result.localizedNames.find(
+      (n) => n.entityType === 'plant' && n.entityId === oak.id && n.locale === 'en-US'
+    )
+    expect(plantName?.name).toBe('Oak')
+    expect(oak.isTree).toBe(true)
+    expect(oak.maturityAgeDays).toBe(7)
+  })
+
+  it('leaves non-crop items without growth fields (back-compat)', () => {
+    const result = parseDataset(makeMinimalDataset(), 'test-dataset')
+    const wood = result.items.find((i) => i.name === 'WoodItem')!
+    expect(wood.maturityAgeDays).toBeUndefined()
+    expect(wood.seedItemId).toBeUndefined()
   })
 
   it('emits recipeUnlocks rows from Unlock-action bonuses, dropping unresolved recipe names', () => {

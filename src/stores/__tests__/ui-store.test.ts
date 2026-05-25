@@ -33,6 +33,8 @@ describe('createUIStore', () => {
       lastNewsViewedAt: 0,
       lastReleasesViewedAt: 0,
       hasSeenAboutDialog: false,
+      cropSortField: 'name',
+      cropSortDir: 'asc',
     })
   })
 

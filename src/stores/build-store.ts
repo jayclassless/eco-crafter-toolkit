@@ -96,6 +96,9 @@ export function createBuildStore() {
       showOnlyFavorites: { type: 'boolean', default: false },
       defaultShareForSecondaryItems: { type: 'number', default: 20 },
       blueprintMode: { type: 'string', default: 'include' },
+      // Crop Tracker: server plant-growth-rate multiplier (1 = default rate,
+      // i.e. 1 game day = 24 real hours). >1 means crops grow faster.
+      growthRateModifier: { type: 'number', default: 1 },
     },
     computedPrices: {
       id: { type: 'string' },
@@ -104,6 +107,15 @@ export function createBuildStore() {
       costPrice: { type: 'number' },
       salePrice: { type: 'number' },
       recipeId: { type: 'string' },
+    },
+    // Crop Tracker: one row per tracked field/plot for a build.
+    userPlantings: {
+      id: { type: 'string' },
+      buildId: { type: 'string' },
+      cropItemId: { type: 'string' }, // game-data items row id (the harvested crop)
+      name: { type: 'string', default: '' }, // optional user field name
+      plantedAt: { type: 'string', default: '' }, // ISO; '' = not yet planted
+      hasRegrown: { type: 'boolean', default: false }, // true after first harvest of a regen crop
     },
     hiddenSkills: {
       buildId: { type: 'string' },

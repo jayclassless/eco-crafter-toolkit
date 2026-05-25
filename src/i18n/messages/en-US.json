@@ -9,6 +9,11 @@
     "clearSearch": "Clear Search",
     "missingIcon": "Missing Icon"
   },
+  "nav": {
+    "calculator": "Price Calculator",
+    "crops": "Crop Tracker",
+    "toolSwitcher": "Switch tool"
+  },
   "dataset": {
     "selector": {
       "label": "Dataset"
@@ -199,6 +204,38 @@
       "nonConvergentDetail_one": "{count} recipe is part of a dependency cycle. The displayed prices may be unstable.",
       "nonConvergentDetail_other": "{count} recipes are part of a dependency cycle. The displayed prices may be unstable."
     }
+  },
+  "cropTracker": {
+    "title": "Crop Tracker",
+    "addField": "Add Field",
+    "removeField": "Remove field",
+    "empty": "This dataset has no crop data. Re-import or update the dataset to enable the Crop Tracker.",
+    "fieldNamePlaceholder": "Field name (optional)",
+    "fieldLabel": "Field",
+    "cropPlaceholder": "Select a crop",
+    "cropGroupLabel": "Crops",
+    "treeGroupLabel": "Trees",
+    "plant": "Plant",
+    "replant": "Replant",
+    "harvest": "Harvest",
+    "growthRate": "Growth Rate",
+    "growthRateTooltip": "Server plant-growth-rate multiplier. 1 = default rate (1 game day = 24 hours). Set to 2 if crops grow at 2× speed.",
+    "sortBy": "Sort by",
+    "sortAsc": "Ascending",
+    "sortDesc": "Descending",
+    "sortField": {
+      "name": "Field Name",
+      "plant": "Plant",
+      "planted": "Planted Time",
+      "harvest": "Harvest Time"
+    },
+    "notPlanted": "Not planted",
+    "plantedAt": "Planted {time}",
+    "pickableAt": "Pickable {time}",
+    "harvestAt": "Harvest {time}",
+    "statusGrowing": "Growing",
+    "statusPickable": "Pickable",
+    "statusReady": "Ready"
   },
   "gameNews": {
     "title": "Game News",

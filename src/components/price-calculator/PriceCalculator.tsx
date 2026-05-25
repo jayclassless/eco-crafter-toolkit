@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 
+import { NavBar } from '@/components/common/NavBar'
 import { AboutDialog } from '@/components/settings/AboutDialog'
 import { DatasetsDialog } from '@/components/settings/datasets/DatasetsDialog'
 import { AdHocRecipeCalculatorDialog } from '@/components/settings/recipe-calculator/AdHocRecipeCalculatorDialog'
@@ -16,7 +17,6 @@ import { useStores } from '@/stores/providers'
 import { ConfigPanel } from './build-options/ConfigPanel'
 import { ConfigPanelDrawer } from './build-options/ConfigPanelDrawer'
 import { Materials } from './materials/Materials'
-import { NavBar } from './NavBar'
 import { Products } from './products/Products'
 
 export function PriceCalculator() {
@@ -201,6 +201,7 @@ export function PriceCalculator() {
   return (
     <div className="flex flex-column h-screen">
       <NavBar
+        tool="calculator"
         datasetId={datasetId}
         buildId={buildId}
         onSelectBuild={(id) => navigate(`/${datasetId}/calculator/${id}`)}

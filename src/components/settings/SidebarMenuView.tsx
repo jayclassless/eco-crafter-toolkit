@@ -9,7 +9,9 @@ import { useNewsBadgeCount } from '@/hooks/use-news-badge'
 import { useReleasesBadgeCount } from '@/hooks/use-releases-badge'
 
 interface Props {
-  onSelectRecipeCalculator: () => void
+  // Calculator-specific; omitted in tools (e.g. Crop Tracker) that have no
+  // ad-hoc recipe calculator, in which case the menu item is hidden.
+  onSelectRecipeCalculator?: () => void
   onSelectGameNews: () => void
   onSelectDatasets: () => void
   onSelectUiSettings: () => void
@@ -63,11 +65,15 @@ export function SidebarMenuView({
   const releasesCount = useReleasesBadgeCount()
 
   const items: MenuItem[] = [
-    {
-      label: t('settings.menu.recipeCalculator'),
-      icon: 'pi pi-calculator',
-      command: onSelectRecipeCalculator,
-    },
+    ...(onSelectRecipeCalculator
+      ? [
+          {
+            label: t('settings.menu.recipeCalculator'),
+            icon: 'pi pi-calculator',
+            command: onSelectRecipeCalculator,
+          },
+        ]
+      : []),
     {
       label: t('settings.menu.gameNews'),
       icon: 'pi pi-megaphone',

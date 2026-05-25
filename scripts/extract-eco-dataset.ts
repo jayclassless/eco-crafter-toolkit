@@ -186,6 +186,13 @@ interface RawItem {
   craftingTableModuleTags?: string[]
   craftingTableModuleItems?: string[]
   CraftingTablePluginModules?: string[]
+  // Crop growth data, merged from the matching PlantSpecies (see parsePlantFile).
+  maturityAgeDays?: number
+  postHarvestingGrowth?: number
+  pickableAtPercent?: number
+  seedItemName?: string
+  plantDisplay?: string // in-world species name, e.g. "Oak" (vs the item's "Oak Log")
+  isTree?: boolean
 }
 interface RawTagDef {
   name: string
@@ -234,6 +241,20 @@ const variants: RawVariant[] = []
 const talentGroups: RawTalentGroup[] = []
 const talents: RawTalent[] = []
 const bonusesByTalentName = new Map<string, RawBonus[]>()
+
+// Growth data parsed from AutoGen/Plant/*.cs. The harvested crop item can't be
+// resolved at parse time (it depends on item tags, populated across all files),
+// so we stash each species' ResourceList item names and growth values and
+// resolve the crop item after pass 1.
+interface RawPlant {
+  displayName: string // the species' in-world name, e.g. "Oak", "Bolete Mushroom"
+  resourceNames: string[]
+  isTree: boolean
+  maturityAgeDays: number
+  postHarvestingGrowth: number
+  pickableAtPercent: number
+}
+const rawPlants: RawPlant[] = []
 
 // Used to deduplicate stub items
 function ensureItem(name: string, display?: string): RawItem {
@@ -484,6 +505,54 @@ function parseTagDefinitionsFile(src: string) {
     const body = m[2] ?? ''
     const display = /PluralName\s*=\s*Localizer\.DoStr\("([^"]+)"\)/.exec(body)?.[1]
     tagDefs.push({ name, display })
+  }
+}
+
+// ---- Plant / crop growth parsing -------------------------------------------
+
+// Parse a `*Species : (Plant|Tree)Species` block for growth data and its
+// ResourceList item names. The harvested item is resolved later (see the merge
+// step in main) by picking the Crop-tagged item (food crops) or, for trees, the
+// Wood-tagged log. Capturing the ResourceList rather than filtering on a
+// *SeedItem also catches crops that propagate via spores/bulbs or self-seed.
+function parsePlantFile(src: string) {
+  const classRe = /public\s+(?:partial\s+)?class\s+(\w+)Species\s*:\s*(Plant|Tree)Species\b/g
+  let m: RegExpExecArray | null
+  while ((m = classRe.exec(src))) {
+    const isTree = m[2] === 'Tree'
+    const open = src.indexOf('{', m.index)
+    if (open < 0) continue
+    const end = matchBrace(src, open)
+    if (end < 0) continue
+    const block = src.slice(open, end)
+
+    const rlStart = block.search(/ResourceList\s*=\s*new\s+List<SpeciesResource>\s*\(\)/)
+    if (rlStart < 0) continue
+    const rlOpen = block.indexOf('{', rlStart)
+    if (rlOpen < 0) continue
+    const rlEnd = matchBrace(block, rlOpen)
+    if (rlEnd < 0) continue
+    const resourceNames = extractTypeNames(block.slice(rlOpen, rlEnd))
+    if (resourceNames.length === 0) continue
+
+    const displayName = /DisplayName\s*=\s*Localizer\.DoStr\("([^"]+)"\)/.exec(block)?.[1]
+    if (!displayName) continue
+
+    const maturity = parseFloatLit(/MaturityAgeDays\s*=\s*([\d.]+f?)/.exec(block)?.[1] ?? '0')
+    const postHarvest = parseFloatLit(
+      /PostHarvestingGrowth\s*=\s*([\d.]+f?)/.exec(block)?.[1] ?? '0'
+    )
+    const pickable = parseFloatLit(/PickableAtPercent\s*=\s*([\d.]+f?)/.exec(block)?.[1] ?? '0')
+    if (!(maturity > 0)) continue
+
+    rawPlants.push({
+      displayName,
+      resourceNames,
+      isTree,
+      maturityAgeDays: maturity,
+      postHarvestingGrowth: Number.isNaN(postHarvest) ? 0 : postHarvest,
+      pickableAtPercent: Number.isNaN(pickable) ? 0 : pickable,
+    })
   }
 }
 
@@ -1110,6 +1179,7 @@ async function main() {
     const src = await fs.readFile(file, 'utf8')
     if (file.includes(`${path.sep}Tech${path.sep}`)) parseSkillFile(src)
     if (file.includes(`${path.sep}Benefit${path.sep}`)) parseTalentFile(src)
+    if (file.includes(`${path.sep}Plant${path.sep}`)) parsePlantFile(src)
     parseItemAndRecipeFile(src)
     // Variants are `class <X>Recipe : Recipe` with AddTagProduct(...). They
     // can live in any AutoGen subtree (Recipe/, Block/, Item/, WorldObject/);
@@ -1121,6 +1191,31 @@ async function main() {
   if (variants.length > 0) {
     console.log(`[extract] emitted ${variants.length} recipe variants via AddTagProduct`)
   }
+
+  // Merge growth data onto each plant's harvested item. For food crops that's
+  // the Crop-tagged entry in the species' ResourceList (e.g. CornItem,
+  // CamasBulbItem, FiddleheadsItem); for trees it's the Wood-tagged log
+  // (e.g. OakLogItem). Plants with neither (wild grasses) are skipped. The seed
+  // link, when present, is the "Crop Seed"-tagged entry; crops that self-seed
+  // point at themselves, while trees (whose saplings aren't in the ResourceList)
+  // get no seed link.
+  let cropCount = 0
+  for (const plant of rawPlants) {
+    const resourceItems = plant.resourceNames.map((n) => items.get(n)).filter((it) => it != null)
+    const harvest =
+      resourceItems.find((it) => it.tags.includes('Crop')) ??
+      (plant.isTree ? resourceItems.find((it) => it.tags.includes('Wood')) : undefined)
+    if (!harvest) continue
+    const seed = resourceItems.find((it) => it.tags.includes('Crop Seed'))
+    harvest.maturityAgeDays = plant.maturityAgeDays
+    harvest.postHarvestingGrowth = plant.postHarvestingGrowth
+    harvest.pickableAtPercent = plant.pickableAtPercent
+    harvest.plantDisplay = plant.displayName
+    harvest.isTree = plant.isTree
+    if (seed) harvest.seedItemName = seed.name
+    cropCount++
+  }
+  console.log(`[extract] merged growth data onto ${cropCount} crop item(s)`)
 
   // Pass 1b: flag blueprint recipes from PaidItemsEmbeddedList (v12+).
   // A recipe is a blueprint iff any of its products' class basenames (with
@@ -1464,6 +1559,14 @@ async function main() {
       j.IsCraftingTable = true
       if (it.CraftingTablePluginModules)
         j.CraftingTablePluginModules = it.CraftingTablePluginModules
+    }
+    if (it.maturityAgeDays != null) {
+      j.MaturityAgeDays = it.maturityAgeDays
+      j.PostHarvestingGrowth = it.postHarvestingGrowth ?? 0
+      j.PickableAtPercent = it.pickableAtPercent ?? 0
+      if (it.seedItemName) j.SeedItem = it.seedItemName
+      if (it.plantDisplay) j.PlantName = mergeLocalized(it.plantDisplay, translations)
+      if (it.isTree) j.IsTree = true
     }
     itemJsons.push(j)
   }

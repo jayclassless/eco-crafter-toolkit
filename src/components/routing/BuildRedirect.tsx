@@ -5,7 +5,13 @@ import { Navigate, useParams } from 'react-router-dom'
 import { useBuild } from '@/hooks/use-build'
 import { useStores } from '@/stores/providers'
 
-export function BuildRedirect() {
+interface Props {
+  // Which tool to redirect into. Builds are shared across tools, so the
+  // get-or-create logic is identical; only the target path differs.
+  tool?: 'calculator' | 'crops'
+}
+
+export function BuildRedirect({ tool = 'calculator' }: Props = {}) {
   const { datasetId } = useParams<{ datasetId: string }>()
   const { t } = useTranslation()
   const { gameDataStore } = useStores()
@@ -33,6 +39,6 @@ export function BuildRedirect() {
   if (!datasetExists) return <Navigate to="/" replace />
 
   const targetBuildId = builds.length > 0 ? (builds[0].id as string) : createdBuildId
-  if (targetBuildId) return <Navigate to={`/${datasetId}/calculator/${targetBuildId}`} replace />
+  if (targetBuildId) return <Navigate to={`/${datasetId}/${tool}/${targetBuildId}`} replace />
   return null
 }

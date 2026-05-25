@@ -7,6 +7,9 @@
   cost of items that aren't part of your build.
 - Fixed how Barrels are handled so that they're treated as re-integrated
   products like Molds.
+- Added an initial implementation of a Crop Tracker, so farmers and loggers can
+  keep track of when their various plantings are due for harvesting (heavily
+  inspired by the [Eco Farming Tracker](https://eco-farming-tracker.vercel.app/)).
 
 ## 0.2.0 (2026-05-12)
 

@@ -1,15 +1,19 @@
 import { Button } from 'primereact/button'
+import { SelectButton } from 'primereact/selectbutton'
 import { Tag } from 'primereact/tag'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 
 import { NewsBadgeButton } from '@/components/game-news/NewsBadgeButton'
+import { BuildSelector } from '@/components/price-calculator/BuildSelector'
 import { useLocalization } from '@/hooks/use-localization'
 import { useReleasesBadgeCount } from '@/hooks/use-releases-badge'
 import { useStores } from '@/stores/providers'
 
-import { BuildSelector } from './BuildSelector'
+type ToolName = 'calculator' | 'crops'
 
 interface Props {
+  tool: ToolName
   datasetId: string
   buildId: string
   onSelectBuild: (buildId: string) => void
@@ -18,7 +22,11 @@ interface Props {
   onOpenConfig?: () => void
 }
 
+// Shared top navigation for every tool. Hosts the tool switcher, dataset name,
+// build selector, news badge and settings menu. Builds are shared across tools,
+// so switching preserves the active dataset+build.
 export function NavBar({
+  tool,
   datasetId,
   buildId,
   onSelectBuild,
@@ -27,10 +35,16 @@ export function NavBar({
   onOpenConfig,
 }: Props) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const { formatNumber } = useLocalization()
   const { gameDataStore } = useStores()
   const datasetName = (gameDataStore.getCell('datasets', datasetId, 'name') as string) ?? ''
   const releasesCount = useReleasesBadgeCount()
+
+  const toolOptions = [
+    { value: 'calculator' as ToolName, label: t('nav.calculator') },
+    { value: 'crops' as ToolName, label: t('nav.crops') },
+  ]
 
   return (
     <div className="flex align-items-center gap-3 p-2 pb-0">
@@ -52,6 +66,18 @@ export function NavBar({
       />
       <Tag severity="warning" value="BETA" />
       <span className="font-semibold text-color-secondary">{datasetName}</span>
+      <SelectButton
+        value={tool}
+        options={toolOptions}
+        optionLabel="label"
+        optionValue="value"
+        aria-label={t('nav.toolSwitcher')}
+        allowEmpty={false}
+        onChange={(e) => {
+          const next = e.value as ToolName | null
+          if (next && next !== tool) navigate(`/${datasetId}/${next}/${buildId}`)
+        }}
+      />
       <BuildSelector
         datasetId={datasetId}
         activeBuildId={buildId}

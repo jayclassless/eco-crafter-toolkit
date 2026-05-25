@@ -27,6 +27,7 @@ interface Props<T extends GroupedSinglePickerItem> {
   completeMethod: (event: AutoCompleteCompleteEvent) => void
   onChange: (value: T | null) => void
   className?: string
+  disabled?: boolean
 }
 
 /**
@@ -43,6 +44,7 @@ export function GroupedSinglePicker<T extends GroupedSinglePickerItem>({
   completeMethod,
   onChange,
   className,
+  disabled,
 }: Props<T>) {
   return (
     <div className={`flex align-items-center gap-2 ${className ?? ''}`}>
@@ -55,6 +57,7 @@ export function GroupedSinglePicker<T extends GroupedSinglePickerItem>({
         optionGroupLabel="groupLabel"
         optionGroupChildren="items"
         dropdown
+        disabled={disabled}
         forceSelection
         placeholder={placeholder}
         scrollHeight="300px"
