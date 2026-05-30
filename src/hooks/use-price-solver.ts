@@ -1,6 +1,7 @@
+import * as Sentry from '@sentry/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import type { SolverInput, SolverOutput } from '@/types/solver'
+import type { SolverInput, SolverOutput, SolverWorkerMessage } from '@/types/solver'
 
 const DEBOUNCE_MS = 200
 
@@ -11,17 +12,39 @@ export function usePriceSolver() {
   const [solving, setSolving] = useState(false)
 
   useEffect(() => {
-    workerRef.current = new Worker(new URL('../workers/price-solver.worker.ts', import.meta.url), {
+    const worker = new Worker(new URL('../workers/price-solver.worker.ts', import.meta.url), {
       type: 'module',
     })
+    workerRef.current = worker
 
-    workerRef.current.onmessage = (event: MessageEvent<SolverOutput>) => {
-      setResult(event.data)
+    worker.onmessage = (event: MessageEvent<SolverWorkerMessage>) => {
+      const message = event.data
+      if (message.type === 'result') {
+        setResult(message.result)
+      } else {
+        // The worker caught a thrown solve(); surface it instead of leaving the
+        // UI stuck "solving" forever with stale prices.
+        console.error('Price solver failed:', message.message)
+        Sentry.captureException(new Error(`Price solver failed: ${message.message}`))
+      }
+      setSolving(false)
+    }
+
+    // Fires on uncaught worker errors (e.g. a parse/runtime fault the try/catch
+    // in the worker can't reach). Without this the worker dies silently.
+    worker.onerror = (event) => {
+      console.error('Price solver worker crashed:', event.message)
+      Sentry.captureException(new Error(`Price solver worker crashed: ${event.message}`))
       setSolving(false)
     }
 
     return () => {
-      workerRef.current?.terminate()
+      // Clear any pending debounce before tearing down — otherwise a timer that
+      // fires after unmount would post to a terminated worker and call
+      // setSolving on an unmounted component.
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      worker.terminate()
+      workerRef.current = null
     }
   }, [])
 

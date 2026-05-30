@@ -50,8 +50,14 @@ export function resolveModifiers(
     switch (mod.dynamicType) {
       case 'Skill': {
         const { skillLevel, laborReducePercent } = context
-        const level = Math.min(skillLevel, laborReducePercent.length - 1)
-        multiplier *= laborReducePercent[level]
+        // An empty table (skill parsed without a multiplicative strategy) or a
+        // negative level would index out of bounds and yield `undefined`, which
+        // turns `multiplier` into NaN — and NaN silently fails every downstream
+        // convergence comparison, poisoning prices without surfacing an error.
+        if (laborReducePercent.length === 0) break
+        const level = Math.min(Math.max(skillLevel, 0), laborReducePercent.length - 1)
+        const factor = laborReducePercent[level]
+        if (factor != null) multiplier *= factor
         break
       }
       case 'Talent': {

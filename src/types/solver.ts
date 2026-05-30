@@ -119,3 +119,10 @@ export interface SolverError {
   recipeId: string
   message: string
 }
+
+/** Message posted from the price-solver worker back to the main thread. A
+ * thrown `solve()` is reported as `{ type: 'error' }` rather than swallowed,
+ * so the hook can stop "solving" and surface the failure. */
+export type SolverWorkerMessage =
+  | { type: 'result'; result: SolverOutput }
+  | { type: 'error'; message: string }

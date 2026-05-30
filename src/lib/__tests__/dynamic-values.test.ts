@@ -28,6 +28,18 @@ describe('resolveModifiers', () => {
     expect(resolveModifiers(modifiers, ctx)).toBeCloseTo(0.5)
   })
 
+  it('skips the skill modifier (no NaN) when laborReducePercent is empty', () => {
+    const ctx = { ...baseContext, laborReducePercent: [] }
+    const modifiers: SolverModifier[] = [{ dynamicType: 'Skill', refName: 'CookingSkill' }]
+    expect(resolveModifiers(modifiers, ctx)).toBe(1)
+  })
+
+  it('clamps a negative skill level to the first value instead of indexing from the end', () => {
+    const ctx = { ...baseContext, skillLevel: -1 }
+    const modifiers: SolverModifier[] = [{ dynamicType: 'Skill', refName: 'CookingSkill' }]
+    expect(resolveModifiers(modifiers, ctx)).toBeCloseTo(1.0)
+  })
+
   it('applies talent modifier when talent is active', () => {
     const ctx = { ...baseContext, activeTalents: [{ name: 'CookingFocusedTalent', value: 0.85 }] }
     const modifiers: SolverModifier[] = [{ dynamicType: 'Talent', refName: 'CookingFocusedTalent' }]

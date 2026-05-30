@@ -54,6 +54,27 @@ describe('price-solver.worker', () => {
 
     expect(solve).toHaveBeenCalledWith(emptyInput)
     expect(postMessage).toHaveBeenCalledTimes(1)
-    expect(postMessage).toHaveBeenCalledWith(fakeOutput)
+    expect(postMessage).toHaveBeenCalledWith({ type: 'result', result: fakeOutput })
+  })
+
+  it('posts an error message instead of throwing when solve() fails', async () => {
+    const fakeSelf = {
+      onmessage: null as ((event: MessageEvent<SolverInput>) => void) | null,
+      postMessage,
+    }
+    vi.stubGlobal('self', fakeSelf)
+
+    const solve = vi.fn(() => {
+      throw new Error('boom')
+    })
+    vi.resetModules()
+    vi.doMock('@/lib/solver', () => ({ solve }))
+
+    await import('../price-solver.worker')
+
+    fakeSelf.onmessage?.({ data: emptyInput } as MessageEvent<SolverInput>)
+
+    expect(postMessage).toHaveBeenCalledTimes(1)
+    expect(postMessage).toHaveBeenCalledWith({ type: 'error', message: 'boom' })
   })
 })
