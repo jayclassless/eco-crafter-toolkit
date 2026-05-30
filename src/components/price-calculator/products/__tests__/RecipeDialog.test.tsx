@@ -408,6 +408,48 @@ describe('RecipeDialog', () => {
     expect(inputs.length).toBeGreaterThanOrEqual(1)
   })
 
+  it('honors a manual price of 0 (free material) instead of the solver price', async () => {
+    // The solver/signal would price Stone at 99 (× qty 10 = 990). The user has
+    // explicitly set a manual price of 0 ("free"). The manual 0 must win — a
+    // prior truthiness check (`&& up.price`) dropped it and showed the 990
+    // fallback instead.
+    const signal: PriceSignal = { ...stubPriceSignal(), get: () => 99 }
+    stores.buildStore.setRow('userPrices', 'up-stone', {
+      buildId: BUILD_ID,
+      itemOrTagId: 'stone',
+      price: 0,
+      isOverride: true,
+      priceMode: 'manual',
+    })
+
+    render(
+      <StoreContext.Provider
+        value={{
+          ...stores,
+          gameDataPersister: stubPersister(),
+          buildPersister: stubPersister(),
+          uiPersister: stubPersister(),
+        }}
+      >
+        <RecipeDialog
+          recipeId={RECIPE_ID}
+          buildId={BUILD_ID}
+          datasetId={DS}
+          priceSignal={signal}
+          onHide={() => {}}
+        />
+      </StoreContext.Provider>
+    )
+
+    await waitFor(() => {
+      const stoneRow = screen.getAllByRole('row').find((r) => r.textContent?.includes('Stone'))
+      expect(stoneRow).toBeTruthy()
+    })
+    const stoneRow = screen.getAllByRole('row').find((r) => r.textContent?.includes('Stone'))!
+    // With the bug the Stone row total would render the 99 fallback (× 10).
+    expect(stoneRow.textContent).not.toContain('990')
+  })
+
   it('opens an ingredient via the Product link path when the ingredient is also a produced primary', async () => {
     // Add a producing recipe for "stone" so it becomes a primary product
     // in the build. Then add a useRecipe entry for it. The dialog's

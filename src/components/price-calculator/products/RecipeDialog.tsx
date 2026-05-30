@@ -179,7 +179,13 @@ export function RecipeDialog({
     (itemId: string): number | null => {
       for (const upId of buildStore.getRowIds('userPrices')) {
         const up = buildStore.getRow('userPrices', upId)
-        if (up.buildId === buildId && up.itemOrTagId === itemId && up.price) {
+        // Gate on `priceMode === 'manual'`, not on a truthy `price`. The `price`
+        // cell defaults to 0 and rows also exist for mode/mirror/exclude with a
+        // placeholder 0, so a truthiness check both (a) dropped a deliberate
+        // manual price of 0 — a valid "free" material — and (b) would misread
+        // those placeholder rows as priced. Manual mode is the precise signal
+        // that the user typed a price (see use-price-management.setPrice).
+        if (up.buildId === buildId && up.itemOrTagId === itemId && up.priceMode === 'manual') {
           return up.price as number
         }
       }
@@ -212,7 +218,10 @@ export function RecipeDialog({
     [gameDataStore]
   )
 
-  const getElements = useCallback(() => {
+  // Pure structural assembly of the recipe's ingredient/product rows WITHOUT
+  // prices. Memoized via `elementStructure` below so it only re-runs when the
+  // game-data / build structure changes — not on every solver price push.
+  const buildElementStructure = useCallback(() => {
     const ingredients: ElementRow[] = []
     const returnedIngredients: ElementRow[] = []
     const products: ProductRow[] = []
@@ -306,22 +315,18 @@ export function RecipeDialog({
           baseQuantity: baseAbs,
           modifiedQuantity: modifiedAbs,
           hasModifiers: modifiedAbs !== baseAbs,
-          unitPrice: resolveUnitPrice(r.itemOrTagId, false),
+          // unitPrice / totalPrice are filled at render time from the price
+          // signal (see the price-fill pass below) so a solver push doesn't
+          // re-run this structural scan. isProduced / userPriceId are likewise
+          // populated at render from the producedItemIds / userPriceIdByItem
+          // maps built further down.
+          unitPrice: null,
           totalPrice: null,
           isTag: (itemRow?.isTag as boolean) ?? false,
-          // isProduced and userPriceId are populated at render time below,
-          // since the producedItemIds / userPriceIdByItem maps are built by a
-          // memo that runs after this callback is declared.
           isProduced: false,
           userPriceId: '',
         })
       }
-    }
-    // Totals use modified quantity so the dialog's subtotals match what the
-    // solver actually charges (baseQuantity × unitPrice would diverge once
-    // any bonus reduces ingredient needs).
-    for (const ing of ingredients) {
-      ing.totalPrice = ing.unitPrice != null ? ing.unitPrice * ing.modifiedQuantity : null
     }
 
     for (const r of productRaws) {
@@ -331,8 +336,6 @@ export function RecipeDialog({
       const isCustom = !!itemRow?.isCustom
       const baseAbs = Math.abs(r.baseQuantity)
       const modifiedAbs = computeModified(r.id, baseAbs)
-      const unitPrice = resolveUnitPrice(r.itemOrTagId, true)
-      const totalPrice = unitPrice != null ? unitPrice * modifiedAbs : null
 
       if (reintegratedIds.has(r.itemOrTagId)) {
         returnedIngredients.push({
@@ -344,8 +347,8 @@ export function RecipeDialog({
           baseQuantity: baseAbs,
           modifiedQuantity: modifiedAbs,
           hasModifiers: modifiedAbs !== baseAbs,
-          unitPrice,
-          totalPrice,
+          unitPrice: null,
+          totalPrice: null,
           isTag: false,
           isProduced: false,
           userPriceId: '',
@@ -363,8 +366,8 @@ export function RecipeDialog({
           baseQuantity: baseAbs,
           modifiedQuantity: modifiedAbs,
           hasModifiers: modifiedAbs !== baseAbs,
-          unitPrice,
-          totalPrice,
+          unitPrice: null,
+          totalPrice: null,
           isTag: false,
           isProduced: false,
           userPriceId: '',
@@ -381,7 +384,6 @@ export function RecipeDialog({
     buildStore,
     buildId,
     findUserRecipeId,
-    resolveUnitPrice,
     getName,
     getItemRawName,
     resolvedMods,
@@ -415,10 +417,15 @@ export function RecipeDialog({
     setActiveTabIndex(e.index)
   }, [])
 
-  // userSettings is included so the dialog refreshes when the build's
-  // defaultShareForSecondaryItems changes — getElements reads it inline to
-  // compute auto-default share percentages for multi-product recipes.
-  useStoreRevision(buildStore, ['userProductShares', 'userReintegratedProducts', 'userSettings'])
+  // Invalidation signal for the structural element memo below. userSettings is
+  // included so it refreshes when the build's defaultShareForSecondaryItems
+  // changes — the builder reads it inline to compute auto-default share
+  // percentages for multi-product recipes.
+  const shareConfigRev = useStoreRevision(buildStore, [
+    'userProductShares',
+    'userReintegratedProducts',
+    'userSettings',
+  ])
   // Row-ids-only: the useMemo below only reads userRecipes.recipeId (stable
   // after row creation) and userPrices.itemOrTagId (ditto). Cell edits like
   // a userPrices.price change must not invalidate this memo — doing so
@@ -524,6 +531,24 @@ export function RecipeDialog({
     'itemParts',
   ])
 
+  // Structural rows (no prices), recomputed only when the recipe structure or
+  // build options change. `buildElementStructure` reads stores directly, so its
+  // useCallback identity doesn't change on a cell edit — the revision signals
+  // below are what invalidate the memo. Prices are filled at render time so a
+  // solver push re-renders without re-running this scan.
+  const elementStructure = useMemo(
+    () => buildElementStructure(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      buildElementStructure,
+      gameRev,
+      shareConfigRev,
+      buildRecipesRev,
+      reintegrateRowRev,
+      reintegrateCellRev,
+    ]
+  )
+
   // Recipes in this build that consume the primary product of the current
   // recipe. The primary product is the first product (by `index`) that isn't
   // also an ingredient of this recipe (i.e. not reintegrated). Delegates the
@@ -579,15 +604,29 @@ export function RecipeDialog({
   const tableRawName =
     (gameDataStore.getRow('craftingTables', recipe.craftingTableId as string)?.name as string) ?? ''
 
-  const { ingredients, returnedIngredients, products } = getElements()
-  // Enrich ingredient rows with build-scoped flags: whether the item is
-  // produced by any recipe in the build (locks it read-only) and its
-  // userPrices row id (for in-place edits). Populated here so the memo that
-  // owns these maps can live below `getElements`.
-  for (const ing of ingredients) {
-    ing.isProduced = producedItemIds.has(ing.itemOrTagId)
-    ing.userPriceId = userPriceIdByItem.get(ing.itemOrTagId) ?? ''
+  // Fill prices at render time from the price signal so a solver push updates
+  // the displayed numbers without re-running the structural scan in
+  // `elementStructure`. New row objects are produced — the memoized structure
+  // must not be mutated. Totals use modified quantity so subtotals match what
+  // the solver charges (baseQuantity × unitPrice would diverge once a bonus
+  // reduces ingredient needs).
+  const fillPrice = (row: ElementRow, isProduct: boolean) => {
+    const unitPrice = resolveUnitPrice(row.itemOrTagId, isProduct)
+    return { unitPrice, totalPrice: unitPrice != null ? unitPrice * row.modifiedQuantity : null }
   }
+  // Ingredient rows additionally carry build-scoped flags: produced-by-build
+  // locks the row read-only, and userPriceId enables in-place edits.
+  const ingredients = elementStructure.ingredients.map((row) => ({
+    ...row,
+    ...fillPrice(row, false),
+    isProduced: producedItemIds.has(row.itemOrTagId),
+    userPriceId: userPriceIdByItem.get(row.itemOrTagId) ?? '',
+  }))
+  const returnedIngredients = elementStructure.returnedIngredients.map((row) => ({
+    ...row,
+    ...fillPrice(row, true),
+  }))
+  const products = elementStructure.products.map((row) => ({ ...row, ...fillPrice(row, true) }))
   const showShareColumn = products.length > 1
   // Show the per-product reintegration toggle on the products table only when
   // there's something meaningful to do: more than one sellable product (so a
