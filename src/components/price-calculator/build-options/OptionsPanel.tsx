@@ -4,7 +4,6 @@ import { Column } from 'primereact/column'
 import { DataTable } from 'primereact/datatable'
 import { Dialog } from 'primereact/dialog'
 import { Dropdown, type DropdownChangeEvent } from 'primereact/dropdown'
-import { InputText } from 'primereact/inputtext'
 import { Panel } from 'primereact/panel'
 import { RadioButton } from 'primereact/radiobutton'
 import { Tooltip } from 'primereact/tooltip'
@@ -12,12 +11,18 @@ import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { NumericField } from '@/components/common/NumericField'
+import { MarginNameCell } from '@/components/price-calculator/build-options/MarginNameCell'
+import { MarginPercentCell } from '@/components/price-calculator/build-options/MarginPercentCell'
 import { useMarginManagement } from '@/hooks/use-margin-management'
 import { useSettings } from '@/hooks/use-settings'
-import { useStoreRevision } from '@/hooks/use-store-revision'
+import {
+  useCellInTableRevision,
+  useStoreRevision,
+  useTableRowIdsRevision,
+} from '@/hooks/use-store-revision'
 import { useStores } from '@/stores/providers'
 
-const BUILD_TABLES = ['userMargins', 'userSettings', 'builds'] as const
+const SETTINGS_TABLES = ['userSettings', 'builds'] as const
 
 interface Props {
   buildId: string
@@ -25,8 +30,6 @@ interface Props {
 
 interface MarginRow {
   id: string
-  name: string
-  percent: number
   isDefault: boolean
 }
 
@@ -46,7 +49,14 @@ export function OptionsPanel({ buildId }: Props) {
   const settingsMgmt = useSettings(buildId)
   const [marginToDelete, setMarginToDelete] = useState<string | null>(null)
   const [affectedRecipeCount, setAffectedRecipeCount] = useState(0)
-  useStoreRevision(buildStore, BUILD_TABLES)
+  // Re-render the panel on margin add/remove and default changes, and on any
+  // settings change — but NOT on `userMargins.name`/`.percent` cell edits.
+  // Those are owned by the self-subscribing MarginNameCell / MarginPercentCell,
+  // so typing a margin name no longer round-trips through the panel and rebuilds
+  // the whole DataTable on every keystroke.
+  useTableRowIdsRevision(buildStore, ['userMargins'])
+  useCellInTableRevision(buildStore, 'userMargins', 'isDefault')
+  useStoreRevision(buildStore, SETTINGS_TABLES)
 
   const getSettings = useCallback((): UserSettings | null => {
     for (const rowId of buildStore.getRowIds('userSettings')) {
@@ -65,21 +75,31 @@ export function OptionsPanel({ buildId }: Props) {
     return null
   }, [buildId, buildStore])
 
+  // Only the fields the panel itself renders (the default radio + delete
+  // enablement). `name`/`percent` are read directly by their self-subscribing
+  // cells, so they're intentionally absent here — the panel doesn't re-render
+  // when they change.
   const getMargins = useCallback((): MarginRow[] => {
     const rows: MarginRow[] = []
     for (const rowId of buildStore.getRowIds('userMargins')) {
       const row = buildStore.getRow('userMargins', rowId)
       if (row.buildId === buildId) {
-        rows.push({
-          id: rowId,
-          name: row.name as string,
-          percent: row.percent as number,
-          isDefault: row.isDefault as boolean,
-        })
+        rows.push({ id: rowId, isDefault: row.isDefault as boolean })
       }
     }
     return rows
   }, [buildId, buildStore])
+
+  // Stable handlers so the memoized name/percent cells bail when the panel
+  // re-renders for unrelated reasons. `marginMgmt` is itself memoized per build.
+  const handleMarginName = useCallback(
+    (id: string, value: string) => marginMgmt.updateMargin(id, 'name', value),
+    [marginMgmt]
+  )
+  const handleMarginPercent = useCallback(
+    (id: string, value: number) => marginMgmt.updateMargin(id, 'percent', value),
+    [marginMgmt]
+  )
 
   const settings = getSettings()
   const margins = getMargins()
@@ -113,21 +133,11 @@ export function OptionsPanel({ buildId }: Props) {
   }
 
   const marginNameTemplate = (row: MarginRow) => (
-    <InputText
-      value={row.name}
-      onChange={(e) => marginMgmt.updateMargin(row.id, 'name', e.target.value)}
-      className="w-full"
-    />
+    <MarginNameCell marginId={row.id} buildStore={buildStore} onChange={handleMarginName} />
   )
 
   const marginPercentTemplate = (row: MarginRow) => (
-    <NumericField
-      value={row.percent}
-      onChange={(v) => marginMgmt.updateMargin(row.id, 'percent', v ?? 0)}
-      min={0}
-      max={999}
-      className="w-full"
-    />
+    <MarginPercentCell marginId={row.id} buildStore={buildStore} onChange={handleMarginPercent} />
   )
 
   const marginDefaultTemplate = (row: MarginRow) => (

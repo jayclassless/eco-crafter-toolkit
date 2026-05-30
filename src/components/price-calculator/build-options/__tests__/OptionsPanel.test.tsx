@@ -101,6 +101,18 @@ describe('OptionsPanel (smoke)', () => {
     expect(stores.buildStore.getCell('userMargins', 'm1', 'name')).toBe('Standard')
   })
 
+  it('writes a margin percent on edit via its percent cell', async () => {
+    const stores = makeStores()
+    renderPanel(stores)
+    // The Default margin's percent is 20 (unique among the rendered fields).
+    const percentInput = screen.getByDisplayValue('20') as HTMLInputElement
+    fireEvent.change(percentInput, { target: { value: '30' } })
+    fireEvent.blur(percentInput)
+    await waitFor(() => {
+      expect(stores.buildStore.getCell('userMargins', 'm1', 'percent')).toBe(30)
+    })
+  })
+
   it('clicking the trash on a non-default margin (no recipes) deletes it immediately', () => {
     const stores = makeStores()
     renderPanel(stores)
