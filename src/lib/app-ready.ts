@@ -13,6 +13,8 @@
  * crash *before* any provider mounts (so no gate ever fires) still recovers.
  */
 
+import * as Sentry from '@sentry/react'
+
 import { snapLoaderTo100 } from './loader-progress'
 
 const WATCHDOG_MS = 10000
@@ -34,8 +36,9 @@ function ensureWatchdog(): void {
   watchdog = setTimeout(() => {
     if (revealed) return
     const pending = (Object.keys(gates) as Gate[]).filter((g) => !gates[g])
-    console.warn(
-      `[app-ready] watchdog fired after ${WATCHDOG_MS}ms; force-revealing app. Pending gates: ${pending.join(', ') || 'none'}`
+    Sentry.captureMessage(
+      `[app-ready] watchdog fired after ${WATCHDOG_MS}ms; force-revealing app. Pending gates: ${pending.join(', ') || 'none'}`,
+      'warning'
     )
     reveal()
   }, WATCHDOG_MS)

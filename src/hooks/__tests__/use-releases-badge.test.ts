@@ -122,8 +122,7 @@ describe('useReleasesBadgeCount', () => {
     expect(result.current).toBe(0)
   })
 
-  it('returns 0 and warns when the fetch fails', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  it('returns 0 and swallows the error when the fetch fails', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response('boom', { status: 500, statusText: 'Server Error' })
     )
@@ -132,7 +131,7 @@ describe('useReleasesBadgeCount', () => {
       wrapper: makeWrapper(stores),
     })
 
-    await waitFor(() => expect(warnSpy).toHaveBeenCalled())
-    expect(result.current).toBe(0)
+    // The badge stays at 0; a failed background fetch is not surfaced anywhere.
+    await waitFor(() => expect(result.current).toBe(0))
   })
 })

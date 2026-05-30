@@ -16,11 +16,10 @@ export function useNewsBadgeCount(): number {
       .then((fetched) => {
         if (!controller.signal.aborted) setItems(fetched)
       })
-      .catch((err) => {
-        if (controller.signal.aborted) return
-        // Swallow for the badge UI (it stays at 0), but surface in the console
-        // so a misconfigured CORS proxy / network outage isn't invisible.
-        console.warn('[gameNews] failed to fetch Steam news for badge:', err)
+      .catch(() => {
+        // Swallow for the badge UI (it stays at 0). A failed background fetch
+        // (offline, CORS proxy hiccup, transient network error) is routine and
+        // not worth reporting.
       })
     return () => {
       controller.abort()

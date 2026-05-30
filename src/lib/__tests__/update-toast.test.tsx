@@ -1,8 +1,14 @@
+import * as Sentry from '@sentry/react'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Toast } from 'primereact/toast'
 import { createRef } from 'react'
 import type { Store } from 'tinybase'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('@sentry/react', () => ({
+  captureException: vi.fn(),
+  captureMessage: vi.fn(),
+}))
 
 import { createBuildStore } from '@/stores/build-store'
 import { createGameDataStore } from '@/stores/game-data-store'
@@ -110,7 +116,6 @@ describe('showUpdateToast', () => {
     )
     const stores = makeStores(1)
     const ref = createRef<Toast>()
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     render(<Toast ref={ref} />)
     act(() => {
       showUpdateToast(ref, makeUpdate(stores), stores, (key) => key)
@@ -118,8 +123,7 @@ describe('showUpdateToast', () => {
     const updateBtn = await screen.findByRole('button', { name: /Update Now/i })
     fireEvent.click(updateBtn)
     await waitFor(() => {
-      expect(errSpy).toHaveBeenCalledWith('Dataset update failed', expect.anything())
+      expect(Sentry.captureException).toHaveBeenCalledWith(expect.anything())
     })
-    errSpy.mockRestore()
   })
 })

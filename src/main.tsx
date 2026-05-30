@@ -28,9 +28,7 @@ const rootEl = document.getElementById('root')
 if (!rootEl) throw new Error('#root not found')
 
 createRoot(rootEl, {
-  onUncaughtError: Sentry.reactErrorHandler((error, errorInfo) => {
-    console.warn('Uncaught error', error, errorInfo.componentStack)
-  }),
+  onUncaughtError: Sentry.reactErrorHandler(),
   onCaughtError: Sentry.reactErrorHandler(),
   onRecoverableError: Sentry.reactErrorHandler(),
 }).render(

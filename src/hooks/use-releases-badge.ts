@@ -16,11 +16,10 @@ export function useReleasesBadgeCount(): number {
       .then((fetched) => {
         if (!controller.signal.aborted) setItems(fetched)
       })
-      .catch((err) => {
-        if (controller.signal.aborted) return
-        // Swallow for the badge UI (it stays at 0), but surface in the console
-        // so a network/API outage isn't invisible.
-        console.warn('[releases] failed to fetch GitHub releases for badge:', err)
+      .catch(() => {
+        // Swallow for the badge UI (it stays at 0). A failed background fetch
+        // (offline, rate limit, transient API/network error) is routine and
+        // not worth reporting.
       })
     return () => {
       controller.abort()

@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react'
 import { Button } from 'primereact/button'
 import { Menu } from 'primereact/menu'
 import type { MenuItem } from 'primereact/menuitem'
@@ -72,7 +73,7 @@ export function DatasetActionsMenu({
       await applyDatasetUpdate(row.entry, gameDataStore, buildStore, uiStore)
       onUpdateSuccess(row.entry.name, row.entry.revision)
     } catch (err) {
-      console.error('Dataset update failed', err)
+      Sentry.captureException(err)
       onUpdateError(row.entry.name, err)
     } finally {
       setBusy(false)

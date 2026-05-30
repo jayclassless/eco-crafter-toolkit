@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react'
 import { Button } from 'primereact/button'
 import { Toast, type ToastMessage } from 'primereact/toast'
 import { type RefObject, useState } from 'react'
@@ -36,7 +37,7 @@ function UpdateToastContent({ update, localName, stores, onSuccess, onError }: C
       )
       onSuccess()
     } catch (err) {
-      console.error('Dataset update failed', err)
+      Sentry.captureException(err)
       onError()
       setLoading(false)
     }

@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react'
 import { Button } from 'primereact/button'
 import { Dialog } from 'primereact/dialog'
 import { Toast } from 'primereact/toast'
@@ -31,7 +32,7 @@ export function DeleteDatasetConfirmDialog({ target, onHide }: Props) {
         { gameData: gameDataPersister, build: buildPersister, ui: uiPersister }
       )
     } catch (err) {
-      console.error('Failed to delete dataset', err)
+      Sentry.captureException(err)
       toastRef.current?.show({
         severity: 'error',
         summary: t('settings.deleteDataset.errorSummary'),

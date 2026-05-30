@@ -24,7 +24,6 @@ export function usePriceSolver() {
       } else {
         // The worker caught a thrown solve(); surface it instead of leaving the
         // UI stuck "solving" forever with stale prices.
-        console.error('Price solver failed:', message.message)
         Sentry.captureException(new Error(`Price solver failed: ${message.message}`))
       }
       setSolving(false)
@@ -33,7 +32,6 @@ export function usePriceSolver() {
     // Fires on uncaught worker errors (e.g. a parse/runtime fault the try/catch
     // in the worker can't reach). Without this the worker dies silently.
     worker.onerror = (event) => {
-      console.error('Price solver worker crashed:', event.message)
       Sentry.captureException(new Error(`Price solver worker crashed: ${event.message}`))
       setSolving(false)
     }

@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 import {
@@ -7,6 +8,11 @@ import {
   markStoresReady,
   markThemeReady,
 } from '../app-ready'
+
+vi.mock('@sentry/react', () => ({
+  captureException: vi.fn(),
+  captureMessage: vi.fn(),
+}))
 
 function installLoader(): HTMLDivElement {
   const loader = document.createElement('div')
@@ -22,6 +28,7 @@ function dispatchTransitionEnd(el: HTMLElement): void {
 describe('app-ready', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    vi.mocked(Sentry.captureMessage).mockClear()
     __resetAppReady()
     document.body.innerHTML = ''
   })
@@ -90,7 +97,6 @@ describe('app-ready', () => {
 
   it('watchdog force-reveals after the watchdog timeout if gates never all fire', () => {
     const loader = installLoader()
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     markStoresReady()
     // theme + firstRender never fire
@@ -99,17 +105,15 @@ describe('app-ready', () => {
 
     vi.advanceTimersByTime(1)
     expect(loader.classList.contains('hidden')).toBe(true)
-    expect(warnSpy).toHaveBeenCalledOnce()
-    expect(warnSpy.mock.calls[0][0]).toContain('theme')
-    expect(warnSpy.mock.calls[0][0]).toContain('firstRender')
-    expect(warnSpy.mock.calls[0][0]).not.toContain('stores')
-
-    warnSpy.mockRestore()
+    expect(Sentry.captureMessage).toHaveBeenCalledOnce()
+    const msg = vi.mocked(Sentry.captureMessage).mock.calls[0][0]
+    expect(msg).toContain('theme')
+    expect(msg).toContain('firstRender')
+    expect(msg).not.toContain('stores')
   })
 
   it('initAppReady arms the watchdog so a crash before any gate still reveals', () => {
     const loader = installLoader()
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     // No gate ever fires (e.g. React failed to mount). Before initAppReady the
     // watchdog was only armed from markGate, so nothing would have revealed.
@@ -119,13 +123,11 @@ describe('app-ready', () => {
 
     vi.advanceTimersByTime(1)
     expect(loader.classList.contains('hidden')).toBe(true)
-    expect(warnSpy).toHaveBeenCalledOnce()
-    const msg = warnSpy.mock.calls[0][0]
+    expect(Sentry.captureMessage).toHaveBeenCalledOnce()
+    const msg = vi.mocked(Sentry.captureMessage).mock.calls[0][0]
     expect(msg).toContain('stores')
     expect(msg).toContain('theme')
     expect(msg).toContain('firstRender')
-
-    warnSpy.mockRestore()
   })
 
   it('initAppReady is idempotent and does not re-arm a second watchdog', () => {
@@ -139,7 +141,6 @@ describe('app-ready', () => {
 
   it('does not call reveal twice if gates fire after watchdog', () => {
     const loader = installLoader()
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     markStoresReady()
     vi.advanceTimersByTime(10000)
@@ -150,7 +151,5 @@ describe('app-ready', () => {
       markThemeReady()
       markFirstRenderReady()
     }).not.toThrow()
-
-    warnSpy.mockRestore()
   })
 })

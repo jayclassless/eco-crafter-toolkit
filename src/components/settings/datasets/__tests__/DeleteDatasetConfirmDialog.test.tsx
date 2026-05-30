@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { Store } from 'tinybase'
 import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
@@ -12,6 +13,11 @@ import { DeleteDatasetConfirmDialog } from '../DeleteDatasetConfirmDialog'
 import type { DatasetRow } from '../types'
 
 import '@/i18n'
+
+vi.mock('@sentry/react', () => ({
+  captureException: vi.fn(),
+  captureMessage: vi.fn(),
+}))
 
 vi.mock('@/lib/purge-data', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/purge-data')>()
@@ -172,14 +178,11 @@ describe('DeleteDatasetConfirmDialog — execution', () => {
     ;(mockedPurgeData as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error('boom')
     )
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
     renderDialog({ target: makeRow() })
     fireEvent.click(screen.getByRole('button', { name: /^delete$/i }))
 
     await waitFor(() => expect(document.body.textContent ?? '').toMatch(/delete failed/i))
     expect(reloadSpy).not.toHaveBeenCalled()
-    expect(errorSpy).toHaveBeenCalledWith('Failed to delete dataset', expect.any(Error))
-    errorSpy.mockRestore()
+    expect(Sentry.captureException).toHaveBeenCalledWith(expect.any(Error))
   })
 })
