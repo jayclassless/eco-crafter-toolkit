@@ -25,7 +25,15 @@ function getIconPath(name: string): string {
 
 export function EcoIcon({ name, size = 24, className, alt = '' }: Props) {
   const { t } = useTranslation()
-  const [failed, setFailed] = useState(false)
+  // Track the *src* that failed, not a bare boolean. EcoIcon is reused with a
+  // changing `name` (e.g. in autocomplete item templates / selected-value
+  // slots where React keeps the same element instance), so a boolean would
+  // stay stuck on the fallback after one icon 404s even when a later `name`
+  // points at a valid image. Deriving `failed` from the current path resets it
+  // automatically whenever `name` changes.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  const path = getIconPath(name)
+  const failed = failedSrc === path
 
   if (failed) {
     return (
@@ -52,12 +60,12 @@ export function EcoIcon({ name, size = 24, className, alt = '' }: Props) {
 
   return (
     <img
-      src={getIconPath(name)}
+      src={path}
       alt={alt}
       width={size}
       height={size}
       className={className}
-      onError={() => setFailed(true)}
+      onError={() => setFailedSrc(path)}
     />
   )
 }

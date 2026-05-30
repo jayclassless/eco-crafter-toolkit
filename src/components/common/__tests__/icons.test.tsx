@@ -44,6 +44,21 @@ describe('EcoIcon', () => {
     expect(svg).toBeInTheDocument()
     expect(svg!.getAttribute('aria-label')).toBe('missing icon')
   })
+
+  it('recovers from a prior failure when the name changes to a valid icon', () => {
+    // EcoIcon instances are reused with a changing `name`; a failure for one
+    // icon must not stick to the next.
+    const { container, rerender } = render(<EcoIcon name="MissingItem" />)
+    fireEvent.error(container.querySelector('img')!)
+    expect(container.querySelector('svg')).toBeInTheDocument()
+    expect(container.querySelector('img')).toBeNull()
+
+    rerender(<EcoIcon name="WoodItem" />)
+    const img = container.querySelector('img')
+    expect(img).toBeInTheDocument()
+    expect(img!.getAttribute('src')).toBe('/eco-icons/items/WoodItem.png')
+    expect(container.querySelector('svg')).toBeNull()
+  })
 })
 
 describe('icon wrappers forward name + alt to EcoIcon', () => {
