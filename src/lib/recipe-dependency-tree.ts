@@ -73,6 +73,9 @@ interface BuildContext {
   store: Store
   primaryRecipeIdsByItemId: Map<string, string[]>
   itemIdsByTagId: Map<string, string[]>
+  /** recipeId → its recipeElement rows. Avoids re-scanning the whole
+   * recipeElements table once per expanded node (O(nodes × all-elements)). */
+  elementsByRecipeId: Map<string, Array<{ id: string; row: Record<string, unknown> }>>
   selections: Map<string, string>
   getName: (entityType: string, entityId: string) => string
   shortcutEdges: ShortcutEdge[]
@@ -159,6 +162,7 @@ export function buildDependencyTree(
     store,
     primaryRecipeIdsByItemId: indexes.primaryRecipeIdsByItemId,
     itemIdsByTagId: indexes.itemIdsByTagId,
+    elementsByRecipeId: indexes.recipeIndexes.elementsByRecipeId,
     selections,
     getName,
     shortcutEdges: [],
@@ -213,13 +217,11 @@ function expandIngredients(
     index: number
   }
   const ingredients: Ingredient[] = []
-  for (const reId of ctx.store.getRowIds('recipeElements')) {
-    const re = ctx.store.getRow('recipeElements', reId)
-    if (re.recipeId !== recipeId) continue
-    if (re.isProduct) continue
+  for (const { row } of ctx.elementsByRecipeId.get(recipeId) ?? []) {
+    if (row.isProduct) continue
     ingredients.push({
-      itemOrTagId: re.itemOrTagId as string,
-      index: (re.index as number) ?? 0,
+      itemOrTagId: row.itemOrTagId as string,
+      index: (row.index as number) ?? 0,
     })
   }
   ingredients.sort((a, b) => a.index - b.index)

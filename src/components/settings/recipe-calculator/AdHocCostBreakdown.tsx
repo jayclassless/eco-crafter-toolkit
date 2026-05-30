@@ -9,6 +9,7 @@ import { ItemIcon } from '@/components/common/ItemIcon'
 import { PriceField } from '@/components/common/PriceField'
 import { AppliedBonuses } from '@/components/price-calculator/products/AppliedBonuses'
 import { useLocalization } from '@/hooks/use-localization'
+import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import type { GetNameFn } from '@/lib/recipe-modifiers'
 
 import type { AdHocResult } from './adhoc-recipe-calc'
@@ -59,11 +60,13 @@ export function AdHocCostBreakdown({
       index: number
     }
     const rawRows: RawRow[] = []
-    for (const reId of gameDataStore.getRowIds('recipeElements')) {
-      const re = gameDataStore.getRow('recipeElements', reId)
-      if (re.recipeId !== recipeId) continue
+    // Use the cached per-recipe element index instead of scanning the whole
+    // recipeElements table (tens of thousands of rows) on every recompute.
+    const elements =
+      getGameDataIndexes(gameDataStore).recipeIndexes.elementsByRecipeId.get(recipeId)
+    for (const { id, row: re } of elements ?? []) {
       const row: RawRow = {
-        id: reId,
+        id,
         itemOrTagId: re.itemOrTagId as string,
         baseQuantity: re.baseQuantity as number,
         isProduct: re.isProduct as boolean,

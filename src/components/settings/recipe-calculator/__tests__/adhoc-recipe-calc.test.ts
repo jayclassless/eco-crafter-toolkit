@@ -385,4 +385,48 @@ describe('seedIngredientPrices', () => {
     const seeded = seedIngredientPrices(game, build, stubSignal({}), BUILD, 'r1')
     expect(seeded).toEqual({ iron: 0, copper: 0 })
   })
+
+  it('preserves a manual price of 0 (free) instead of falling through to the signal', () => {
+    build.setRow('userPrices', 'p1', {
+      id: 'p1',
+      buildId: BUILD,
+      itemOrTagId: 'iron',
+      price: 0,
+      isOverride: false,
+      primaryItemId: '',
+      priceMode: 'manual',
+    })
+    const seeded = seedIngredientPrices(
+      game,
+      build,
+      stubSignal({ iron: 99, copper: 3 }),
+      BUILD,
+      'r1'
+    )
+    expect(seeded.iron).toBe(0)
+    expect(seeded.copper).toBe(3)
+  })
+
+  it('ignores a placeholder price on a non-manual (e.g. min-mode) userPrices row', () => {
+    build.setRow('userPrices', 'p1', {
+      id: 'p1',
+      buildId: BUILD,
+      itemOrTagId: 'iron',
+      price: 0,
+      isOverride: false,
+      primaryItemId: '',
+      priceMode: 'min',
+    })
+    // priceMode is not 'manual', so the placeholder 0 must NOT seed iron — it
+    // should use the signal cost price instead.
+    const seeded = seedIngredientPrices(
+      game,
+      build,
+      stubSignal({ iron: 5, copper: 3 }),
+      BUILD,
+      'r1'
+    )
+    expect(seeded.iron).toBe(5)
+    expect(seeded.copper).toBe(3)
+  })
 })

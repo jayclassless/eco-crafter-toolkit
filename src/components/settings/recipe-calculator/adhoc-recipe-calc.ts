@@ -106,14 +106,17 @@ export function seedIngredientPrices(
   buildId: string,
   recipeId: string
 ): Record<string, number> {
-  const manualPriceFor = (itemId: string): number | null => {
-    for (const upId of buildStore.getRowIds('userPrices')) {
-      const up = buildStore.getRow('userPrices', upId)
-      if (up.buildId === buildId && up.itemOrTagId === itemId && up.price) {
-        return up.price as number
-      }
-    }
-    return null
+  // One pass over userPrices → manual price per item, instead of re-scanning
+  // the whole table for every ingredient (was O(ingredients × userPrices)).
+  // Gate on priceMode === 'manual' (not a truthy price): the `price` cell
+  // defaults to 0 and mode/mirror/exclude rows carry a placeholder 0, so a
+  // truthiness check both dropped a deliberate manual 0 and misread placeholders.
+  const manualPrices = new Map<string, number>()
+  for (const upId of buildStore.getRowIds('userPrices')) {
+    const up = buildStore.getRow('userPrices', upId)
+    if (up.buildId !== buildId || up.priceMode !== 'manual') continue
+    const itemId = up.itemOrTagId as string
+    if (!manualPrices.has(itemId)) manualPrices.set(itemId, up.price as number)
   }
 
   const prices: Record<string, number> = {}
@@ -123,7 +126,8 @@ export function seedIngredientPrices(
     if (row.isProduct) continue
     const itemOrTagId = row.itemOrTagId as string
     if (itemOrTagId in prices) continue
-    const seeded = manualPriceFor(itemOrTagId) ?? priceSignal.get(itemOrTagId, 'costPrice') ?? 0
+    const manual = manualPrices.get(itemOrTagId)
+    const seeded = manual ?? priceSignal.get(itemOrTagId, 'costPrice') ?? 0
     prices[itemOrTagId] = seeded
   }
   return prices
