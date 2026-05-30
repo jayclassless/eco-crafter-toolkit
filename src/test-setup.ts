@@ -2,7 +2,18 @@ import 'fake-indexeddb/auto'
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { IDBFactory } from 'fake-indexeddb'
+import PrimeReact from 'primereact/api'
 import { afterEach } from 'vitest'
+
+// Disable PrimeReact's enter/exit animations in tests. Its overlays (Dialog,
+// AutoComplete, etc.) wrap react-transition-group's CSSTransition, which drives
+// "entered"/"exited" state changes off setTimeout. Those timers routinely fire
+// AFTER the test that mounted the overlay has finished, producing "An update to
+// Transition inside a test was not wrapped in act(...)" warnings that get blamed
+// on whichever unrelated test happens to be running when the timer pops. With
+// `cssTransition` off, PrimeReact's CSSTransition runs its lifecycle callbacks
+// synchronously inside an effect (no timers), so the state settles within act().
+PrimeReact.cssTransition = false
 
 // Initialize react-i18next globally so components that call useTranslation()
 // don't emit "you will need to pass in an i18next instance" warnings during

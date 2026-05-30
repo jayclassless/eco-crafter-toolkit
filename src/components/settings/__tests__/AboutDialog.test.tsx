@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import type { Store } from 'tinybase'
 import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
@@ -132,6 +132,12 @@ describe('AboutDialog', () => {
     // The badge hook may have called fetch, but the tab body specifically
     // hasn't mounted — confirmed by the absence of the empty-state message.
     fetchSpy.mockClear()
+    // The badge hook's background fetch resolves and calls setItems after the
+    // synchronous assertions above. Flush that pending state update inside act()
+    // so it doesn't leak past the test as an "update not wrapped in act" warning.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
   })
 
   it('shows a count badge on the Update History tab when there are unseen releases', async () => {
