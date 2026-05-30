@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 import {
   __resetAppReady,
+  initAppReady,
   markFirstRenderReady,
   markStoresReady,
   markThemeReady,
@@ -104,6 +105,36 @@ describe('app-ready', () => {
     expect(warnSpy.mock.calls[0][0]).not.toContain('stores')
 
     warnSpy.mockRestore()
+  })
+
+  it('initAppReady arms the watchdog so a crash before any gate still reveals', () => {
+    const loader = installLoader()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    // No gate ever fires (e.g. React failed to mount). Before initAppReady the
+    // watchdog was only armed from markGate, so nothing would have revealed.
+    initAppReady()
+    vi.advanceTimersByTime(9999)
+    expect(loader.classList.contains('hidden')).toBe(false)
+
+    vi.advanceTimersByTime(1)
+    expect(loader.classList.contains('hidden')).toBe(true)
+    expect(warnSpy).toHaveBeenCalledOnce()
+    const msg = warnSpy.mock.calls[0][0]
+    expect(msg).toContain('stores')
+    expect(msg).toContain('theme')
+    expect(msg).toContain('firstRender')
+
+    warnSpy.mockRestore()
+  })
+
+  it('initAppReady is idempotent and does not re-arm a second watchdog', () => {
+    installLoader()
+    initAppReady()
+    initAppReady()
+    // A single watchdog reveals once; advancing past it must not throw or
+    // schedule a second reveal.
+    expect(() => vi.advanceTimersByTime(10000)).not.toThrow()
   })
 
   it('does not call reveal twice if gates fire after watchdog', () => {

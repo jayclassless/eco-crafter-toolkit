@@ -7,9 +7,10 @@
  *   - theme:        PrimeReact theme <link> has loaded its CSS
  *   - firstRender:  AppInner mounted real content (not a null return)
  *
- * A 5 second watchdog force-reveals the app if any gate fails to fire, so
+ * A 10 second watchdog force-reveals the app if any gate fails to fire, so
  * a broken theme fetch or store crash can't leave the user stuck on the
- * loading screen forever.
+ * loading screen forever. `initAppReady()` arms it during bootstrap so even a
+ * crash *before* any provider mounts (so no gate ever fires) still recovers.
  */
 
 import { snapLoaderTo100 } from './loader-progress'
@@ -69,6 +70,16 @@ function reveal(): void {
   // Safety: if transitionend doesn't fire (e.g. element is already hidden
   // via CSS, or transitions are disabled), remove after the fade duration.
   setTimeout(remove, FADE_MS + 50)
+}
+
+/**
+ * Arm the watchdog at app bootstrap, before any React provider mounts. Without
+ * this the watchdog was only armed from inside `markGate`, so a crash before
+ * the first gate fired left the splash up forever. Idempotent — re-arming is a
+ * no-op while a watchdog is already pending or the app has been revealed.
+ */
+export function initAppReady(): void {
+  ensureWatchdog()
 }
 
 export function markStoresReady(): void {

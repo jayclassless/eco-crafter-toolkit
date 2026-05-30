@@ -9,7 +9,13 @@ import { createRoot } from 'react-dom/client'
 
 import './sentry'
 import { App } from './App'
+import { initAppReady } from './lib/app-ready'
 import { markLoaderMilestone } from './lib/loader-progress'
+
+// Arm the splash watchdog before anything can throw. If React fails to mount
+// (so no app-ready gate ever fires), this still force-reveals the app instead
+// of leaving the user stuck on the loading screen forever.
+initAppReady()
 
 // Both marks land here because ES modules hoist all imports above the body —
 // so by the time this code runs, every CSS import and i18n.init() has already
