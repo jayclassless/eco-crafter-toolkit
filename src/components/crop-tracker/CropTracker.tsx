@@ -1,6 +1,6 @@
 import { Button } from 'primereact/button'
 import { Dropdown } from 'primereact/dropdown'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 
@@ -81,6 +81,13 @@ export function CropTracker() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetId, gameDataStore, getName, itemsRev])
   const cropsById = useMemo(() => new Map(crops.map((c) => [c.id, c])), [crops])
+  // Read the latest crop map inside the sort memo via a ref so the memo can use
+  // current crop data WITHOUT re-sorting merely because `cropsById` got a new
+  // identity. Its identity changes whenever `getName` reloads (the localized-
+  // name index resolves async), and treating that as a re-sort trigger yanked
+  // rows out from under the user mid-edit — the exact thing the memo prevents.
+  const cropsByIdRef = useRef(cropsById)
+  cropsByIdRef.current = cropsById
 
   // Per-build growth-rate multiplier.
   const settings = useSettings(buildId ?? '')
@@ -111,7 +118,7 @@ export function CropTracker() {
         const hasRegrown =
           (buildStore.getCell('userPlantings', id, 'hasRegrown') as boolean) ?? false
         const name = (buildStore.getCell('userPlantings', id, 'name') as string) ?? ''
-        const crop = cropItemId ? cropsById.get(cropItemId) : undefined
+        const crop = cropItemId ? cropsByIdRef.current.get(cropItemId) : undefined
         const harvest =
           crop && plantedAt
             ? computeHarvestDate(plantedAt, crop, growthRateModifier, hasRegrown)
@@ -125,8 +132,11 @@ export function CropTracker() {
         }
       })
     return sortPlantings(rows, sortField, sortDir).map((r) => r.id)
+    // cropsById is read via a ref (see above) so its identity changes don't
+    // trigger a live re-sort; the real triggers are row add/remove and the
+    // sort/growth settings.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildId, buildStore, cropsById, growthRateModifier, sortField, sortDir, rowIdsRev])
+  }, [buildId, buildStore, growthRateModifier, sortField, sortDir, rowIdsRev])
 
   const sortFieldOptions = useMemo(
     () => [

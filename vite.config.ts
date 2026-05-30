@@ -1,3 +1,4 @@
+import fs from 'fs'
 import path from 'path'
 
 import { sentryVitePlugin } from '@sentry/vite-plugin'
@@ -6,17 +7,40 @@ import { defineConfig, type Plugin } from 'vitest/config'
 
 import pkg from './package.json' with { type: 'json' }
 
-// Test files that use `vi.mock` / `vi.doMock`. These can't run with the shared
-// module cache enabled by `isolate: false`, so they get their own isolated
-// project below.
-const MOCK_USING_TEST_FILES = [
-  'src/components/price-calculator/__tests__/NavBar.test.tsx',
-  'src/components/price-calculator/__tests__/PriceCalculator.test.tsx',
-  'src/components/price-calculator/recipe-dependency-graph/__tests__/DepItemNode.test.tsx',
-  'src/components/price-calculator/recipe-dependency-graph/__tests__/RecipeDependencyGraph.test.tsx',
-  'src/components/settings/datasets/__tests__/DeleteDatasetConfirmDialog.test.tsx',
-  'src/workers/__tests__/price-solver.worker.test.ts',
-]
+// Test files that use file-level `vi.mock` / `vi.doMock` can't share the module
+// registry enabled by `isolate: false` below — a mock registered in one file
+// leaks into every other file in the same worker. Those files run in the
+// isolated project instead.
+//
+// This list is DERIVED by scanning test sources rather than hand-maintained: a
+// stale manual list (it referenced a since-moved NavBar test) previously let a
+// leaked `steam-news` mock break an unrelated news-badge test. Detecting the
+// usage directly means adding a `vi.mock` to a file can never silently flake.
+function findMockUsingTestFiles(): string[] {
+  const found: string[] = []
+  const visit = (dir: string): void => {
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return // root doesn't exist (e.g. no infra/ in some checkouts)
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        visit(full)
+      } else if (/\.test\.tsx?$/.test(entry.name)) {
+        if (/\bvi\.(mock|doMock)\s*\(/.test(fs.readFileSync(full, 'utf8'))) {
+          found.push(path.relative(__dirname, full).split(path.sep).join('/'))
+        }
+      }
+    }
+  }
+  for (const root of ['src', 'infra']) visit(path.resolve(__dirname, root))
+  return found
+}
+
+const MOCK_USING_TEST_FILES = findMockUsingTestFiles()
 
 // Steam's news API has no CORS headers. In production a Lambda Function URL
 // behind CloudFront serves /api/game-news; in dev this middleware runs the
