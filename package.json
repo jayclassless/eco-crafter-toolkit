@@ -52,6 +52,7 @@
     "preview": "vite preview",
     "test": "vitest run --reporter=verbose",
     "test:coverage": "vitest run --coverage --reporter=verbose",
+    "test:dot": "vitest run --reporter=dot",
     "typecheck": "tsc --noEmit"
   },
   "aube": {

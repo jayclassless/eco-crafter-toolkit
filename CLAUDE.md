@@ -9,8 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   2. `knip`
   3. `format`
   4. `lint`
-  5. `test`
-- Never pipe the output of a quality-check script (`typecheck`, `knip`, `format`, `lint`, `test`, `test:coverage`, `fullcheck`) through `tail`, `head`, or `grep`. These commands write warnings (e.g. React `act()` warnings, deprecation notices, oxlint hints) inline between the test list and the final summary, and truncating filters silently discard them. Run the script unfiltered and read the full output.
+  5. `test:dot` (the compact reporter — see below; use `test` only when you specifically need the verbose per-test listing)
+- Never pipe the output of a quality-check script (`typecheck`, `knip`, `format`, `lint`, `test`, `test:dot`, `test:coverage`, `fullcheck`) through `tail`, `head`, or `grep`. These commands write warnings (e.g. React `act()` warnings, deprecation notices, oxlint hints) inline between the test list and the final summary, and truncating filters silently discard them. Run the script unfiltered and read the full output.
+- To keep test output compact WITHOUT filtering, prefer `test:dot` (`vitest run --reporter=dot`). Passing tests print one `·` each (the whole suite is a single block of dots), failures still print the full `⎯⎯ Failed Tests ⎯⎯` diagnostics (diff + `file:line` + code frame), and console warnings still print inline — nothing load-bearing is lost. Do NOT pass `--reporter=dot` to the bare `test` shortcut (its script already sets `--reporter=verbose`, so you'd run both reporters); use `aube run test:dot` instead. Never add `--silent` (it suppresses the warnings).
 - When implementing features and changes, keep in mind the following order of priorities:
   1. Correctness: It is absolutely critical that the data and mathematics presented to the user is correct. Flaws in calculations are not acceptable.
   2. Performance: Aim to make the UI as responsive and quick as possible for the users.
@@ -31,7 +32,8 @@ Runtime is pinned via `mise.toml` (Node 24, aube, pnpm, hk, pkl, jd, jq). Always
 - `mise exec -- aube run lint` — oxlint
 - `mise exec -- aube run knip` — unused-export/dependency check (config: `.knip.json`)
 - `mise exec -- aube run format` — oxfmt (single quotes, no semi, 2-space)
-- `mise exec -- aube test` — vitest run (jsdom, `src/**/*.test.{ts,tsx}`)
+- `mise exec -- aube test` — vitest run, verbose reporter (jsdom, `src/**/*.test.{ts,tsx}`)
+- `mise exec -- aube run test:dot` — same run with the compact dot reporter (preferred for quality checks; compact pass output, full failure diagnostics + inline warnings preserved)
 - `mise exec -- aube run test:coverage` — vitest with v8 coverage
 - `mise exec -- aube run fullcheck` — lint + knip + typecheck + format + coverage
 - Single test: `mise exec -- aube exec vitest run path/to/file.test.ts -t "name pattern"`
