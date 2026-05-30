@@ -991,7 +991,7 @@ export function RecipeDialog({
               <div className="grid">
                 <div className="col-6 flex flex-column">
                   <h4 className="mt-0 mb-2">{t('priceCalculator.recipe.ingredients')}</h4>
-                  <DataTable value={ingredients} size="small">
+                  <DataTable value={ingredients} dataKey="recipeElementId" size="small">
                     <Column
                       header={t('priceCalculator.recipe.quantity')}
                       body={quantityTemplate}
@@ -1022,7 +1022,7 @@ export function RecipeDialog({
                       <h4 className="mt-4 mb-2">
                         {t('priceCalculator.recipe.returnedIngredients')}
                       </h4>
-                      <DataTable value={returnedIngredients} size="small">
+                      <DataTable value={returnedIngredients} dataKey="recipeElementId" size="small">
                         <Column
                           header={t('priceCalculator.recipe.quantity')}
                           body={quantityTemplate}
@@ -1054,7 +1054,7 @@ export function RecipeDialog({
                   {additionalCosts.length > 0 && (
                     <>
                       <h4 className="mt-4 mb-2">{t('priceCalculator.recipe.additionalCosts')}</h4>
-                      <DataTable value={additionalCosts} size="small">
+                      <DataTable value={additionalCosts} dataKey="id" size="small">
                         <Column
                           header={t('priceCalculator.recipe.quantity')}
                           body={additionalCostQuantityTemplate}
@@ -1087,7 +1087,7 @@ export function RecipeDialog({
 
                 <div className="col-6 flex flex-column">
                   <h4 className="mt-0 mb-2">{t('priceCalculator.recipe.products')}</h4>
-                  <DataTable value={products} size="small">
+                  <DataTable value={products} dataKey="recipeElementId" size="small">
                     <Column
                       header={t('priceCalculator.recipe.quantity')}
                       body={quantityTemplate}

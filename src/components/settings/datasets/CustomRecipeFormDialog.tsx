@@ -19,6 +19,7 @@ import {
   type CustomRecipeInput,
   updateCustomRecipe,
 } from '@/lib/custom-entities'
+import { generateId } from '@/lib/ids'
 import { useStores } from '@/stores/providers'
 
 interface PickerOption {
@@ -31,15 +32,30 @@ interface PickerOption {
 type PickerGroup = GroupedSinglePickerGroup<PickerOption>
 
 interface IngredientRow {
+  // Stable per-row id used as the React key. Rows are deletable mid-list, so
+  // keying by array index would let an InputText/picker's internal state
+  // (focus, in-progress text, open dropdown) carry over to the wrong logical
+  // row after a delete.
+  id: string
   selection: PickerOption | null
   baseQuantity: number | null
   isDiscountedBySkill: boolean
 }
 
 interface ProductRow {
+  id: string
   selection: PickerOption | null
   quantity: number | null
 }
+
+const emptyIngredient = (): IngredientRow => ({
+  id: generateId(),
+  selection: null,
+  baseQuantity: 1,
+  isDiscountedBySkill: false,
+})
+
+const emptyProduct = (): ProductRow => ({ id: generateId(), selection: null, quantity: 1 })
 
 interface Props {
   visible: boolean
@@ -218,8 +234,8 @@ export function CustomRecipeFormDialog({ visible, onHide, datasetId, recipeId }:
       setRequiredSkillLevel(0)
       setBaseLaborCost(0)
       setBaseCraftTime(0)
-      setIngredients([{ selection: null, baseQuantity: 1, isDiscountedBySkill: false }])
-      setProducts([{ selection: null, quantity: 1 }])
+      setIngredients([emptyIngredient()])
+      setProducts([emptyProduct()])
       return
     }
     const recipe = gameDataStore.getRow('recipes', recipeId)
@@ -281,21 +297,21 @@ export function CustomRecipeFormDialog({ visible, onHide, datasetId, recipeId }:
         : null
       if (row.isProduct) {
         prods.push({
+          id: generateId(),
           selection,
           quantity: Math.abs((row.baseQuantity as number) ?? 0),
         })
       } else {
         ings.push({
+          id: generateId(),
           selection,
           baseQuantity: Math.abs((row.baseQuantity as number) ?? 0),
           isDiscountedBySkill: elementDiscountedSet.has(id),
         })
       }
     }
-    setIngredients(
-      ings.length > 0 ? ings : [{ selection: null, baseQuantity: 1, isDiscountedBySkill: false }]
-    )
-    setProducts(prods.length > 0 ? prods : [{ selection: null, quantity: 1 }])
+    setIngredients(ings.length > 0 ? ings : [emptyIngredient()])
+    setProducts(prods.length > 0 ? prods : [emptyProduct()])
   }, [visible, isEdit, recipeId, gameDataStore, getName])
 
   const updateIngredient = (idx: number, patch: Partial<IngredientRow>) => {
@@ -495,16 +511,11 @@ export function CustomRecipeFormDialog({ visible, onHide, datasetId, recipeId }:
               icon="pi pi-plus"
               size="small"
               outlined
-              onClick={() =>
-                setIngredients((rows) => [
-                  ...rows,
-                  { selection: null, baseQuantity: 1, isDiscountedBySkill: false },
-                ])
-              }
+              onClick={() => setIngredients((rows) => [...rows, emptyIngredient()])}
             />
           </div>
           {ingredients.map((row, idx) => (
-            <div key={idx} className="flex align-items-center gap-2">
+            <div key={row.id} className="flex align-items-center gap-2">
               <div className="flex-grow-1">
                 <TypeAheadPicker
                   placeholder={t('settings.customEntities.fields.itemPlaceholder')}
@@ -549,11 +560,11 @@ export function CustomRecipeFormDialog({ visible, onHide, datasetId, recipeId }:
               icon="pi pi-plus"
               size="small"
               outlined
-              onClick={() => setProducts((rows) => [...rows, { selection: null, quantity: 1 }])}
+              onClick={() => setProducts((rows) => [...rows, emptyProduct()])}
             />
           </div>
           {products.map((row, idx) => (
-            <div key={idx} className="flex align-items-center gap-2">
+            <div key={row.id} className="flex align-items-center gap-2">
               <div className="flex-grow-1">
                 <TypeAheadPicker
                   placeholder={t('settings.customEntities.fields.itemPlaceholder')}

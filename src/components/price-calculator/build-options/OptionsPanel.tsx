@@ -163,6 +163,7 @@ export function OptionsPanel({ buildId }: Props) {
           {margins.length > 0 && (
             <DataTable
               value={margins}
+              dataKey="id"
               size="small"
               tableStyle={{ width: '100%', tableLayout: 'fixed' }}
             >
