@@ -102,8 +102,9 @@ describe('NavBar', () => {
 
   it('renders the tool switcher with both tools', () => {
     renderNav(makeStores())
-    expect(screen.getByText('Price Calculator')).toBeInTheDocument()
-    expect(screen.getByText('Crop Tracker')).toBeInTheDocument()
+    // The switcher is icon-only; tool names are exposed via aria-label/title.
+    expect(screen.getByLabelText('Price Calculator')).toBeInTheDocument()
+    expect(screen.getByLabelText('Crop Tracker')).toBeInTheDocument()
   })
 
   it('shows a count badge on the hamburger button when there are unseen releases', async () => {

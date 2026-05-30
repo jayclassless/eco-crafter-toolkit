@@ -4,6 +4,7 @@ import { Tag } from 'primereact/tag'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
+import { PlantIcon } from '@/components/common/PlantIcon'
 import { NewsBadgeButton } from '@/components/game-news/NewsBadgeButton'
 import { BuildSelector } from '@/components/price-calculator/BuildSelector'
 import { useLocalization } from '@/hooks/use-localization'
@@ -42,8 +43,8 @@ export function NavBar({
   const releasesCount = useReleasesBadgeCount()
 
   const toolOptions = [
-    { value: 'calculator' as ToolName, label: t('nav.calculator') },
-    { value: 'crops' as ToolName, label: t('nav.crops') },
+    { value: 'calculator' as ToolName, label: t('nav.calculator'), icon: 'pi pi-calculator' },
+    { value: 'crops' as ToolName, label: t('nav.crops'), icon: '' },
   ]
 
   return (
@@ -69,10 +70,16 @@ export function NavBar({
       <SelectButton
         value={tool}
         options={toolOptions}
-        optionLabel="label"
         optionValue="value"
         aria-label={t('nav.toolSwitcher')}
         allowEmpty={false}
+        itemTemplate={(option) =>
+          option.value === 'crops' ? (
+            <PlantIcon title={option.label} />
+          ) : (
+            <i className={option.icon} title={option.label} />
+          )
+        }
         onChange={(e) => {
           const next = e.value as ToolName | null
           if (next && next !== tool) navigate(`/${datasetId}/${next}/${buildId}`)
