@@ -67,6 +67,21 @@ describe('GroupedSinglePicker', () => {
     expect(img!.getAttribute('src')).toContain('IronOre')
   })
 
+  it('keeps typed text visible as the user types (without clearing the selection)', () => {
+    const onChange = vi.fn()
+    const initial: Opt = { id: '1', name: 'Iron Ore', rawName: 'IronOre' }
+    render(<Wrapper initial={initial} onChange={onChange} groups={sampleGroups} />)
+    const input = screen.getByDisplayValue('Iron Ore') as HTMLInputElement
+    // Typing a new query must stay in the box rather than being wiped.
+    fireEvent.change(input, { target: { value: 'cop' } })
+    expect(input.value).toBe('cop')
+    fireEvent.change(input, { target: { value: 'copp' } })
+    expect(input.value).toBe('copp')
+    // The in-progress text must not be reported to the parent as a selection
+    // change (only a real pick or a clear should).
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   it('emits onChange(null) when the input is cleared', () => {
     const onChange = vi.fn()
     const initial: Opt = { id: '1', name: 'Iron Ore', rawName: 'IronOre' }

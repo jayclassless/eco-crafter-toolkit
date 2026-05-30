@@ -4,7 +4,9 @@
 
 - Now displays the skill next to recipe names in the dialogs where you're
   looking one up.
-- A variety of minor bug fixes and under-the-hood optimizations.
+- Fixed some autocomplete dropdowns erasing your search text before you've
+  chosen something.
+- A variety of other minor bug fixes and under-the-hood optimizations.
 
 ## 0.3.0 (2026-05-25)
 

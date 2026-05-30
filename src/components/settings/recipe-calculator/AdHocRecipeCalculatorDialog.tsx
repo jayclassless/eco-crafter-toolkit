@@ -37,7 +37,10 @@ export function AdHocRecipeCalculatorDialog({
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
 
-  const [selectedOption, setSelectedOption] = useState<RecipeOption | undefined>(undefined)
+  // Holds either the picked recipe (object) or the in-progress typed string, so
+  // the AutoComplete keeps the user's text visible until a choice is made. Only
+  // an actual selection updates `selectedRecipeId` (via handleSelect).
+  const [selectedOption, setSelectedOption] = useState<RecipeOption | string | undefined>(undefined)
   const [selectedRecipeId, setSelectedRecipeId] = useState('')
   const [suggestions, setSuggestions] = useState<RecipeOption[]>([])
   const [skillLevel, setSkillLevel] = useState(0)
@@ -170,9 +173,12 @@ export function AdHocRecipeCalculatorDialog({
           itemTemplate={recipeItemTemplate}
           placeholder={t('settings.adHocRecipeCalculator.placeholder')}
           onChange={(e) => {
-            const v = e.value as RecipeOption | undefined
+            const v = e.value as RecipeOption | string | undefined
+            // An object is a real selection; a string is in-progress typing
+            // that must stay visible. forceSelection's blur clears (undefined)
+            // when the typed text matched nothing.
             if (v && typeof v === 'object') handleSelect(v)
-            else setSelectedOption(undefined)
+            else setSelectedOption(v)
           }}
           className="w-full"
           inputClassName="w-full"

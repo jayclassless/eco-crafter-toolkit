@@ -3,6 +3,7 @@ import {
   type AutoCompleteChangeEvent,
   type AutoCompleteCompleteEvent,
 } from 'primereact/autocomplete'
+import { useEffect, useState } from 'react'
 
 import { EcoIcon } from '@/components/common/EcoIcon'
 
@@ -46,11 +47,25 @@ export function GroupedSinglePicker<T extends GroupedSinglePickerItem>({
   className,
   disabled,
 }: Props<T>) {
+  // PrimeReact AutoComplete drives its visible input from the `value` prop. As
+  // the user types, onChange fires with `e.value` set to the in-progress input
+  // string and only fires with an object once a suggestion is picked. If we
+  // forwarded each keystroke to the parent (which only models a selected item),
+  // `value` would reset to null on every keystroke, wiping the typed text. So
+  // we keep an internal value holding either the parent's selected object OR
+  // the in-progress typed string, and only forward an actual selection (or a
+  // blur-driven clear) to the parent. `forceSelection` reverts the input to the
+  // committed value on blur if the user typed without selecting.
+  const [internal, setInternal] = useState<T | string | null>(value)
+  useEffect(() => {
+    setInternal(value)
+  }, [value])
+
   return (
     <div className={`flex align-items-center gap-2 ${className ?? ''}`}>
       {value?.rawName && <EcoIcon name={value.rawName} size={24} className="flex-shrink-0" />}
       <AutoComplete
-        value={value}
+        value={internal}
         suggestions={suggestions as never[]}
         completeMethod={completeMethod}
         field="name"
@@ -63,13 +78,15 @@ export function GroupedSinglePicker<T extends GroupedSinglePickerItem>({
         scrollHeight="300px"
         onChange={(e: AutoCompleteChangeEvent) => {
           const v = e.value as T | string | null | undefined
-          // forceSelection lets the user clear by deleting the text (becomes ''),
-          // and types the value as the input string until a suggestion is chosen.
-          // Map both intermediate states to null so callers get a clean signal.
-          if (v === null || v === undefined || typeof v === 'string') {
+          setInternal(v ?? null)
+          // A null/undefined value is a clear (e.g. forceSelection's blur after
+          // an unmatched query); forward it. A string is in-progress typing —
+          // keep it visible locally without disturbing the parent selection.
+          if (v === null || v === undefined) {
             onChange(null)
             return
           }
+          if (typeof v === 'string') return
           onChange(v)
         }}
         itemTemplate={(item: unknown) => {

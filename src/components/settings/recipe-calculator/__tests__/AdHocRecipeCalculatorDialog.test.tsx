@@ -109,4 +109,14 @@ describe('AdHocRecipeCalculatorDialog', () => {
     expect(screen.getByText('IronRecipe')).toBeInTheDocument()
     expect(screen.getByText('MiningSkill')).toBeInTheDocument()
   })
+
+  it('keeps the typed text visible in the lookup until a recipe is chosen', () => {
+    const stores = makeStores()
+    render(<Harness stores={stores} />)
+    const input = screen.getByPlaceholderText(/search/i) as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'iro' } })
+    expect(input.value).toBe('iro')
+    fireEvent.change(input, { target: { value: 'iron' } })
+    expect(input.value).toBe('iron')
+  })
 })
