@@ -1,6 +1,10 @@
 # Eco Crafter Toolkit Change Log
 
-## 0.3.0 (TBD)
+## 0.4.0 (TBD)
+
+-
+
+## 0.3.0 (2026-05-25)
 
 - Switched from CrowdIn to Weblate to get translations for Eco dataset items.
 - Added an ad-hoc recipe calculator for when you want to roughly calculate the
