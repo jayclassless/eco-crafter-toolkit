@@ -64,6 +64,23 @@ describe('localized-name-store', () => {
     expect(second).toBe(first)
   })
 
+  it('dedups concurrent cache-miss loads into one shared Map instance', async () => {
+    await saveLocalizedNames('ds1', [row('1', 'item', 'iron', 'en-US', 'Iron')])
+    // Force a cache miss so both calls race the IDB read, then share the result.
+    await __resetLocalizedNameStore()
+
+    const [a, b, c] = await Promise.all([
+      loadIndex('ds1', 'en-US'),
+      loadIndex('ds1', 'en-US'),
+      loadIndex('ds1', 'en-US'),
+    ])
+    // All three resolve to the very same Map — without dedup each would build
+    // its own, defeating the useLocalizedName Object.is re-render bailout.
+    expect(b).toBe(a)
+    expect(c).toBe(a)
+    expect(a.get('item:iron')).toBe('Iron')
+  })
+
   it('invalidates the cached index for a dataset when saving more rows', async () => {
     await saveLocalizedNames('ds1', [row('1', 'item', 'iron', 'en-US', 'Iron')])
     const before = await loadIndex('ds1', 'en-US')

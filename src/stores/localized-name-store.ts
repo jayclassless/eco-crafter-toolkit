@@ -11,6 +11,26 @@ export type LocalizedNameIndex = Map<string /* `${entityType}:${entityId}` */, s
 
 let dbPromise: Promise<IDBDatabase> | null = null
 const cache = new Map<string /* `${datasetId}:${locale}` */, LocalizedNameIndex>()
+// In-flight loads keyed by `${datasetId}:${locale}`. `useLocalizedName` mounts
+// in many cells at once; on a cache miss they'd otherwise each issue their own
+// IDB read and build their own Map, so callers would hold *different* Map
+// instances for the same data — defeating the `Object.is` re-render bailout.
+// Sharing one promise per key means one read, one Map, identical references.
+const inFlight = new Map<string /* `${datasetId}:${locale}` */, Promise<LocalizedNameIndex>>()
+
+/**
+ * Drop all cached + in-flight indexes for a dataset (every locale). Called
+ * after any write so the next `loadIndex` re-reads fresh data.
+ */
+function invalidateDataset(datasetId: string): void {
+  const prefix = `${datasetId}:`
+  for (const key of cache.keys()) {
+    if (key.startsWith(prefix)) cache.delete(key)
+  }
+  for (const key of inFlight.keys()) {
+    if (key.startsWith(prefix)) inFlight.delete(key)
+  }
+}
 
 type ChangeListener = (datasetId: string) => void
 const changeListeners = new Set<ChangeListener>()
@@ -62,25 +82,42 @@ export async function loadIndex(datasetId: string, locale: string): Promise<Loca
   const cacheKey = `${datasetId}:${locale}`
   const cached = cache.get(cacheKey)
   if (cached) return cached
+  const pending = inFlight.get(cacheKey)
+  if (pending) return pending
 
-  const db = await openDb()
-  const value = await new Promise<StoredValue | undefined>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readonly')
-    const req = tx.objectStore(STORE_NAME).get(cacheKey)
-    req.onsuccess = () => resolve(req.result as StoredValue | undefined)
-    req.onerror = () => reject(toStoreError(req.error))
-  })
+  const promise = (async (): Promise<LocalizedNameIndex> => {
+    const db = await openDb()
+    const value = await new Promise<StoredValue | undefined>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly')
+      const req = tx.objectStore(STORE_NAME).get(cacheKey)
+      req.onsuccess = () => resolve(req.result as StoredValue | undefined)
+      req.onerror = () => reject(toStoreError(req.error))
+    })
 
-  const index: LocalizedNameIndex = new Map()
-  if (value) {
-    for (const [entityType, byId] of Object.entries(value)) {
-      for (const [entityId, name] of Object.entries(byId)) {
-        index.set(`${entityType}:${entityId}`, name)
+    const index: LocalizedNameIndex = new Map()
+    if (value) {
+      for (const [entityType, byId] of Object.entries(value)) {
+        for (const [entityId, name] of Object.entries(byId)) {
+          index.set(`${entityType}:${entityId}`, name)
+        }
       }
     }
-  }
-  cache.set(cacheKey, index)
-  return index
+    return index
+  })()
+
+  inFlight.set(cacheKey, promise)
+  void promise
+    .then((index) => {
+      // Commit to the shared cache only if this load is still current. A write
+      // (invalidateDataset) may have cleared us mid-read, in which case our
+      // value is stale and a fresh load will run — don't repopulate the cache.
+      if (inFlight.get(cacheKey) === promise) cache.set(cacheKey, index)
+    })
+    .catch(() => {})
+    .finally(() => {
+      if (inFlight.get(cacheKey) === promise) inFlight.delete(cacheKey)
+    })
+  return promise
 }
 
 export async function saveLocalizedNames(datasetId: string, rows: LocalizedName[]): Promise<void> {
@@ -111,9 +148,7 @@ export async function saveLocalizedNames(datasetId: string, rows: LocalizedName[
     tx.onabort = () => reject(toStoreError(tx.error))
   })
 
-  for (const key of cache.keys()) {
-    if (key.startsWith(`${datasetId}:`)) cache.delete(key)
-  }
+  invalidateDataset(datasetId)
   notifyChange(datasetId)
 }
 
@@ -170,9 +205,7 @@ export async function upsertLocalizedNames(
     tx.onabort = () => reject(toStoreError(tx.error))
   })
 
-  for (const key of cache.keys()) {
-    if (key.startsWith(`${datasetId}:`)) cache.delete(key)
-  }
+  invalidateDataset(datasetId)
   notifyChange(datasetId)
 }
 
@@ -209,9 +242,7 @@ export async function removeLocalizedName(
     tx.onabort = () => reject(toStoreError(tx.error))
   })
 
-  for (const key of cache.keys()) {
-    if (key.startsWith(`${datasetId}:`)) cache.delete(key)
-  }
+  invalidateDataset(datasetId)
   notifyChange(datasetId)
 }
 
@@ -263,14 +294,13 @@ export async function deleteLocalizedNamesForDataset(datasetId: string): Promise
     tx.onerror = () => reject(toStoreError(tx.error))
     tx.onabort = () => reject(toStoreError(tx.error))
   })
-  for (const key of cache.keys()) {
-    if (key.startsWith(`${datasetId}:`)) cache.delete(key)
-  }
+  invalidateDataset(datasetId)
   notifyChange(datasetId)
 }
 
 export async function __resetLocalizedNameStore(): Promise<void> {
   cache.clear()
+  inFlight.clear()
   changeListeners.clear()
   if (dbPromise) {
     const db = await dbPromise
