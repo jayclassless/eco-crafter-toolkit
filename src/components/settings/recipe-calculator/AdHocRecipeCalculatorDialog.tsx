@@ -3,7 +3,8 @@ import { Dialog } from 'primereact/dialog'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { RecipeIcon } from '@/components/common/RecipeIcon'
+import { type RecipeOption, resolveRecipeSkillName } from '@/components/common/recipe-option'
+import { RecipeOptionItem } from '@/components/common/RecipeOptionItem'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import type { PriceSignal } from '@/hooks/use-prices-signal'
 import { buildRecipeProductItemIds, getRecipePrimaryProductRawName } from '@/hooks/use-products'
@@ -16,13 +17,6 @@ import {
 } from './adhoc-recipe-calc'
 import { AdHocCostBreakdown } from './AdHocCostBreakdown'
 import { AdHocRecipeInputs } from './AdHocRecipeInputs'
-
-interface RecipeOption {
-  id: string
-  name: string
-  rawName: string
-  isCustom: boolean
-}
 
 interface Props {
   visible: boolean
@@ -73,6 +67,7 @@ export function AdHocRecipeCalculatorDialog({
         id: rowId,
         name: getName('recipe', rowId) || (recipe.name as string),
         rawName: getRecipePrimaryProductRawName(gameDataStore, rowId, productIdsByRecipe),
+        skillName: resolveRecipeSkillName(gameDataStore, getName, recipe.skillId as string),
         isCustom: !!recipe.isCustom,
       })
     }
@@ -152,14 +147,7 @@ export function AdHocRecipeCalculatorDialog({
     defaultShareForSecondaryItems,
   ])
 
-  const recipeItemTemplate = (item: RecipeOption) => (
-    <div className="flex align-items-center gap-2">
-      {(item.rawName || item.isCustom) && (
-        <RecipeIcon primaryProduct={{ name: item.rawName, isCustom: item.isCustom }} />
-      )}
-      <span>{item.name}</span>
-    </div>
-  )
+  const recipeItemTemplate = (item: RecipeOption) => <RecipeOptionItem option={item} />
 
   return (
     <Dialog

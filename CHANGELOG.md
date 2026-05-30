@@ -2,7 +2,9 @@
 
 ## 0.4.0 (TBD)
 
--
+- Now displays the skill next to recipe names in the dialogs where you're
+  looking one up.
+- A variety of minor bug fixes and under-the-hood optimizations.
 
 ## 0.3.0 (2026-05-25)
 

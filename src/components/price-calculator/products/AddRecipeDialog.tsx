@@ -5,7 +5,8 @@ import { SelectButton, type SelectButtonChangeEvent } from 'primereact/selectbut
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { RecipeIcon } from '@/components/common/RecipeIcon'
+import { type RecipeOption, resolveRecipeSkillName } from '@/components/common/recipe-option'
+import { RecipeOptionItem } from '@/components/common/RecipeOptionItem'
 import { CustomEntitiesDialog } from '@/components/settings/datasets/CustomEntitiesDialog'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { buildRecipeProductItemIds, getRecipePrimaryProductRawName } from '@/hooks/use-products'
@@ -16,13 +17,6 @@ import {
   useTableRowIdsRevision,
 } from '@/hooks/use-store-revision'
 import { useStores } from '@/stores/providers'
-
-interface RecipeOption {
-  id: string
-  name: string
-  rawName: string
-  isCustom: boolean
-}
 
 type Mode = 'skill' | 'standard' | 'custom'
 
@@ -97,7 +91,14 @@ export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingR
       if (primaryProductId && excludedItems.has(primaryProductId)) continue
       const name = getName('recipe', rowId) || (recipe.name as string)
       const rawName = getRecipePrimaryProductRawName(gameDataStore, rowId, productItemIdsByRecipeId)
-      const option: RecipeOption = { id: rowId, name, rawName, isCustom: !!recipe.isCustom }
+      const skillName = resolveRecipeSkillName(gameDataStore, getName, recipe.skillId as string)
+      const option: RecipeOption = {
+        id: rowId,
+        name,
+        rawName,
+        skillName,
+        isCustom: !!recipe.isCustom,
+      }
       if (recipe.isCustom) {
         custom.push(option)
         continue
@@ -189,17 +190,7 @@ export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingR
     onHide()
   }
 
-  const itemTemplate = useCallback(
-    (item: RecipeOption) => (
-      <div className="flex align-items-center gap-2">
-        {(item.rawName || item.isCustom) && (
-          <RecipeIcon primaryProduct={{ name: item.rawName, isCustom: item.isCustom }} />
-        )}
-        <span>{item.name}</span>
-      </div>
-    ),
-    []
-  )
+  const itemTemplate = useCallback((item: RecipeOption) => <RecipeOptionItem option={item} />, [])
 
   const showCustomEmptyHint = mode === 'custom' && customRecipes.length === 0
   const showStandardEmptyHint =

@@ -194,6 +194,16 @@ describe('AddRecipeDialog', () => {
     expect(screen.getByText(/no custom recipes yet/i)).toBeInTheDocument()
   })
 
+  it("shows each recipe's skill name alongside the recipe in the suggestions", () => {
+    const stores = makeStores()
+    renderDialog(stores)
+    const dropdown = document.body.querySelector('.p-autocomplete-dropdown') as HTMLButtonElement
+    fireEvent.click(dropdown)
+    // The recipe and its owning skill name both appear in the option row.
+    expect(screen.getByText('IronRecipe')).toBeInTheDocument()
+    expect(screen.getByText('MiningSkill')).toBeInTheDocument()
+  })
+
   it('Any Standard Recipe mode excludes custom recipes', () => {
     const stores = makeStores()
     stores.gameDataStore.setRow('recipes', 'r-custom', {
