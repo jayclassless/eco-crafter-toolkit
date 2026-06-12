@@ -1,6 +1,6 @@
 # Eco Crafter Toolkit Change Log
 
-## 0.4.0 (TBD)
+## 0.4.0 (2026-06-11)
 
 - Now displays the skill next to recipe names in the dialogs where you're
   looking one up.
