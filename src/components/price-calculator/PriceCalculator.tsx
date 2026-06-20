@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 
 import { NavBar } from '@/components/common/NavBar'
+import { ProductionPlannerDialog } from '@/components/price-calculator/production-planner/ProductionPlannerDialog'
 import { AboutDialog } from '@/components/settings/AboutDialog'
 import { DatasetsDialog } from '@/components/settings/datasets/DatasetsDialog'
 import { AdHocRecipeCalculatorDialog } from '@/components/settings/recipe-calculator/AdHocRecipeCalculatorDialog'
@@ -42,6 +43,7 @@ export function PriceCalculator() {
   const [datasetsDialogVisible, setDatasetsDialogVisible] = useState(false)
   const [aboutVisible, setAboutVisible] = useState(false)
   const [recipeCalculatorVisible, setRecipeCalculatorVisible] = useState(false)
+  const [productionPlannerVisible, setProductionPlannerVisible] = useState(false)
   const [configDrawerVisible, setConfigDrawerVisible] = useState(false)
   const isTablet = useIsTablet()
 
@@ -228,6 +230,7 @@ export function PriceCalculator() {
         visible={settingsVisible}
         onHide={() => setSettingsVisible(false)}
         onOpenRecipeCalculator={() => setRecipeCalculatorVisible(true)}
+        onOpenProductionPlanner={() => setProductionPlannerVisible(true)}
         onOpenGameNews={() => navigate('/game-news')}
         onOpenDatasets={() => setDatasetsDialogVisible(true)}
         onOpenAbout={() => setAboutVisible(true)}
@@ -248,6 +251,13 @@ export function PriceCalculator() {
         buildId={buildId}
         datasetId={datasetId}
         priceSignal={priceSignal}
+      />
+      <ProductionPlannerDialog
+        visible={productionPlannerVisible}
+        onHide={() => setProductionPlannerVisible(false)}
+        buildId={buildId}
+        datasetId={datasetId}
+        solverOutput={result}
       />
       <Toast ref={solverToastRef} position="top-right" />
     </div>

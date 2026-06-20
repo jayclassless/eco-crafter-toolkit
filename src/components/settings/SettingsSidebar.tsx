@@ -13,6 +13,8 @@ interface Props {
   onHide: () => void
   // Optional: omit in tools without an ad-hoc recipe calculator (Crop Tracker).
   onOpenRecipeCalculator?: () => void
+  // Optional: omit in tools without a production planner.
+  onOpenProductionPlanner?: () => void
   onOpenGameNews: () => void
   onOpenDatasets: () => void
   onOpenAbout: () => void
@@ -24,6 +26,7 @@ export function SettingsSidebar({
   visible,
   onHide,
   onOpenRecipeCalculator,
+  onOpenProductionPlanner,
   onOpenGameNews,
   onOpenDatasets,
   onOpenAbout,
@@ -58,6 +61,13 @@ export function SettingsSidebar({
       }
     : undefined
 
+  const handleSelectProductionPlanner = onOpenProductionPlanner
+    ? () => {
+        onHide()
+        onOpenProductionPlanner()
+      }
+    : undefined
+
   const handleSelectGameNews = () => {
     onHide()
     onOpenGameNews()
@@ -78,6 +88,7 @@ export function SettingsSidebar({
       {view === 'menu' ? (
         <SidebarMenuView
           onSelectRecipeCalculator={handleSelectRecipeCalculator}
+          onSelectProductionPlanner={handleSelectProductionPlanner}
           onSelectGameNews={handleSelectGameNews}
           onSelectDatasets={handleSelectDatasets}
           onSelectUiSettings={() => setView('uiSettings')}

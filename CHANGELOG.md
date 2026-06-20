@@ -3,6 +3,9 @@
 ## 0.5.0 (TBD)
 
 - The app now remembers the last build you had open, and returns you to it.
+- Added an initial implementation of a "Production Planner" tool, that will
+  tell you how many of a item you can produce given a set of input ingredients,
+  or how many ingredients you need to produce a target number of items.
 
 ## 0.4.0 (2026-06-11)
 

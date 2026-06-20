@@ -267,6 +267,7 @@
     },
     "menu": {
       "recipeCalculator": "Ad-Hoc Recipe Calculator",
+      "productionPlanner": "Production Planner",
       "gameNews": "Game News",
       "datasets": "Game Datasets",
       "uiSettings": "UI Settings",
@@ -278,6 +279,29 @@
       "costTotal": "Cost Total",
       "productsTotal": "Products Total",
       "unresolved": "Some ingredient prices could not be resolved."
+    },
+    "productionPlanner": {
+      "title": "Production Planner",
+      "targetLabel": "Product to produce",
+      "targetPlaceholder": "Search for a product…",
+      "desiredPlaceholder": "Maximize",
+      "inventoryLabel": "Materials on hand",
+      "itemPlaceholder": "Search for an item…",
+      "quantityPlaceholder": "Qty",
+      "addItem": "Add material",
+      "removeItem": "Remove material",
+      "pickProduct": "Pick a product and list the materials you have to plan production.",
+      "canProduce": "You can produce {qty} {name}.",
+      "shortOfDesired": "You can only produce {qty} {name} with these materials.",
+      "nothingProducible": "You can't produce any with these materials — see what's missing below.",
+      "cyclic": "This product has a circular crafting dependency and can't be planned.",
+      "stepsTitle": "Crafting steps",
+      "colStep": "Recipe",
+      "colCrafts": "Crafts",
+      "colConsumes": "Consumes",
+      "colProduces": "Produces",
+      "missingTitle": "Missing materials",
+      "leftoversTitle": "Leftover materials"
     },
     "ui": {
       "title": "UI Settings",

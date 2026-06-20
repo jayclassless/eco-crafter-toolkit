@@ -8,8 +8,9 @@ import type {
   SolverError,
 } from '@/types/solver'
 
-import { resolveModifiers, applyRoundFactor, type ModifierContext } from './dynamic-values'
+import { resolveModifiers, type ModifierContext } from './dynamic-values'
 import { applyMargin } from './margins'
+import { getEffectiveRecipeQuantities } from './recipe-quantities'
 
 interface PreparedElement {
   itemOrTagId: string
@@ -329,35 +330,19 @@ function prepareRecipe(recipe: SolverRecipe, calorieCost: number): PreparedRecip
     calorieCost,
   }
 
-  const ingredients: PreparedElement[] = Array.from<PreparedElement>({
-    length: recipe.ingredients.length,
-  })
-  for (let i = 0; i < recipe.ingredients.length; i++) {
-    const ing = recipe.ingredients[i]
-    ingredients[i] = {
-      itemOrTagId: ing.itemOrTagId,
-      qty: applyRoundFactor(
-        ing.baseQuantity * resolveModifiers(ing.modifiers, ctx),
-        recipe.roundFactor
-      ),
-    }
-  }
+  const effective = getEffectiveRecipeQuantities(recipe)
+  const ingredients: PreparedElement[] = effective.ingredients
 
   const reintegrated: PreparedElement[] = []
   const products: PreparedProduct[] = []
 
-  for (let i = 0; i < recipe.products.length; i++) {
-    const prod = recipe.products[i]
-    const qty = applyRoundFactor(
-      prod.baseQuantity * resolveModifiers(prod.modifiers, ctx),
-      recipe.roundFactor
-    )
+  for (const prod of effective.products) {
     if (prod.isReintegrated) {
-      reintegrated.push({ itemOrTagId: prod.itemOrTagId, qty })
+      reintegrated.push({ itemOrTagId: prod.itemOrTagId, qty: prod.qty })
     } else {
       products.push({
         itemOrTagId: prod.itemOrTagId,
-        qty,
+        qty: prod.qty,
         share: prod.share,
       })
     }

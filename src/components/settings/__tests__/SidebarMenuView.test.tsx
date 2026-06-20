@@ -95,6 +95,33 @@ describe('SidebarMenuView', () => {
     expect(onSelectRecipeCalculator).toHaveBeenCalledTimes(1)
   })
 
+  it('shows the Production Planner item only when the handler is provided', () => {
+    const onSelectProductionPlanner = vi.fn()
+    renderWith(
+      <SidebarMenuView
+        onSelectProductionPlanner={onSelectProductionPlanner}
+        onSelectGameNews={() => {}}
+        onSelectDatasets={() => {}}
+        onSelectUiSettings={() => {}}
+        onSelectAbout={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByText('Production Planner'))
+    expect(onSelectProductionPlanner).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides the Production Planner item when no handler is provided', () => {
+    renderWith(
+      <SidebarMenuView
+        onSelectGameNews={() => {}}
+        onSelectDatasets={() => {}}
+        onSelectUiSettings={() => {}}
+        onSelectAbout={() => {}}
+      />
+    )
+    expect(screen.queryByText('Production Planner')).not.toBeInTheDocument()
+  })
+
   it('invokes onSelectGameNews when the Game News menu item is clicked', () => {
     const onSelectGameNews = vi.fn()
     renderWith(

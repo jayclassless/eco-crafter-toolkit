@@ -12,6 +12,8 @@ interface Props {
   // Calculator-specific; omitted in tools (e.g. Crop Tracker) that have no
   // ad-hoc recipe calculator, in which case the menu item is hidden.
   onSelectRecipeCalculator?: () => void
+  // Calculator-specific; omitted in tools without a production planner.
+  onSelectProductionPlanner?: () => void
   onSelectGameNews: () => void
   onSelectDatasets: () => void
   onSelectUiSettings: () => void
@@ -54,6 +56,7 @@ function badgedTemplate(count: number, format: (n: number) => string) {
 
 export function SidebarMenuView({
   onSelectRecipeCalculator,
+  onSelectProductionPlanner,
   onSelectGameNews,
   onSelectDatasets,
   onSelectUiSettings,
@@ -71,6 +74,15 @@ export function SidebarMenuView({
             label: t('settings.menu.recipeCalculator'),
             icon: 'pi pi-calculator',
             command: onSelectRecipeCalculator,
+          },
+        ]
+      : []),
+    ...(onSelectProductionPlanner
+      ? [
+          {
+            label: t('settings.menu.productionPlanner'),
+            icon: 'pi pi-sitemap',
+            command: onSelectProductionPlanner,
           },
         ]
       : []),
