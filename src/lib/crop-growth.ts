@@ -73,6 +73,29 @@ export function computePickableDate(
   return new Date(plantedMs + hours * pickAt * MS_PER_HOUR)
 }
 
+// A compact "time remaining" string from `now` until `target`, showing the two
+// largest non-zero units — e.g. "2d 3h", "5h 12m", "8m", or "<1m". Returns null
+// when `target` is at or before `now` (nothing left to count down to).
+export function formatTimeUntil(target: Date, now: Date): string | null {
+  let remaining = target.getTime() - now.getTime()
+  if (remaining <= 0) return null
+  const minuteMs = 60 * 1000
+  const hourMs = 60 * minuteMs
+  const dayMs = 24 * hourMs
+  const days = Math.floor(remaining / dayMs)
+  remaining -= days * dayMs
+  const hours = Math.floor(remaining / hourMs)
+  remaining -= hours * hourMs
+  const minutes = Math.floor(remaining / minuteMs)
+  const parts: string[] = []
+  if (days > 0) parts.push(`${days}d`)
+  if (hours > 0) parts.push(`${hours}h`)
+  if (minutes > 0) parts.push(`${minutes}m`)
+  // A sub-minute remainder still counts down — show "<1m" rather than nothing.
+  if (parts.length === 0) return '<1m'
+  return parts.slice(0, 2).join(' ')
+}
+
 // Growth progress in [0, 1] from planting to the fully-grown date.
 export function harvestProgress(plantedAt: Date, harvestDate: Date, now: Date): number {
   const total = harvestDate.getTime() - plantedAt.getTime()

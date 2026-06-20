@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   computeHarvestDate,
   computePickableDate,
+  formatTimeUntil,
   growthHours,
   harvestProgress,
   isRegrowCrop,
@@ -83,6 +84,33 @@ describe('computePickableDate', () => {
 
   it('returns null for an invalid date', () => {
     expect(computePickableDate('nope', regen, 1, false)).toBeNull()
+  })
+})
+
+describe('formatTimeUntil', () => {
+  const now = new Date('2026-01-01T00:00:00.000Z')
+  const after = (ms: number) => new Date(now.getTime() + ms)
+  const MIN = 60 * 1000
+  const HOUR = 60 * MIN
+  const DAY = 24 * HOUR
+
+  it('returns null when the target is at or before now', () => {
+    expect(formatTimeUntil(now, now)).toBeNull()
+    expect(formatTimeUntil(after(-HOUR), now)).toBeNull()
+  })
+
+  it('shows the two largest non-zero units', () => {
+    expect(formatTimeUntil(after(2 * DAY + 3 * HOUR + 15 * MIN), now)).toBe('2d 3h')
+    expect(formatTimeUntil(after(5 * HOUR + 12 * MIN), now)).toBe('5h 12m')
+    expect(formatTimeUntil(after(8 * MIN), now)).toBe('8m')
+  })
+
+  it('skips a zero middle unit', () => {
+    expect(formatTimeUntil(after(2 * DAY + 5 * MIN), now)).toBe('2d 5m')
+  })
+
+  it('shows "<1m" for a sub-minute remainder', () => {
+    expect(formatTimeUntil(after(30 * 1000), now)).toBe('<1m')
   })
 })
 

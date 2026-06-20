@@ -15,6 +15,7 @@ import { useCellValue } from '@/hooks/use-store-revision'
 import {
   computeHarvestDate,
   computePickableDate,
+  formatTimeUntil,
   harvestProgress,
   isRegrowCrop,
 } from '@/lib/crop-growth'
@@ -203,9 +204,16 @@ export function PlantingRow({
             {pickableDate && (
               <span>{t('cropTracker.pickableAt', { time: timeFormat.format(pickableDate) })}</span>
             )}
-            {harvestDate && (
-              <span>{t('cropTracker.harvestAt', { time: timeFormat.format(harvestDate) })}</span>
-            )}
+            {harvestDate &&
+              (() => {
+                const until = formatTimeUntil(harvestDate, now)
+                return (
+                  <span>
+                    {t('cropTracker.harvestAt', { time: timeFormat.format(harvestDate) })}
+                    {until && ` (${t('cropTracker.timeUntil', { duration: until })})`}
+                  </span>
+                )
+              })()}
           </div>
           <div className="relative">
             <ProgressBar

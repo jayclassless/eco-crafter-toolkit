@@ -233,6 +233,7 @@
     "plantedAt": "Planted {time}",
     "pickableAt": "Pickable {time}",
     "harvestAt": "Harvest {time}",
+    "timeUntil": "in {duration}",
     "statusGrowing": "Growing",
     "statusPickable": "Pickable",
     "statusReady": "Ready"
