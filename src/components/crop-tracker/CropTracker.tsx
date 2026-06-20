@@ -1,6 +1,6 @@
 import { Button } from 'primereact/button'
 import { Dropdown } from 'primereact/dropdown'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 
@@ -13,6 +13,7 @@ import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useNowTick } from '@/hooks/use-now-tick'
 import { useSettings } from '@/hooks/use-settings'
 import { useCellValue, useStoreRevision, useTableRowIdsRevision } from '@/hooks/use-store-revision'
+import { useTrackActiveBuild } from '@/hooks/use-track-active-build'
 import { computeHarvestDate } from '@/lib/crop-growth'
 import { generateId } from '@/lib/ids'
 import { useStores } from '@/stores/providers'
@@ -46,12 +47,8 @@ export function CropTracker() {
     : null
   const buildValid = datasetValid && buildExists && buildDatasetId === datasetId
 
-  useEffect(() => {
-    if (buildValid && datasetId) uiStore.setCell('uiState', 'main', 'activeDatasetId', datasetId)
-  }, [buildValid, datasetId, uiStore])
-  useEffect(() => {
-    if (buildValid && buildId) uiStore.setCell('uiState', 'main', 'activeBuildId', buildId)
-  }, [buildValid, buildId, uiStore])
+  // Persist last-used ids (global hints + per-dataset last-viewed build).
+  useTrackActiveBuild(uiStore, datasetId, buildId, buildValid)
 
   // Eligible crops: items in this dataset carrying growth data. Rebuilt only
   // when the items table changes (datasets are immutable in normal use).

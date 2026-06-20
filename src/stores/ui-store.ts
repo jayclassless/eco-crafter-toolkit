@@ -23,6 +23,12 @@ export function createUIStore() {
       cropSortField: { type: 'string', default: 'name' }, // name | plant | planted | harvest
       cropSortDir: { type: 'string', default: 'asc' }, // asc | desc
     },
+    // Per-dataset memory of the build the user last viewed. Row id = datasetId.
+    // BuildRedirect uses this to land on the last-viewed build instead of the
+    // first one; purge-data (src/lib/purge-data.ts) clears stale entries.
+    lastViewedBuilds: {
+      buildId: { type: 'string', default: '' },
+    },
   })
 
   // Initialize singleton row

@@ -14,7 +14,7 @@ interface Props {
 export function BuildRedirect({ tool = 'calculator' }: Props = {}) {
   const { datasetId } = useParams<{ datasetId: string }>()
   const { t } = useTranslation()
-  const { gameDataStore } = useStores()
+  const { gameDataStore, uiStore } = useStores()
   const { getBuilds, createBuild } = useBuild()
   const [createdBuildId, setCreatedBuildId] = useState<string | null>(null)
   // Ref guard so StrictMode's dev double-invoke of effects can't create a
@@ -38,7 +38,15 @@ export function BuildRedirect({ tool = 'calculator' }: Props = {}) {
 
   if (!datasetExists) return <Navigate to="/" replace />
 
-  const targetBuildId = builds.length > 0 ? (builds[0].id as string) : createdBuildId
+  // Prefer the build the user last viewed for this dataset. The existence
+  // check tolerates a stale id (deleted build) — fall back to the first build.
+  const lastViewed = uiStore.getCell('lastViewedBuilds', datasetId!, 'buildId') as string
+  const remembered = builds.find((b) => b.id === lastViewed)
+  const targetBuildId = remembered
+    ? (remembered.id as string)
+    : builds.length > 0
+      ? (builds[0].id as string)
+      : createdBuildId
   if (targetBuildId) return <Navigate to={`/${datasetId}/${tool}/${targetBuildId}`} replace />
   return null
 }

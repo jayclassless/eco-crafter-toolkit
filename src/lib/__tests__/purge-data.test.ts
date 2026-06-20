@@ -261,6 +261,38 @@ describe('purgeData', () => {
     expect(f.uiStore.getCell('uiState', 'main', 'activeBuildId')).toBe('b2')
   })
 
+  it('drops lastViewedBuilds entries for deleted datasets and builds', async () => {
+    const f = makeFixture()
+    // ds1 will be deleted (with its build b1); ds2 survives but its remembered
+    // build is b2, which also gets deleted here via a stale pointer scenario.
+    f.uiStore.setRow('lastViewedBuilds', 'ds1', { buildId: 'b1' })
+    f.uiStore.setRow('lastViewedBuilds', 'ds2', { buildId: 'b2' })
+
+    await purgeData(
+      { datasetIds: ['ds1'], purgeAllBuilds: false },
+      { gameDataStore: f.gameDataStore, buildStore: f.buildStore, uiStore: f.uiStore },
+      f.persisters
+    )
+
+    // ds1 entry removed (dataset deleted); ds2 entry kept (build b2 survived)
+    expect(f.uiStore.getRowIds('lastViewedBuilds')).toEqual(['ds2'])
+    expect(f.uiStore.getCell('lastViewedBuilds', 'ds2', 'buildId')).toBe('b2')
+  })
+
+  it('drops lastViewedBuilds entries pointing at a deleted build in a surviving dataset', async () => {
+    const f = makeFixture()
+    f.uiStore.setRow('lastViewedBuilds', 'ds2', { buildId: 'b2' })
+
+    await purgeData(
+      { datasetIds: [], purgeAllBuilds: true },
+      { gameDataStore: f.gameDataStore, buildStore: f.buildStore, uiStore: f.uiStore },
+      f.persisters
+    )
+
+    // ds2 survives but its build b2 was purged → stale entry removed
+    expect(f.uiStore.getRowIds('lastViewedBuilds')).toEqual([])
+  })
+
   it('removes hiddenSkills rows tied to deleted builds', async () => {
     const f = makeFixture()
 

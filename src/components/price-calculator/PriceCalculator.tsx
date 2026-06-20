@@ -12,6 +12,7 @@ import { useIsTablet } from '@/hooks/use-is-tablet'
 import { usePriceSolver } from '@/hooks/use-price-solver'
 import { usePriceSignal } from '@/hooks/use-prices-signal'
 import { useSolverSnapshot } from '@/hooks/use-solver-snapshot'
+import { useTrackActiveBuild } from '@/hooks/use-track-active-build'
 import { useStores } from '@/stores/providers'
 
 import { ConfigPanel } from './build-options/ConfigPanel'
@@ -61,20 +62,8 @@ export function PriceCalculator() {
     : null
   const buildValid = datasetValid && buildExists && buildDatasetId === datasetId
 
-  // Persist last-used ids. RootRedirect uses activeDatasetId to pick a
-  // landing page next visit; purge-data clears activeBuildId when its
-  // build is deleted (src/lib/purge-data.ts).
-  useEffect(() => {
-    if (buildValid && datasetId) {
-      uiStore.setCell('uiState', 'main', 'activeDatasetId', datasetId)
-    }
-  }, [buildValid, datasetId, uiStore])
-
-  useEffect(() => {
-    if (buildValid && buildId) {
-      uiStore.setCell('uiState', 'main', 'activeBuildId', buildId)
-    }
-  }, [buildValid, buildId, uiStore])
+  // Persist last-used ids (global hints + per-dataset last-viewed build).
+  useTrackActiveBuild(uiStore, datasetId, buildId, buildValid)
 
   // Show the About dialog the first time the calculator renders for a valid
   // build. The flag is persisted in uiStore so subsequent visits stay quiet.

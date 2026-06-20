@@ -2,7 +2,7 @@
 
 ## 0.5.0 (TBD)
 
--
+- The app now remembers the last build you had open, and returns you to it.
 
 ## 0.4.0 (2026-06-11)
 

@@ -117,6 +117,18 @@ function cleanupUiStore(
     if (activeDatasetId && datasetIdSet.has(activeDatasetId)) {
       uiStore.setCell('uiState', 'main', 'activeDatasetId', '')
     }
+    // Drop per-dataset last-viewed-build memory for deleted datasets, and clear
+    // any remaining entry that points at a deleted build.
+    for (const datasetId of uiStore.getRowIds('lastViewedBuilds')) {
+      if (datasetIdSet.has(datasetId)) {
+        uiStore.delRow('lastViewedBuilds', datasetId)
+        continue
+      }
+      const buildId = uiStore.getCell('lastViewedBuilds', datasetId, 'buildId') as string
+      if (buildId && deletedBuildIds.has(buildId)) {
+        uiStore.delRow('lastViewedBuilds', datasetId)
+      }
+    }
   })
 }
 

@@ -99,6 +99,46 @@ describe('BuildRedirect', () => {
     })
   })
 
+  it('redirects to the last-viewed build for the dataset when one is recorded', async () => {
+    addDataset(stores.gameDataStore, 'ds1')
+    addBuild(stores.buildStore, 'b1', 'ds1')
+    addBuild(stores.buildStore, 'b2', 'ds1')
+    stores.uiStore.setCell('lastViewedBuilds', 'ds1', 'buildId', 'b2')
+
+    renderAt('/ds1/calculator', stores)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location').textContent).toBe('/ds1/calculator/b2')
+    })
+  })
+
+  it('falls back to the first build when the last-viewed build no longer exists', async () => {
+    addDataset(stores.gameDataStore, 'ds1')
+    addBuild(stores.buildStore, 'b1', 'ds1')
+    addBuild(stores.buildStore, 'b2', 'ds1')
+    stores.uiStore.setCell('lastViewedBuilds', 'ds1', 'buildId', 'deleted-build')
+
+    renderAt('/ds1/calculator', stores)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location').textContent).toBe('/ds1/calculator/b1')
+    })
+  })
+
+  it('ignores a last-viewed build recorded for a different dataset', async () => {
+    addDataset(stores.gameDataStore, 'ds1')
+    addBuild(stores.buildStore, 'b1', 'ds1')
+    addBuild(stores.buildStore, 'b2', 'ds1')
+    // A pointer for ds-other must not leak into ds1's redirect.
+    stores.uiStore.setCell('lastViewedBuilds', 'ds-other', 'buildId', 'b2')
+
+    renderAt('/ds1/calculator', stores)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location').textContent).toBe('/ds1/calculator/b1')
+    })
+  })
+
   it('creates a build and redirects to it when the dataset has none', async () => {
     addDataset(stores.gameDataStore, 'ds1')
 
