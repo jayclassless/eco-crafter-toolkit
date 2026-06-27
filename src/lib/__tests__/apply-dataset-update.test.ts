@@ -278,8 +278,8 @@ describe('applyDatasetUpdate', () => {
       baseLaborCost: 25,
       baseCraftTime: 0,
       ingredients: [
-        { itemId: oldWoodId, baseQuantity: 4, isDiscountedBySkill: true },
-        { itemId: customItemId, baseQuantity: 1, isDiscountedBySkill: false },
+        { itemId: oldWoodId, baseQuantity: 4, isReducedByModule: true },
+        { itemId: customItemId, baseQuantity: 1, isReducedByModule: false },
       ],
       products: [{ itemId: customItemId, quantity: 1 }],
     }

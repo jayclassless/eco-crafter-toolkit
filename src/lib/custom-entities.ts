@@ -23,7 +23,7 @@ export class DuplicateItemNameError extends Error {
 interface CustomRecipeIngredient {
   itemId: string
   baseQuantity: number
-  isDiscountedBySkill: boolean
+  isReducedByModule: boolean
 }
 
 interface CustomRecipeProduct {
@@ -153,12 +153,24 @@ function writeRecipeElementsAndModifiers(
   input: CustomRecipeInput
 ): void {
   // Labor scales with the recipe's skill via a `targetType: 'labor'` modifier.
-  // Without this, custom recipes ignore the user's skill level entirely.
+  // Without this, custom recipes ignore the user's skill level entirely. (Vanilla
+  // Eco labor is skill-reduced and never module-reduced, so no Module entry here.)
   store.setRow('modifiers', generateId(), {
     datasetId,
     targetType: 'labor',
     targetId: recipeId,
     dynamicType: 'Skill',
+    refName: skillName,
+  })
+
+  // Craft time is reduced by the crafting table's installed (speed) upgrade module.
+  // A `targetType: 'craftMinutes'`, Module modifier is the hook the solver keys on
+  // (`resolveModifiers`); without it an installed module never touches craft time.
+  store.setRow('modifiers', generateId(), {
+    datasetId,
+    targetType: 'craftMinutes',
+    targetId: recipeId,
+    dynamicType: 'Module',
     refName: skillName,
   })
 
@@ -174,12 +186,15 @@ function writeRecipeElementsAndModifiers(
       isProduct: false,
       index: index++,
     })
-    if (ing.isDiscountedBySkill) {
+    // A Module elementQuantity modifier lets the table's (resource) upgrade module
+    // reduce this ingredient. Static items (tools/molds) should be left untoggled,
+    // mirroring how vanilla recipes omit the Module entry on non-reducible slots.
+    if (ing.isReducedByModule) {
       store.setRow('modifiers', generateId(), {
         datasetId,
         targetType: 'elementQuantity',
         targetId: elementId,
-        dynamicType: 'Skill',
+        dynamicType: 'Module',
         refName: skillName,
       })
     }

@@ -1751,6 +1751,60 @@ describe('solve — additional scenarios', () => {
     })
   })
 
+  describe('custom-recipe upgrade-module modifiers', () => {
+    // Mirrors what writeRecipeElementsAndModifiers (custom-entities.ts) emits:
+    // labor is Skill-reduced (never module), craft time carries a Module modifier,
+    // a "module-reduced" ingredient carries a Module modifier and a static one does
+    // not. A single installed module fills both module slots; pluginType gates it.
+    const makeCustomRecipe = (module: { percent: number; pluginType: string } | null) =>
+      makeRecipe({
+        baseLaborCost: 0,
+        baseCraftTime: 10,
+        costPerMinute: 2,
+        pluginModule: module,
+        speedPluginModule: module,
+        laborModifiers: [{ dynamicType: 'Skill', refName: 'skill-1' }],
+        craftMinutesModifiers: [{ dynamicType: 'Module', refName: 'skill-1' }],
+        ingredients: [
+          // toggled-on ingredient (module-reduced)
+          {
+            itemOrTagId: 'wood',
+            baseQuantity: -10,
+            modifiers: [{ dynamicType: 'Module', refName: 'skill-1' }],
+          },
+          // toggled-off ingredient (static; no modifier)
+          { itemOrTagId: 'nail', baseQuantity: -10, modifiers: [] },
+        ],
+        products: [
+          { itemOrTagId: 'out', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
+        ],
+      })
+
+    const costOf = (module: { percent: number; pluginType: string } | null) =>
+      solve(makeInput({ recipes: [makeCustomRecipe(module)], prices: { wood: 1, nail: 1 } }))
+        .prices['out'].costPrice
+
+    it('applies no module reduction when none is installed', () => {
+      // ingredients 10+10=20, craft 10*2=20 → 40
+      expect(costOf(null)).toBeCloseTo(40)
+    })
+
+    it('a Resource module reduces the toggled-on ingredient but not craft time', () => {
+      // wood 10*0.5=5, nail 10 (static), craft 20 (speed-gated off) → 35
+      expect(costOf({ percent: 0.5, pluginType: 'Resource' })).toBeCloseTo(35)
+    })
+
+    it('a Speed module reduces craft time but not ingredients', () => {
+      // ingredients 20 (resource-gated off), craft 20*0.5=10 → 30
+      expect(costOf({ percent: 0.5, pluginType: 'Speed' })).toBeCloseTo(30)
+    })
+
+    it('a combined Resource&Speed module reduces both', () => {
+      // wood 5 + nail 10 = 15, craft 10 → 25
+      expect(costOf({ percent: 0.5, pluginType: 'Resource&Speed' })).toBeCloseTo(25)
+    })
+  })
+
   describe('resolveProductCost — additional edge cases', () => {
     const cand = (recipeId: string, costPrice: number, salePrice = costPrice) => ({
       recipeId,

@@ -138,13 +138,13 @@ function buildBaseRecipeInput(itemId: string): CustomRecipeInput {
     requiredSkillLevel: 0,
     baseLaborCost: 50,
     baseCraftTime: 0,
-    ingredients: [{ itemId: 'item-wood', baseQuantity: 2, isDiscountedBySkill: true }],
+    ingredients: [{ itemId: 'item-wood', baseQuantity: 2, isReducedByModule: true }],
     products: [{ itemId, quantity: 1 }],
   }
 }
 
 describe('createCustomRecipe', () => {
-  it('writes recipe, elements, labor modifier, and ingredient discount modifier', async () => {
+  it('writes recipe, elements, labor + craftMinutes modifiers, and ingredient module modifier', async () => {
     const store = setupBaseDataset()
     const productItemId = await createCustomItem(store, DS_ID, 'Refined Ore', LOCALE)
     const recipeId = await createCustomRecipe(
@@ -185,18 +185,27 @@ describe('createCustomRecipe', () => {
       )
     const laborMod = modifiers.find((m) => m.targetType === 'labor')
     expect(laborMod).toBeDefined()
+    expect(laborMod!.dynamicType).toBe('Skill')
     expect(laborMod!.refName).toBe('Mining')
+    // Craft time is module-reduced (so an installed speed upgrade can apply).
+    const craftMod = modifiers.find((m) => m.targetType === 'craftMinutes')
+    expect(craftMod).toBeDefined()
+    expect(craftMod!.dynamicType).toBe('Module')
+    expect(craftMod!.refName).toBe('Mining')
+    expect(craftMod!.targetId).toBe(recipeId)
+    // Toggled-on ingredient is module-reduced (resource upgrade applies).
     const elementMod = modifiers.find((m) => m.targetType === 'elementQuantity')
     expect(elementMod).toBeDefined()
+    expect(elementMod!.dynamicType).toBe('Module')
     expect(elementMod!.refName).toBe('Mining')
     expect(elementMod!.targetId).toBe(ingredient)
   })
 
-  it('skips the ingredient modifier when isDiscountedBySkill is false', async () => {
+  it('skips the ingredient modifier when isReducedByModule is false', async () => {
     const store = setupBaseDataset()
     const productItemId = await createCustomItem(store, DS_ID, 'Refined Ore', LOCALE)
     const input = buildBaseRecipeInput(productItemId)
-    input.ingredients[0].isDiscountedBySkill = false
+    input.ingredients[0].isReducedByModule = false
     const recipeId = await createCustomRecipe(store, DS_ID, input, LOCALE)
 
     const elementMods = store
@@ -204,12 +213,19 @@ describe('createCustomRecipe', () => {
       .map((id) => store.getRow('modifiers', id))
       .filter((m) => m.targetType === 'elementQuantity')
     expect(elementMods.length).toBe(0)
-    // Labor modifier is still present, regardless of ingredient discount.
+    // Labor (Skill) and craftMinutes (Module) modifiers are still present,
+    // regardless of whether the ingredient is module-reduced.
     const laborMods = store
       .getRowIds('modifiers')
       .map((id) => store.getRow('modifiers', id))
       .filter((m) => m.targetType === 'labor' && m.targetId === recipeId)
     expect(laborMods.length).toBe(1)
+    const craftMods = store
+      .getRowIds('modifiers')
+      .map((id) => store.getRow('modifiers', id))
+      .filter((m) => m.targetType === 'craftMinutes' && m.targetId === recipeId)
+    expect(craftMods.length).toBe(1)
+    expect(craftMods[0].dynamicType).toBe('Module')
   })
 
   it('rejects empty ingredient or product lists', async () => {
@@ -244,7 +260,7 @@ describe('updateCustomRecipe', () => {
         requiredSkillLevel: 3,
         baseLaborCost: 80,
         baseCraftTime: 5,
-        ingredients: [{ itemId: 'item-wood', baseQuantity: 4, isDiscountedBySkill: false }],
+        ingredients: [{ itemId: 'item-wood', baseQuantity: 4, isReducedByModule: false }],
         products: [
           { itemId: productItemId, quantity: 2 },
           { itemId: otherProduct, quantity: 1 },
@@ -267,8 +283,15 @@ describe('updateCustomRecipe', () => {
       .getRowIds('modifiers')
       .map((id) => store.getRow('modifiers', id))
       .filter((m) => m.targetType === 'elementQuantity')
-    // No discount on the new ingredient, so no elementQuantity modifier survives.
+    // New ingredient is not module-reduced, so no elementQuantity modifier survives.
     expect(ingredientMods.length).toBe(0)
+    // The recipe-level craftMinutes Module modifier is rewritten on update.
+    const craftMods = store
+      .getRowIds('modifiers')
+      .map((id) => store.getRow('modifiers', id))
+      .filter((m) => m.targetType === 'craftMinutes' && m.targetId === recipeId)
+    expect(craftMods.length).toBe(1)
+    expect(craftMods[0].dynamicType).toBe('Module')
   })
 })
 

@@ -39,7 +39,7 @@ interface IngredientRow {
   id: string
   selection: PickerOption | null
   baseQuantity: number | null
-  isDiscountedBySkill: boolean
+  isReducedByModule: boolean
 }
 
 interface ProductRow {
@@ -52,7 +52,9 @@ const emptyIngredient = (): IngredientRow => ({
   id: generateId(),
   selection: null,
   baseQuantity: 1,
-  isDiscountedBySkill: false,
+  // Most ingredients are reduced by upgrade modules in vanilla recipes; default on
+  // and let the user untoggle static items (tools/molds) that aren't reduced.
+  isReducedByModule: true,
 })
 
 const emptyProduct = (): ProductRow => ({ id: generateId(), selection: null, quantity: 1 })
@@ -269,10 +271,10 @@ export function CustomRecipeFormDialog({ visible, onHide, datasetId, recipeId }:
         : null
     )
 
-    const elementDiscountedSet = new Set<string>()
+    const elementReducedSet = new Set<string>()
     for (const mId of gameDataStore.getRowIds('modifiers')) {
       if (gameDataStore.getCell('modifiers', mId, 'targetType') !== 'elementQuantity') continue
-      elementDiscountedSet.add(gameDataStore.getCell('modifiers', mId, 'targetId') as string)
+      elementReducedSet.add(gameDataStore.getCell('modifiers', mId, 'targetId') as string)
     }
     const ings: IngredientRow[] = []
     const prods: ProductRow[] = []
@@ -306,7 +308,7 @@ export function CustomRecipeFormDialog({ visible, onHide, datasetId, recipeId }:
           id: generateId(),
           selection,
           baseQuantity: Math.abs((row.baseQuantity as number) ?? 0),
-          isDiscountedBySkill: elementDiscountedSet.has(id),
+          isReducedByModule: elementReducedSet.has(id),
         })
       }
     }
@@ -346,7 +348,7 @@ export function CustomRecipeFormDialog({ visible, onHide, datasetId, recipeId }:
       .map((r) => ({
         itemId: r.selection!.id,
         baseQuantity: r.baseQuantity ?? 0,
-        isDiscountedBySkill: r.isDiscountedBySkill,
+        isReducedByModule: r.isReducedByModule,
       }))
     const prodPayload = products
       .filter((r) => r.selection !== null)
@@ -533,12 +535,12 @@ export function CustomRecipeFormDialog({ visible, onHide, datasetId, recipeId }:
               />
               <div className="flex align-items-center gap-1">
                 <Checkbox
-                  inputId={`ing-discount-${idx}`}
-                  checked={row.isDiscountedBySkill}
-                  onChange={(e) => updateIngredient(idx, { isDiscountedBySkill: !!e.checked })}
+                  inputId={`ing-reduced-${idx}`}
+                  checked={row.isReducedByModule}
+                  onChange={(e) => updateIngredient(idx, { isReducedByModule: !!e.checked })}
                 />
-                <label htmlFor={`ing-discount-${idx}`} className="text-sm">
-                  {t('settings.customEntities.fields.discountedBySkill')}
+                <label htmlFor={`ing-reduced-${idx}`} className="text-sm">
+                  {t('settings.customEntities.fields.reducedByModule')}
                 </label>
               </div>
               <Button

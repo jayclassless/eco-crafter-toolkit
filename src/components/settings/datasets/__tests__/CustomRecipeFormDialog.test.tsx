@@ -180,9 +180,9 @@ describe('CustomRecipeFormDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: /add ingredient/i }))
     // A new ingredient row adds its own trash button, so total icon-only
     // buttons in the dialog body increase. We assert specifically on the
-    // discount-checkbox label count, which uniquely identifies ingredient rows.
-    const ingredientDiscountLabels = document.body.querySelectorAll('label[for^="ing-discount-"]')
-    expect(ingredientDiscountLabels.length).toBe(2)
+    // module-reduction-checkbox label count, which uniquely identifies rows.
+    const ingredientReducedLabels = document.body.querySelectorAll('label[for^="ing-reduced-"]')
+    expect(ingredientReducedLabels.length).toBe(2)
     expect(before).toBeGreaterThanOrEqual(0)
   })
 
@@ -205,7 +205,7 @@ describe('CustomRecipeFormDialog', () => {
     // Add a second ingredient so there are two trash buttons in the
     // ingredients section.
     fireEvent.click(screen.getByRole('button', { name: /add ingredient/i }))
-    expect(document.body.querySelectorAll('label[for^="ing-discount-"]').length).toBe(2)
+    expect(document.body.querySelectorAll('label[for^="ing-reduced-"]').length).toBe(2)
     // Click the first trash button (ingredient column). Iterate top-down
     // through the visible trash buttons until one shrinks the list.
     const trashButtons = Array.from(
@@ -213,19 +213,20 @@ describe('CustomRecipeFormDialog', () => {
     ) as HTMLElement[]
     const firstTrash = trashButtons[0].closest('button') as HTMLButtonElement
     fireEvent.click(firstTrash)
-    // One discount label remains.
-    expect(document.body.querySelectorAll('label[for^="ing-discount-"]').length).toBe(1)
+    // One module-reduction label remains.
+    expect(document.body.querySelectorAll('label[for^="ing-reduced-"]').length).toBe(1)
   })
 
-  it('toggles the "discounted by skill" checkbox on an ingredient row', () => {
+  it('toggles the "reduced by upgrade module" checkbox on an ingredient row', () => {
     renderForm(makeStores())
-    const checkbox = document.body.querySelector('input#ing-discount-0') as HTMLInputElement
+    const checkbox = document.body.querySelector('input#ing-reduced-0') as HTMLInputElement
     expect(checkbox).not.toBeNull()
-    expect(checkbox.checked).toBe(false)
+    // Defaults to on (most ingredients are module-reduced in vanilla recipes).
+    expect(checkbox.checked).toBe(true)
     fireEvent.click(checkbox)
     // Re-read to get the live checked state after re-render.
-    const refreshed = document.body.querySelector('input#ing-discount-0') as HTMLInputElement
-    expect(refreshed.checked).toBe(true)
+    const refreshed = document.body.querySelector('input#ing-reduced-0') as HTMLInputElement
+    expect(refreshed.checked).toBe(false)
   })
 
   it('shows the skill-required validation error when only the name and table are set', async () => {

@@ -8,6 +8,7 @@
   or how many ingredients you need to produce a target number of items.
 - Added an option to builds to mirror a server's `AllowMultipleTalentPicks`
   configuration, allowing you to choose multiple talents per skill level grouping.
+- Fixed how upgrade & skill discounts are applied to custom recipes.
 
 ## 0.4.0 (2026-06-11)
 

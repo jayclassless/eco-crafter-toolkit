@@ -393,7 +393,7 @@
         "ingredients": "Ingredients",
         "products": "Products",
         "itemPlaceholder": "Select an item",
-        "discountedBySkill": "Discounted by skill"
+        "reducedByModule": "Reduced by upgrades"
       },
       "errors": {
         "nameRequired": "Name is required.",
