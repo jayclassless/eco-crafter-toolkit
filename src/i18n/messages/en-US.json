@@ -389,7 +389,7 @@
         "requiredSkillLevel": "Required Skill Level",
         "labor": "Labor",
         "craftTime": "Craft Time",
-        "seconds": "s",
+        "minutes": "min",
         "ingredients": "Ingredients",
         "products": "Products",
         "itemPlaceholder": "Select an item",

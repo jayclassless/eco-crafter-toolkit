@@ -498,7 +498,7 @@ export function CustomRecipeFormDialog({ visible, onHide, datasetId, recipeId }:
               onChange={setBaseCraftTime}
               min={0}
               maxFractionDigits={2}
-              suffix={t('settings.customEntities.fields.seconds')}
+              suffix={t('settings.customEntities.fields.minutes')}
             />
           </div>
         </div>
