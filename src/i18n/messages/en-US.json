@@ -69,6 +69,8 @@
       "calorieCostTooltip": "Cost per 1000 calories of labor. Converts labor into a currency cost.",
       "applyMarginBetweenSkills": "Apply margin between skills",
       "applyMarginBetweenSkillsTooltip": "When an ingredient is produced by a different skill than the recipe using it, use the margin-adjusted price instead of the base cost price.",
+      "allowMultipleTalentPicks": "Allow multiple talent picks",
+      "allowMultipleTalentPicksTooltip": "Matches the Eco server setting of the same name. When enabled, talents unlocked at the same skill level are no longer mutually exclusive — you can invest in more than one. Leave off for default servers.",
       "defaultShareForSecondaryItems": "Default Share for Secondary Items",
       "defaultShareForSecondaryItemsTooltip": "Total percentage of recipe cost allocated to secondary products by default, split evenly among them. Slag and tailings always get 0%. Once you adjust shares for a specific recipe, those manual values take over.",
       "deleteBuildConfirmTitle": "Delete Build",

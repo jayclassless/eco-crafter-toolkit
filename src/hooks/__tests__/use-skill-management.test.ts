@@ -449,6 +449,27 @@ describe('createSkillManagement', () => {
       expect(enabled[0].talentId).toBe('talent-3b')
     })
 
+    it('keeps siblings when the build allows multiple talent picks', () => {
+      // Mirrors the Eco server setting AllowMultipleTalentPicks: when on, two
+      // talents in the same skill-level tier can both stay enabled.
+      buildStore.setRow('userSettings', 'settings-1', {
+        id: 'settings-1',
+        buildId: BUILD_ID,
+        allowMultipleTalentPicks: true,
+      })
+      buildStore.setRow('userTalents', 'ut-a', {
+        id: 'ut-a',
+        buildId: BUILD_ID,
+        talentId: 'talent-3a',
+        enabled: true,
+      })
+      mgmt().toggleTalent('talent-3b', '', true)
+
+      expect(buildStore.getCell('userTalents', 'ut-a', 'enabled')).toBe(true)
+      const enabled = rowsForBuild(buildStore, 'userTalents').filter((t) => t.enabled)
+      expect(enabled.map((t) => t.talentId).sort()).toEqual(['talent-3a', 'talent-3b'])
+    })
+
     it('ignores foreign-build talents when enforcing the sibling rule', () => {
       // A foreign-build talent at the same level should not be touched
       buildStore.setRow('userTalents', 'ut-foreign-3a', {

@@ -91,13 +91,12 @@ export function createBuildStore() {
       showUnskilledRecipes: { type: 'boolean', default: true },
       onlyLevelAccessible: { type: 'boolean', default: false },
       applyMarginBetweenSkills: { type: 'boolean', default: false },
+      allowMultipleTalentPicks: { type: 'boolean', default: false },
       showParts: { type: 'boolean', default: true },
       showUntagged: { type: 'boolean', default: true },
       showOnlyFavorites: { type: 'boolean', default: false },
       defaultShareForSecondaryItems: { type: 'number', default: 20 },
       blueprintMode: { type: 'string', default: 'include' },
-      // Crop Tracker: server plant-growth-rate multiplier (1 = default rate,
-      // i.e. 1 game day = 24 real hours). >1 means crops grow faster.
       growthRateModifier: { type: 'number', default: 1 },
     },
     computedPrices: {

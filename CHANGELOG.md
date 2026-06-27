@@ -6,6 +6,8 @@
 - Added an initial implementation of a "Production Planner" tool, that will
   tell you how many of a item you can produce given a set of input ingredients,
   or how many ingredients you need to produce a target number of items.
+- Added an option to builds to mirror a server's `AllowMultipleTalentPicks`
+  configuration, allowing you to choose multiple talents per skill level grouping.
 
 ## 0.4.0 (2026-06-11)
 

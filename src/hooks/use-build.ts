@@ -74,6 +74,7 @@ export function createBuildOps(buildStore: Store, gameDataStore: Store) {
         showUnskilledRecipes: true,
         onlyLevelAccessible: false,
         applyMarginBetweenSkills: false,
+        allowMultipleTalentPicks: false,
         showParts: true,
         showUntagged: true,
         showOnlyFavorites: false,

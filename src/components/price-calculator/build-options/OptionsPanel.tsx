@@ -39,6 +39,7 @@ interface UserSettings {
   marginType: string
   calorieCost: number
   applyMarginBetweenSkills: boolean
+  allowMultipleTalentPicks: boolean
   defaultShareForSecondaryItems: number
 }
 
@@ -68,6 +69,7 @@ export function OptionsPanel({ buildId }: Props) {
           marginType: row.marginType as string,
           calorieCost: row.calorieCost as number,
           applyMarginBetweenSkills: row.applyMarginBetweenSkills as boolean,
+          allowMultipleTalentPicks: row.allowMultipleTalentPicks === true,
           defaultShareForSecondaryItems: (row.defaultShareForSecondaryItems as number) ?? 20,
         }
       }
@@ -272,6 +274,26 @@ export function OptionsPanel({ buildId }: Props) {
             max={100}
             suffix="%"
             className="w-full"
+          />
+        </div>
+
+        {/* Allow multiple talent picks */}
+        <div className="flex align-items-center gap-2">
+          <Checkbox
+            inputId="allowMultipleTalentPicks"
+            checked={settings.allowMultipleTalentPicks}
+            onChange={(e: CheckboxChangeEvent) =>
+              setSetting('allowMultipleTalentPicks', e.checked ?? false)
+            }
+          />
+          <label htmlFor="allowMultipleTalentPicks" className="text-sm">
+            {t('priceCalculator.config.allowMultipleTalentPicks')}
+            <i className="pi pi-info-circle ml-1 text-xs allow-multiple-talents-tooltip" />
+          </label>
+          <Tooltip
+            target=".allow-multiple-talents-tooltip"
+            content={t('priceCalculator.config.allowMultipleTalentPicksTooltip')}
+            position="right"
           />
         </div>
 

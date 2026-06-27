@@ -152,11 +152,23 @@ export function createSkillManagement(
     })
   }
 
+  // Whether this build allows picking multiple talents within the same
+  // skill-level tier (mirrors the Eco v13 server setting AllowMultipleTalentPicks).
+  // Absent settings row → default false (the vanilla one-per-tier rule).
+  const allowsMultipleTalentPicks = (): boolean => {
+    for (const rowId of buildStore.getRowIds('userSettings')) {
+      const row = buildStore.getRow('userSettings', rowId)
+      if (row.buildId === buildId) return row.allowMultipleTalentPicks === true
+    }
+    return false
+  }
+
   // Shared guts: enable one talent (optionally at a chosen level for levelable
   // talents) and disable all siblings at the same skill level. Used by both
   // toggleTalent and setTalentLevel so the one-per-level invariant is enforced
-  // regardless of entry point.
+  // regardless of entry point. No-op when the build allows multiple talent picks.
   const disableSiblings = (talentId: string) => {
+    if (allowsMultipleTalentPicks()) return
     const talent = gameDataStore.getRow('talents', talentId)
     const skillId = talent.skillId as string
     const level = talent.level as number
