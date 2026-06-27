@@ -16,6 +16,7 @@ interface Props {
   onSelectProductionPlanner?: () => void
   onSelectGameNews: () => void
   onSelectDatasets: () => void
+  onSelectCustomEntities: () => void
   onSelectUiSettings: () => void
   onSelectAbout: () => void
 }
@@ -59,6 +60,7 @@ export function SidebarMenuView({
   onSelectProductionPlanner,
   onSelectGameNews,
   onSelectDatasets,
+  onSelectCustomEntities,
   onSelectUiSettings,
   onSelectAbout,
 }: Props) {
@@ -96,6 +98,11 @@ export function SidebarMenuView({
       label: t('settings.menu.datasets'),
       icon: 'pi pi-database',
       command: onSelectDatasets,
+    },
+    {
+      label: t('settings.menu.customEntities'),
+      icon: 'pi pi-wrench',
+      command: onSelectCustomEntities,
     },
     {
       label: t('settings.menu.uiSettings'),

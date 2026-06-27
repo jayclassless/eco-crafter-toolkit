@@ -60,12 +60,13 @@ describe('SidebarMenuView', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders the menu items in order: recipe calculator, game news, datasets, ui settings, about', () => {
+  it('renders the menu items in order: recipe calculator, game news, datasets, custom entities, ui settings, about', () => {
     renderWith(
       <SidebarMenuView
         onSelectRecipeCalculator={() => {}}
         onSelectGameNews={() => {}}
         onSelectDatasets={() => {}}
+        onSelectCustomEntities={() => {}}
         onSelectUiSettings={() => {}}
         onSelectAbout={() => {}}
       />
@@ -75,6 +76,7 @@ describe('SidebarMenuView', () => {
       'Ad-Hoc Recipe Calculator',
       'Game News',
       'Game Datasets',
+      'Custom Recipes/Items',
       'UI Settings',
       'About this App',
     ])
@@ -87,6 +89,7 @@ describe('SidebarMenuView', () => {
         onSelectRecipeCalculator={onSelectRecipeCalculator}
         onSelectGameNews={() => {}}
         onSelectDatasets={() => {}}
+        onSelectCustomEntities={() => {}}
         onSelectUiSettings={() => {}}
         onSelectAbout={() => {}}
       />
@@ -102,6 +105,7 @@ describe('SidebarMenuView', () => {
         onSelectProductionPlanner={onSelectProductionPlanner}
         onSelectGameNews={() => {}}
         onSelectDatasets={() => {}}
+        onSelectCustomEntities={() => {}}
         onSelectUiSettings={() => {}}
         onSelectAbout={() => {}}
       />
@@ -115,6 +119,7 @@ describe('SidebarMenuView', () => {
       <SidebarMenuView
         onSelectGameNews={() => {}}
         onSelectDatasets={() => {}}
+        onSelectCustomEntities={() => {}}
         onSelectUiSettings={() => {}}
         onSelectAbout={() => {}}
       />
@@ -129,6 +134,7 @@ describe('SidebarMenuView', () => {
         onSelectRecipeCalculator={() => {}}
         onSelectGameNews={onSelectGameNews}
         onSelectDatasets={() => {}}
+        onSelectCustomEntities={() => {}}
         onSelectUiSettings={() => {}}
         onSelectAbout={() => {}}
       />
@@ -165,6 +171,7 @@ describe('SidebarMenuView', () => {
         onSelectRecipeCalculator={() => {}}
         onSelectGameNews={() => {}}
         onSelectDatasets={() => {}}
+        onSelectCustomEntities={() => {}}
         onSelectUiSettings={() => {}}
         onSelectAbout={() => {}}
       />
@@ -176,6 +183,22 @@ describe('SidebarMenuView', () => {
     })
   })
 
+  it('invokes onSelectCustomEntities when the Custom Recipes/Items menu item is clicked', () => {
+    const onSelectCustomEntities = vi.fn()
+    renderWith(
+      <SidebarMenuView
+        onSelectRecipeCalculator={() => {}}
+        onSelectGameNews={() => {}}
+        onSelectDatasets={() => {}}
+        onSelectCustomEntities={onSelectCustomEntities}
+        onSelectUiSettings={() => {}}
+        onSelectAbout={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByText('Custom Recipes/Items'))
+    expect(onSelectCustomEntities).toHaveBeenCalledTimes(1)
+  })
+
   it('invokes onSelectAbout when the About menu item is clicked', () => {
     const onSelectAbout = vi.fn()
     renderWith(
@@ -183,6 +206,7 @@ describe('SidebarMenuView', () => {
         onSelectRecipeCalculator={() => {}}
         onSelectGameNews={() => {}}
         onSelectDatasets={() => {}}
+        onSelectCustomEntities={() => {}}
         onSelectUiSettings={() => {}}
         onSelectAbout={onSelectAbout}
       />

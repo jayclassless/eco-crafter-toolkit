@@ -17,6 +17,7 @@ interface Props {
   onOpenProductionPlanner?: () => void
   onOpenGameNews: () => void
   onOpenDatasets: () => void
+  onOpenCustomEntities: () => void
   onOpenAbout: () => void
 }
 
@@ -29,6 +30,7 @@ export function SettingsSidebar({
   onOpenProductionPlanner,
   onOpenGameNews,
   onOpenDatasets,
+  onOpenCustomEntities,
   onOpenAbout,
 }: Props) {
   const { t } = useTranslation()
@@ -78,6 +80,11 @@ export function SettingsSidebar({
     onOpenDatasets()
   }
 
+  const handleSelectCustomEntities = () => {
+    onHide()
+    onOpenCustomEntities()
+  }
+
   const handleSelectAbout = () => {
     onHide()
     onOpenAbout()
@@ -91,6 +98,7 @@ export function SettingsSidebar({
           onSelectProductionPlanner={handleSelectProductionPlanner}
           onSelectGameNews={handleSelectGameNews}
           onSelectDatasets={handleSelectDatasets}
+          onSelectCustomEntities={handleSelectCustomEntities}
           onSelectUiSettings={() => setView('uiSettings')}
           onSelectAbout={handleSelectAbout}
         />

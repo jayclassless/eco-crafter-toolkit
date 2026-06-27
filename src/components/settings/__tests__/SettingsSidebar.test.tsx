@@ -38,6 +38,7 @@ function renderSidebar(opts: {
   onOpenRecipeCalculator?: () => void
   onOpenGameNews?: () => void
   onOpenDatasets?: () => void
+  onOpenCustomEntities?: () => void
   onOpenAbout?: () => void
   stores?: { gameDataStore: Store; buildStore: Store; uiStore: Store }
 }) {
@@ -57,6 +58,7 @@ function renderSidebar(opts: {
         onOpenRecipeCalculator={opts.onOpenRecipeCalculator ?? (() => {})}
         onOpenGameNews={opts.onOpenGameNews ?? (() => {})}
         onOpenDatasets={opts.onOpenDatasets ?? (() => {})}
+        onOpenCustomEntities={opts.onOpenCustomEntities ?? (() => {})}
         onOpenAbout={opts.onOpenAbout ?? (() => {})}
       />
     </StoreContext.Provider>
@@ -116,6 +118,15 @@ describe('SettingsSidebar', () => {
     fireEvent.click(screen.getByText('Game Datasets'))
     expect(onHide).toHaveBeenCalledTimes(1)
     expect(onOpenDatasets).toHaveBeenCalledTimes(1)
+  })
+
+  it('calls onHide and onOpenCustomEntities when Custom Recipes/Items is clicked', () => {
+    const onHide = vi.fn()
+    const onOpenCustomEntities = vi.fn()
+    renderSidebar({ onHide, onOpenCustomEntities })
+    fireEvent.click(screen.getByText('Custom Recipes/Items'))
+    expect(onHide).toHaveBeenCalledTimes(1)
+    expect(onOpenCustomEntities).toHaveBeenCalledTimes(1)
   })
 
   it('calls onHide and onOpenAbout when About is clicked', () => {
@@ -188,6 +199,7 @@ describe('SettingsSidebar', () => {
           onOpenRecipeCalculator={() => {}}
           onOpenGameNews={() => {}}
           onOpenDatasets={() => {}}
+          onOpenCustomEntities={() => {}}
           onOpenAbout={() => {}}
         />
       </StoreContext.Provider>
@@ -209,6 +221,7 @@ describe('SettingsSidebar', () => {
           onOpenRecipeCalculator={() => {}}
           onOpenGameNews={() => {}}
           onOpenDatasets={() => {}}
+          onOpenCustomEntities={() => {}}
           onOpenAbout={() => {}}
         />
       </StoreContext.Provider>

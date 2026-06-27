@@ -7,6 +7,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { NavBar } from '@/components/common/NavBar'
 import { NumericField } from '@/components/common/NumericField'
 import { AboutDialog } from '@/components/settings/AboutDialog'
+import { CustomEntitiesDialog } from '@/components/settings/datasets/CustomEntitiesDialog'
 import { DatasetsDialog } from '@/components/settings/datasets/DatasetsDialog'
 import { SettingsSidebar } from '@/components/settings/SettingsSidebar'
 import { useLocalizedName } from '@/hooks/use-localized-name'
@@ -37,6 +38,7 @@ export function CropTracker() {
 
   const [settingsVisible, setSettingsVisible] = useState(false)
   const [datasetsDialogVisible, setDatasetsDialogVisible] = useState(false)
+  const [customEntitiesVisible, setCustomEntitiesVisible] = useState(false)
   const [aboutVisible, setAboutVisible] = useState(false)
 
   // URL is the source of truth; mirror PriceCalculator's validation.
@@ -252,6 +254,7 @@ export function CropTracker() {
         onHide={() => setSettingsVisible(false)}
         onOpenGameNews={() => navigate('/game-news')}
         onOpenDatasets={() => setDatasetsDialogVisible(true)}
+        onOpenCustomEntities={() => setCustomEntitiesVisible(true)}
         onOpenAbout={() => setAboutVisible(true)}
       />
       <DatasetsDialog
@@ -262,6 +265,11 @@ export function CropTracker() {
           setDatasetsDialogVisible(false)
           navigate(`/${id}/crops`)
         }}
+      />
+      <CustomEntitiesDialog
+        visible={customEntitiesVisible}
+        onHide={() => setCustomEntitiesVisible(false)}
+        datasetId={datasetId}
       />
       <AboutDialog visible={aboutVisible} onHide={() => setAboutVisible(false)} />
     </div>

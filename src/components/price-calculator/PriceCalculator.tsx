@@ -6,6 +6,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { NavBar } from '@/components/common/NavBar'
 import { ProductionPlannerDialog } from '@/components/price-calculator/production-planner/ProductionPlannerDialog'
 import { AboutDialog } from '@/components/settings/AboutDialog'
+import { CustomEntitiesDialog } from '@/components/settings/datasets/CustomEntitiesDialog'
 import { DatasetsDialog } from '@/components/settings/datasets/DatasetsDialog'
 import { AdHocRecipeCalculatorDialog } from '@/components/settings/recipe-calculator/AdHocRecipeCalculatorDialog'
 import { SettingsSidebar } from '@/components/settings/SettingsSidebar'
@@ -41,6 +42,7 @@ export function PriceCalculator() {
 
   const [settingsVisible, setSettingsVisible] = useState(false)
   const [datasetsDialogVisible, setDatasetsDialogVisible] = useState(false)
+  const [customEntitiesVisible, setCustomEntitiesVisible] = useState(false)
   const [aboutVisible, setAboutVisible] = useState(false)
   const [recipeCalculatorVisible, setRecipeCalculatorVisible] = useState(false)
   const [productionPlannerVisible, setProductionPlannerVisible] = useState(false)
@@ -233,6 +235,7 @@ export function PriceCalculator() {
         onOpenProductionPlanner={() => setProductionPlannerVisible(true)}
         onOpenGameNews={() => navigate('/game-news')}
         onOpenDatasets={() => setDatasetsDialogVisible(true)}
+        onOpenCustomEntities={() => setCustomEntitiesVisible(true)}
         onOpenAbout={() => setAboutVisible(true)}
       />
       <DatasetsDialog
@@ -243,6 +246,11 @@ export function PriceCalculator() {
           setDatasetsDialogVisible(false)
           navigate(`/${id}/calculator`)
         }}
+      />
+      <CustomEntitiesDialog
+        visible={customEntitiesVisible}
+        onHide={() => setCustomEntitiesVisible(false)}
+        datasetId={datasetId}
       />
       <AboutDialog visible={aboutVisible} onHide={() => setAboutVisible(false)} />
       <AdHocRecipeCalculatorDialog
