@@ -1,5 +1,9 @@
 # Eco Crafter Toolkit Change Log
 
+## 0.6.0 (TBD)
+
+- Fixed display of Tag ingredient names in Custom Recipe editor.
+
 ## 0.5.0 (2026-06-27)
 
 - The app now remembers the last build you had open, and returns you to it.

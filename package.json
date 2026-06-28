@@ -1,6 +1,6 @@
 {
   "name": "eco-crafter-toolkit",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "dependencies": {
     "@sentry/react": "^10.62.0",
     "@xyflow/react": "^12.11.1",

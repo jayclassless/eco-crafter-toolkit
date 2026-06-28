@@ -90,7 +90,7 @@ function buildItemCandidates(
     const isTag = !!gameDataStore.getCell('items', id, 'isTag')
     if (isTag && !includeTags) continue
     const isCustom = !!gameDataStore.getCell('items', id, 'isCustom')
-    const label = getName(isTag ? 'tag' : 'item', id) || rawName
+    const label = getName('item', id) || rawName
     out.push({ id, name: label, rawName, isCustom })
   }
   out.sort((a, b) => a.name.localeCompare(b.name))
@@ -288,11 +288,10 @@ export function CustomRecipeFormDialog({ visible, onHide, datasetId, recipeId }:
     for (const { id, row } of elementRows) {
       const itemId = row.itemOrTagId as string
       const itemRow = itemId ? gameDataStore.getRow('items', itemId) : null
-      const isTag = itemRow ? !!itemRow.isTag : false
       const selection: PickerOption | null = itemRow
         ? {
             id: itemId,
-            name: getName(isTag ? 'tag' : 'item', itemId) || (itemRow.name as string),
+            name: getName('item', itemId) || (itemRow.name as string),
             rawName: itemRow.name as string,
             isCustom: !!itemRow.isCustom,
           }
