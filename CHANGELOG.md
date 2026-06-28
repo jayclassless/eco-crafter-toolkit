@@ -1,6 +1,6 @@
 # Eco Crafter Toolkit Change Log
 
-## 0.5.0 (TBD)
+## 0.5.0 (2026-06-27)
 
 - The app now remembers the last build you had open, and returns you to it.
 - Added an initial implementation of a "Production Planner" tool, that will
