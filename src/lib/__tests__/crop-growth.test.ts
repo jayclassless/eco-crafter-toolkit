@@ -14,6 +14,9 @@ import {
 // 50% (PostHarvestingGrowth 0.5 -> 14.4h), and are pickable at 80%.
 const nonRegen = { maturityAgeDays: 0.8, postHarvestingGrowth: 0, pickableAtPercent: 0 }
 const regen = { maturityAgeDays: 1.2, postHarvestingGrowth: 0.5, pickableAtPercent: 0.8 }
+// Trees (e.g. Oak, MaturityAgeDays 7) become harvestable at the 30% sapling
+// threshold rather than full maturity.
+const tree = { maturityAgeDays: 7, postHarvestingGrowth: 0, pickableAtPercent: 0, isTree: true }
 
 const PLANTED = '2026-01-01T00:00:00.000Z'
 const hoursAfterPlanted = (date: Date | null) => {
@@ -47,6 +50,13 @@ describe('growthHours', () => {
     expect(growthHours(nonRegen, 2, false)).toBeCloseTo(9.6)
   })
 
+  it('scales trees quadratically with the growth-rate modifier', () => {
+    // Trees take the modifier squared: Oak full growth 168h -> 42h at rate 2
+    // (168 / 2^2), not 84h. At rate 1 tree and food crops coincide.
+    expect(growthHours(tree, 1, false)).toBeCloseTo(168)
+    expect(growthHours(tree, 2, false)).toBeCloseTo(42)
+  })
+
   it('treats a non-positive modifier as 1', () => {
     expect(growthHours(nonRegen, 0, false)).toBeCloseTo(19.2)
     expect(growthHours(nonRegen, -5, false)).toBeCloseTo(19.2)
@@ -62,6 +72,14 @@ describe('computeHarvestDate', () => {
   it('offsets the planted time by the full growth duration', () => {
     expect(hoursAfterPlanted(computeHarvestDate(PLANTED, nonRegen, 1, false))).toBeCloseTo(19.2)
     expect(hoursAfterPlanted(computeHarvestDate(PLANTED, regen, 1, true))).toBeCloseTo(14.4)
+  })
+
+  it('harvests trees at the 30% sapling threshold, not full maturity', () => {
+    // Oak: full growth is 7d * 24h = 168h, but it is harvestable at 30% -> 50.4h.
+    expect(hoursAfterPlanted(computeHarvestDate(PLANTED, tree, 1, false))).toBeCloseTo(50.4)
+    // At growth rate 2 the tree modifier is squared (168 / 2^2 = 42h full),
+    // so harvest is 0.3 * 42 = 12.6h.
+    expect(hoursAfterPlanted(computeHarvestDate(PLANTED, tree, 2, false))).toBeCloseTo(12.6)
   })
 
   it('returns null for non-crop input or an invalid date', () => {

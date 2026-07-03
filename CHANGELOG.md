@@ -3,6 +3,7 @@
 ## 0.6.0 (TBD)
 
 - Fixed display of Tag ingredient names in Custom Recipe editor.
+- Fixed (maybe?) the calculation of tree timings in the Crop Tracker.
 
 ## 0.5.0 (2026-06-27)
 

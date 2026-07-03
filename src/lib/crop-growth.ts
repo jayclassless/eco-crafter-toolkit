@@ -8,9 +8,27 @@
 // maturity after harvest, so subsequent cycles take `(1 - postHarvestingGrowth)`
 // of the base time. Crops with `pickableAtPercent > 0` can be picked early, at
 // that fraction of the growth time (before reaching full yield).
+//
+// Trees are a special case in two independent ways:
+//  1. In the game a tree becomes harvestable ("Ripe") once it grows past the
+//     sapling stage — `TreeObject.SaplingGrowthPercent`, a constant 0.3 across
+//     species/versions — not at full `MaturityAgeDays` maturity. So a tree's
+//     harvest time is only 30% of its full growth time; treating it as 100%
+//     (like a food crop) over-predicts harvest by ~3.3x.
+//  2. Trees respond to the server growth-rate modifier *quadratically* while
+//     food crops respond linearly. In-game soil-sampler readings across growth
+//     rates 1 and 2 show food full-growth time scaling as `24 / rate` but tree
+//     full-growth time scaling as `24 / rate^2` (at rate 1 the two coincide, so
+//     the divergence only shows once the rate leaves 1). The mechanism lives in
+//     Eco's closed-source simulation; this is an empirical fit, cleanest as a
+//     square.
 
 const HOURS_PER_MATURITY_DAY = 24
 const MS_PER_HOUR = 60 * 60 * 1000
+
+// Growth fraction at which a tree becomes harvestable (past the sapling stage).
+// Mirrors Eco's `TreeObject.SaplingGrowthPercent => 0.3f`.
+const TREE_HARVEST_GROWTH_PERCENT = 0.3
 
 // The subset of an Item's fields this module needs. Accepting a narrow shape
 // keeps the math easy to unit-test without constructing full store rows.
@@ -18,10 +36,17 @@ export interface CropGrowth {
   maturityAgeDays?: number
   postHarvestingGrowth?: number
   pickableAtPercent?: number
+  isTree?: boolean
 }
 
 export function isRegrowCrop(crop: CropGrowth): boolean {
   return (crop.postHarvestingGrowth ?? 0) > 0
+}
+
+// The growth fraction at which this plant is considered harvestable: trees at
+// the sapling threshold, food crops only when fully grown.
+function harvestGrowthFraction(crop: CropGrowth): number {
+  return crop.isTree ? TREE_HARVEST_GROWTH_PERCENT : 1
 }
 
 // Real hours from planting to fully grown, accounting for the server growth
@@ -34,15 +59,18 @@ export function growthHours(
   const maturity = crop.maturityAgeDays ?? 0
   if (maturity <= 0) return 0
   const modifier = growthRateModifier > 0 ? growthRateModifier : 1
-  let hours = (maturity * HOURS_PER_MATURITY_DAY) / modifier
+  // Trees take the growth-rate modifier quadratically, food crops linearly.
+  const effectiveModifier = crop.isTree ? modifier * modifier : modifier
+  let hours = (maturity * HOURS_PER_MATURITY_DAY) / effectiveModifier
   if (hasRegrown && isRegrowCrop(crop)) {
     hours *= 1 - (crop.postHarvestingGrowth ?? 0)
   }
   return hours
 }
 
-// The fully-grown / full-yield moment. Returns null if the input isn't a crop
-// or `plantedAtIso` is missing/invalid.
+// The harvestable moment — full maturity for food crops, but the 30% sapling
+// threshold for trees (see `TREE_HARVEST_GROWTH_PERCENT`). Returns null if the
+// input isn't a crop or `plantedAtIso` is missing/invalid.
 export function computeHarvestDate(
   plantedAtIso: string,
   crop: CropGrowth,
@@ -53,7 +81,7 @@ export function computeHarvestDate(
   if (Number.isNaN(plantedMs)) return null
   const hours = growthHours(crop, growthRateModifier, hasRegrown)
   if (hours <= 0) return null
-  return new Date(plantedMs + hours * MS_PER_HOUR)
+  return new Date(plantedMs + hours * harvestGrowthFraction(crop) * MS_PER_HOUR)
 }
 
 // The early-pickable moment. Null when the crop has no early-pick window
