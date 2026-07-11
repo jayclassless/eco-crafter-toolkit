@@ -1,0 +1,2321 @@
+{
+  "meta": {
+    "world": "Eco v13 default world (Configs/WorldGenerator.eco.template)",
+    "waterLevel": 60,
+    "maxHeight": 120
+  },
+  "biomes": {
+    "Grassland": {
+      "label": "Grassland",
+      "desc": "Open prairie \u2014 enough water for grasses but few trees. The classic Eco starting biome, rich in farmable soil and shallow clay.",
+      "climate": {
+        "temp": "Warm",
+        "moist": "Moderate",
+        "type": "Land"
+      },
+      "trees": [
+        {
+          "name": "Cedar",
+          "locked": false,
+          "yields": ["Cedar Log"]
+        },
+        {
+          "name": "Oak",
+          "locked": false,
+          "yields": ["Oak Log"]
+        }
+      ],
+      "harvest": [
+        {
+          "name": "Beets",
+          "locked": true,
+          "yields": ["Beet", "Beet Greens"]
+        },
+        {
+          "name": "Big Bluestem",
+          "locked": true,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Bunchgrass",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Common Grass",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Corn",
+          "locked": true,
+          "yields": ["Corn"]
+        },
+        {
+          "name": "Crimini Mushroom",
+          "locked": true,
+          "yields": ["Crimini Mushrooms", "Crimini Mushroom Spores"]
+        },
+        {
+          "name": "Daisy",
+          "locked": true,
+          "yields": ["Daisy"]
+        },
+        {
+          "name": "Flax",
+          "locked": true,
+          "yields": ["Flax Stem"]
+        },
+        {
+          "name": "Sunflower",
+          "locked": true,
+          "yields": ["Sunflower"]
+        },
+        {
+          "name": "Switchgrass",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Tomatoes",
+          "locked": true,
+          "yields": ["Tomato"]
+        },
+        {
+          "name": "Waterweed",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Wheat",
+          "locked": false,
+          "yields": ["Wheat"]
+        }
+      ],
+      "fauna": [
+        {
+          "name": "Turkey",
+          "cat": "Birds",
+          "note": ""
+        },
+        {
+          "name": "Salmon",
+          "cat": "Fish",
+          "note": "freshwater (rivers & lakes)"
+        },
+        {
+          "name": "Trout",
+          "cat": "Fish",
+          "note": "freshwater (rivers & lakes)"
+        },
+        {
+          "name": "Bison",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Coyote",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Deer",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Elk",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Fox",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Hare",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Prairie Dog",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Wolf",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Beaver",
+          "cat": "Other",
+          "note": ""
+        },
+        {
+          "name": "Tarantula",
+          "cat": "Other",
+          "note": ""
+        }
+      ],
+      "rocks": [
+        {
+          "name": "Dirt",
+          "raw": "Dirt",
+          "kind": "soil",
+          "topDepth": 0,
+          "botDepth": 0
+        },
+        {
+          "name": "Rocky Soil",
+          "raw": "RockySoil",
+          "kind": "soil",
+          "topDepth": 2,
+          "botDepth": 6
+        },
+        {
+          "name": "Limestone",
+          "raw": "Limestone",
+          "kind": "stone",
+          "topDepth": 2,
+          "botDepth": 6
+        },
+        {
+          "name": "Sandstone",
+          "raw": "Sandstone",
+          "kind": "stone",
+          "topDepth": 0,
+          "botDepth": 15
+        },
+        {
+          "name": "Granite",
+          "raw": "Granite",
+          "kind": "stone",
+          "topDepth": 60,
+          "botDepth": 80
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "topDepth": 70,
+          "botDepth": 100
+        }
+      ],
+      "column": [
+        {
+          "name": "Rocky Soil",
+          "raw": "RockySoil",
+          "kind": "soil",
+          "from": 0,
+          "to": 6
+        },
+        {
+          "name": "Sandstone",
+          "raw": "Sandstone",
+          "kind": "stone",
+          "from": 6,
+          "to": 15
+        },
+        {
+          "name": "Granite",
+          "raw": "Granite",
+          "kind": "stone",
+          "from": 15,
+          "to": 80
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "from": 80,
+          "to": 100
+        }
+      ],
+      "ores": [
+        {
+          "name": "Sulfur",
+          "raw": "Sulfur",
+          "minDepth": 1,
+          "maxDepth": 12,
+          "surface": true,
+          "onlyCrushed": false,
+          "traceDeep": false,
+          "maxVein": 0,
+          "bands": [
+            {
+              "dmin": 1,
+              "dmax": 3,
+              "hosts": ["Limestone"],
+              "deposit": false
+            },
+            {
+              "dmin": 8,
+              "dmax": 12,
+              "hosts": ["Sandstone"],
+              "deposit": false
+            }
+          ],
+          "guaranteed": false
+        },
+        {
+          "name": "Coal",
+          "raw": "Coal",
+          "minDepth": 12,
+          "maxDepth": 48,
+          "surface": false,
+          "onlyCrushed": false,
+          "traceDeep": false,
+          "maxVein": 0,
+          "bands": [
+            {
+              "dmin": 12,
+              "dmax": 15,
+              "hosts": ["Sandstone"],
+              "deposit": false
+            },
+            {
+              "dmin": 25,
+              "dmax": 27,
+              "hosts": ["Sandstone"],
+              "deposit": false
+            },
+            {
+              "dmin": 45,
+              "dmax": 48,
+              "hosts": ["Sandstone"],
+              "deposit": false
+            }
+          ],
+          "guaranteed": false
+        },
+        {
+          "name": "Iron Ore",
+          "raw": "IronOre",
+          "minDepth": 53,
+          "maxDepth": 60,
+          "surface": true,
+          "onlyCrushed": false,
+          "traceDeep": false,
+          "maxVein": 75,
+          "bands": [
+            {
+              "dmin": 53,
+              "dmax": 60,
+              "hosts": ["Sandstone"],
+              "deposit": true
+            }
+          ],
+          "guaranteed": false
+        }
+      ]
+    },
+    "WarmForest": {
+      "label": "Warm Forest",
+      "desc": "Temperate broadleaf woodland, warm and moist. Dense tree cover over granite bedrock with shallow copper.",
+      "climate": {
+        "temp": "Warm",
+        "moist": "Moist",
+        "type": "Land"
+      },
+      "trees": [
+        {
+          "name": "Birch",
+          "locked": true,
+          "yields": ["Birch Log"]
+        },
+        {
+          "name": "Cedar",
+          "locked": false,
+          "yields": ["Cedar Log"]
+        }
+      ],
+      "harvest": [
+        {
+          "name": "Amanita Mushroom",
+          "locked": true,
+          "yields": ["Amanita Mushrooms", "Amanita Mushroom Spores"]
+        },
+        {
+          "name": "Camas",
+          "locked": true,
+          "yields": ["Camas Bulb"]
+        },
+        {
+          "name": "Common Grass",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Fern",
+          "locked": false,
+          "yields": ["Fiddleheads", "Fern Spore"]
+        },
+        {
+          "name": "Ocean Spray",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Pumpkin",
+          "locked": true,
+          "yields": ["Pumpkin"]
+        },
+        {
+          "name": "Rose Bush",
+          "locked": false,
+          "yields": ["Plant Fibers", "Rose"]
+        },
+        {
+          "name": "Trillium",
+          "locked": false,
+          "yields": ["Trillium Flower"]
+        },
+        {
+          "name": "Waterweed",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        }
+      ],
+      "fauna": [
+        {
+          "name": "Turkey",
+          "cat": "Birds",
+          "note": ""
+        },
+        {
+          "name": "Salmon",
+          "cat": "Fish",
+          "note": "freshwater (rivers & lakes)"
+        },
+        {
+          "name": "Trout",
+          "cat": "Fish",
+          "note": "freshwater (rivers & lakes)"
+        },
+        {
+          "name": "Bison",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Coyote",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Deer",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Elk",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Fox",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Hare",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Wolf",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Beaver",
+          "cat": "Other",
+          "note": ""
+        },
+        {
+          "name": "Tarantula",
+          "cat": "Other",
+          "note": ""
+        }
+      ],
+      "rocks": [
+        {
+          "name": "Dirt",
+          "raw": "Dirt",
+          "kind": "soil",
+          "topDepth": 0,
+          "botDepth": 0
+        },
+        {
+          "name": "Rocky Soil",
+          "raw": "RockySoil",
+          "kind": "soil",
+          "topDepth": 6,
+          "botDepth": 15
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "topDepth": 0,
+          "botDepth": 20
+        },
+        {
+          "name": "Granite",
+          "raw": "Granite",
+          "kind": "stone",
+          "topDepth": 0,
+          "botDepth": 20
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "topDepth": 70,
+          "botDepth": 100
+        }
+      ],
+      "column": [
+        {
+          "name": "Rocky Soil",
+          "raw": "RockySoil",
+          "kind": "soil",
+          "from": 0,
+          "to": 15
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "from": 15,
+          "to": 20
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "from": 20,
+          "to": 100
+        }
+      ],
+      "ores": [
+        {
+          "name": "Copper Ore",
+          "raw": "CopperOre",
+          "minDepth": 15,
+          "maxDepth": 55,
+          "surface": false,
+          "onlyCrushed": false,
+          "traceDeep": false,
+          "maxVein": 25,
+          "bands": [
+            {
+              "dmin": 15,
+              "dmax": 55,
+              "hosts": ["Granite"],
+              "deposit": true
+            }
+          ],
+          "guaranteed": true
+        },
+        {
+          "name": "Sulfur",
+          "raw": "Sulfur",
+          "minDepth": 20,
+          "maxDepth": 24,
+          "surface": false,
+          "onlyCrushed": false,
+          "traceDeep": false,
+          "maxVein": 0,
+          "bands": [
+            {
+              "dmin": 20,
+              "dmax": 24,
+              "hosts": ["Granite"],
+              "deposit": false
+            }
+          ],
+          "guaranteed": false
+        }
+      ]
+    },
+    "ColdForest": {
+      "label": "Cold Forest",
+      "desc": "Cool, wet conifer-and-broadleaf forest. Granite underfoot with the shallowest copper in the game.",
+      "climate": {
+        "temp": "Cool",
+        "moist": "Moist",
+        "type": "Land"
+      },
+      "trees": [
+        {
+          "name": "Fir",
+          "locked": false,
+          "yields": ["Fir Log"]
+        },
+        {
+          "name": "Old Growth Redwood",
+          "locked": false,
+          "yields": ["Redwood Log"]
+        },
+        {
+          "name": "Redwood",
+          "locked": false,
+          "yields": ["Redwood Log"]
+        }
+      ],
+      "harvest": [
+        {
+          "name": "Beans",
+          "locked": true,
+          "yields": ["Beans"]
+        },
+        {
+          "name": "Bolete Mushroom",
+          "locked": true,
+          "yields": ["Bolete Mushrooms", "Bolete Mushroom Spores"]
+        },
+        {
+          "name": "Fern",
+          "locked": false,
+          "yields": ["Fiddleheads", "Fern Spore"]
+        },
+        {
+          "name": "Huckleberry",
+          "locked": true,
+          "yields": ["Huckleberries"]
+        },
+        {
+          "name": "Rose Bush",
+          "locked": false,
+          "yields": ["Plant Fibers", "Rose"]
+        },
+        {
+          "name": "Salal",
+          "locked": true,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Trillium",
+          "locked": false,
+          "yields": ["Trillium Flower"]
+        },
+        {
+          "name": "Tulip",
+          "locked": true,
+          "yields": ["Tulip"]
+        },
+        {
+          "name": "Waterweed",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        }
+      ],
+      "fauna": [
+        {
+          "name": "Salmon",
+          "cat": "Fish",
+          "note": "freshwater (rivers & lakes)"
+        },
+        {
+          "name": "Trout",
+          "cat": "Fish",
+          "note": "freshwater (rivers & lakes)"
+        },
+        {
+          "name": "Coyote",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Deer",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Elk",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Fox",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Hare",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Wolf",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Tarantula",
+          "cat": "Other",
+          "note": ""
+        }
+      ],
+      "rocks": [
+        {
+          "name": "Dirt",
+          "raw": "Dirt",
+          "kind": "soil",
+          "topDepth": 0,
+          "botDepth": 0
+        },
+        {
+          "name": "Rocky Soil",
+          "raw": "RockySoil",
+          "kind": "soil",
+          "topDepth": 1,
+          "botDepth": 3
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "topDepth": 5,
+          "botDepth": 15
+        },
+        {
+          "name": "Granite",
+          "raw": "Granite",
+          "kind": "stone",
+          "topDepth": 0,
+          "botDepth": 15
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "topDepth": 70,
+          "botDepth": 100
+        }
+      ],
+      "column": [
+        {
+          "name": "Rocky Soil",
+          "raw": "RockySoil",
+          "kind": "soil",
+          "from": 0,
+          "to": 3
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "from": 3,
+          "to": 15
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "from": 15,
+          "to": 100
+        }
+      ],
+      "ores": [
+        {
+          "name": "Copper Ore",
+          "raw": "CopperOre",
+          "minDepth": 1,
+          "maxDepth": 20,
+          "surface": true,
+          "onlyCrushed": false,
+          "traceDeep": false,
+          "maxVein": 14,
+          "bands": [
+            {
+              "dmin": 1,
+              "dmax": 20,
+              "hosts": ["Granite"],
+              "deposit": true
+            }
+          ],
+          "guaranteed": false
+        },
+        {
+          "name": "Gold Ore",
+          "raw": "GoldOre",
+          "minDepth": 35,
+          "maxDepth": 45,
+          "surface": false,
+          "onlyCrushed": false,
+          "traceDeep": false,
+          "maxVein": 50,
+          "bands": [
+            {
+              "dmin": 35,
+              "dmax": 45,
+              "hosts": ["Granite"],
+              "deposit": true
+            }
+          ],
+          "guaranteed": false
+        }
+      ]
+    },
+    "RainForest": {
+      "label": "Rainforest",
+      "desc": "Hot and drenched. The most biodiverse biome, and the premier source of gold \u2014 some of it near the surface in clay.",
+      "climate": {
+        "temp": "Hot",
+        "moist": "Very wet",
+        "type": "Land"
+      },
+      "trees": [
+        {
+          "name": "Ceiba",
+          "locked": true,
+          "yields": ["Ceiba Log"]
+        },
+        {
+          "name": "Palm",
+          "locked": true,
+          "yields": ["Palm Log"]
+        }
+      ],
+      "harvest": [
+        {
+          "name": "Cookeina Mushroom",
+          "locked": true,
+          "yields": ["Cookeina Mushrooms", "Cookeina Mushroom Spores"]
+        },
+        {
+          "name": "Filmy Fern",
+          "locked": false,
+          "yields": ["Plant Fibers", "Filmy Fern Spore"]
+        },
+        {
+          "name": "Heliconia",
+          "locked": true,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "King Fern",
+          "locked": true,
+          "yields": ["Plant Fibers", "King Fern Spore"]
+        },
+        {
+          "name": "Lattice Mushroom",
+          "locked": true,
+          "yields": ["Plant Fibers", "Lattice Mushroom Spores"]
+        },
+        {
+          "name": "Orchid",
+          "locked": true,
+          "yields": ["Orchid"]
+        },
+        {
+          "name": "Papaya",
+          "locked": true,
+          "yields": ["Papaya"]
+        },
+        {
+          "name": "Peat Moss",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Pineapple",
+          "locked": true,
+          "yields": ["Pineapple"]
+        },
+        {
+          "name": "Pitcher Plant",
+          "locked": true,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Rose Bush",
+          "locked": false,
+          "yields": ["Plant Fibers", "Rose"]
+        },
+        {
+          "name": "Taro",
+          "locked": true,
+          "yields": ["Taro Root"]
+        },
+        {
+          "name": "Waterweed",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        }
+      ],
+      "fauna": [
+        {
+          "name": "Salmon",
+          "cat": "Fish",
+          "note": "freshwater (rivers & lakes)"
+        },
+        {
+          "name": "Trout",
+          "cat": "Fish",
+          "note": "freshwater (rivers & lakes)"
+        },
+        {
+          "name": "Agouti",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Jaguar",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Alligator",
+          "cat": "Reptiles",
+          "note": ""
+        },
+        {
+          "name": "Snapping Turtle",
+          "cat": "Reptiles",
+          "note": ""
+        }
+      ],
+      "rocks": [
+        {
+          "name": "Dirt",
+          "raw": "Dirt",
+          "kind": "soil",
+          "topDepth": 0,
+          "botDepth": 0
+        },
+        {
+          "name": "Clay",
+          "raw": "Clay",
+          "kind": "soil",
+          "topDepth": 4,
+          "botDepth": 6
+        },
+        {
+          "name": "Shale",
+          "raw": "Shale",
+          "kind": "stone",
+          "topDepth": 0,
+          "botDepth": 30
+        },
+        {
+          "name": "Granite",
+          "raw": "Granite",
+          "kind": "stone",
+          "topDepth": 45,
+          "botDepth": 50
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "topDepth": 65,
+          "botDepth": 100
+        }
+      ],
+      "column": [
+        {
+          "name": "Clay",
+          "raw": "Clay",
+          "kind": "soil",
+          "from": 0,
+          "to": 6
+        },
+        {
+          "name": "Shale",
+          "raw": "Shale",
+          "kind": "stone",
+          "from": 6,
+          "to": 30
+        },
+        {
+          "name": "Granite",
+          "raw": "Granite",
+          "kind": "stone",
+          "from": 30,
+          "to": 50
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "from": 50,
+          "to": 100
+        }
+      ],
+      "ores": [
+        {
+          "name": "Gold Ore",
+          "raw": "GoldOre",
+          "minDepth": 0,
+          "maxDepth": 80,
+          "surface": true,
+          "onlyCrushed": false,
+          "traceDeep": false,
+          "maxVein": 55,
+          "bands": [
+            {
+              "dmin": 0,
+              "dmax": 20,
+              "hosts": ["Clay", "Shale"],
+              "deposit": true
+            },
+            {
+              "dmin": 42,
+              "dmax": 45,
+              "hosts": ["Granite"],
+              "deposit": false
+            },
+            {
+              "dmin": 50,
+              "dmax": 80,
+              "hosts": ["Granite"],
+              "deposit": true
+            }
+          ],
+          "guaranteed": true
+        },
+        {
+          "name": "Coal",
+          "raw": "Coal",
+          "minDepth": 25,
+          "maxDepth": 45,
+          "surface": false,
+          "onlyCrushed": false,
+          "traceDeep": false,
+          "maxVein": 100,
+          "bands": [
+            {
+              "dmin": 25,
+              "dmax": 30,
+              "hosts": ["Shale"],
+              "deposit": false
+            },
+            {
+              "dmin": 40,
+              "dmax": 45,
+              "hosts": ["Shale"],
+              "deposit": true
+            }
+          ],
+          "guaranteed": false
+        }
+      ]
+    },
+    "Wetland": {
+      "label": "Wetland",
+      "desc": "Water-saturated soil, fresh or brackish. Peat and clay over the richest coal seams in the world.",
+      "climate": {
+        "temp": "Mild",
+        "moist": "Wet",
+        "type": "Land"
+      },
+      "trees": [],
+      "harvest": [
+        {
+          "name": "Bullrush",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Buttonbush",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Common Grass",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Cotton",
+          "locked": true,
+          "yields": ["Cotton Boll"]
+        },
+        {
+          "name": "Peat Moss",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Rice",
+          "locked": true,
+          "yields": ["Rice"]
+        },
+        {
+          "name": "Rose Bush",
+          "locked": false,
+          "yields": ["Plant Fibers", "Rose"]
+        },
+        {
+          "name": "Waterweed",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        }
+      ],
+      "fauna": [
+        {
+          "name": "Salmon",
+          "cat": "Fish",
+          "note": "freshwater (rivers & lakes)"
+        },
+        {
+          "name": "Trout",
+          "cat": "Fish",
+          "note": "freshwater (rivers & lakes)"
+        },
+        {
+          "name": "Bison",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Jaguar",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Wolf",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Beaver",
+          "cat": "Other",
+          "note": ""
+        },
+        {
+          "name": "Alligator",
+          "cat": "Reptiles",
+          "note": ""
+        },
+        {
+          "name": "Snapping Turtle",
+          "cat": "Reptiles",
+          "note": ""
+        }
+      ],
+      "rocks": [
+        {
+          "name": "Wetland Soil",
+          "raw": "WetlandsSoil",
+          "kind": "soil",
+          "topDepth": 0,
+          "botDepth": 0
+        },
+        {
+          "name": "Peat",
+          "raw": "Peat",
+          "kind": "soil",
+          "topDepth": 4,
+          "botDepth": 6
+        },
+        {
+          "name": "Clay",
+          "raw": "Clay",
+          "kind": "soil",
+          "topDepth": 1,
+          "botDepth": 12
+        },
+        {
+          "name": "Dirt",
+          "raw": "Dirt",
+          "kind": "soil",
+          "topDepth": 0,
+          "botDepth": 20
+        },
+        {
+          "name": "Shale",
+          "raw": "Shale",
+          "kind": "stone",
+          "topDepth": 55,
+          "botDepth": 60
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "topDepth": 58,
+          "botDepth": 65
+        }
+      ],
+      "column": [
+        {
+          "name": "Peat",
+          "raw": "Peat",
+          "kind": "soil",
+          "from": 0,
+          "to": 6
+        },
+        {
+          "name": "Clay",
+          "raw": "Clay",
+          "kind": "soil",
+          "from": 6,
+          "to": 12
+        },
+        {
+          "name": "Dirt",
+          "raw": "Dirt",
+          "kind": "soil",
+          "from": 12,
+          "to": 20
+        },
+        {
+          "name": "Shale",
+          "raw": "Shale",
+          "kind": "stone",
+          "from": 20,
+          "to": 60
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "from": 60,
+          "to": 100
+        }
+      ],
+      "ores": [
+        {
+          "name": "Coal",
+          "raw": "Coal",
+          "minDepth": 0,
+          "maxDepth": 44,
+          "surface": true,
+          "onlyCrushed": false,
+          "traceDeep": false,
+          "maxVein": 300,
+          "bands": [
+            {
+              "dmin": 0,
+              "dmax": 1,
+              "hosts": ["Dirt"],
+              "deposit": true
+            },
+            {
+              "dmin": 8,
+              "dmax": 24,
+              "hosts": ["Dirt", "Shale"],
+              "deposit": true
+            },
+            {
+              "dmin": 38,
+              "dmax": 44,
+              "hosts": ["Shale"],
+              "deposit": false
+            }
+          ],
+          "guaranteed": false
+        }
+      ]
+    },
+    "Desert": {
+      "label": "Desert",
+      "desc": "The driest and hottest biome. Sandstone bedrock hiding the largest and most abundant iron deposits.",
+      "climate": {
+        "temp": "Hot",
+        "moist": "Arid",
+        "type": "Land"
+      },
+      "trees": [
+        {
+          "name": "Joshua",
+          "locked": true,
+          "yields": ["Joshua Log"]
+        },
+        {
+          "name": "Saguaro Cactus",
+          "locked": true,
+          "yields": ["Saguaro Rib"]
+        }
+      ],
+      "harvest": [
+        {
+          "name": "Agave",
+          "locked": true,
+          "yields": ["Agave Leaves"]
+        },
+        {
+          "name": "Barrel Cactus",
+          "locked": true,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Creosote Bush",
+          "locked": true,
+          "yields": ["Creosote Flower"]
+        },
+        {
+          "name": "Desert Moss",
+          "locked": true,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Jointfir",
+          "locked": true,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Prickly Pear",
+          "locked": true,
+          "yields": ["Prickly Pear Fruit"]
+        },
+        {
+          "name": "Waterweed",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "White Bursage",
+          "locked": true,
+          "yields": ["Plant Fibers"]
+        }
+      ],
+      "fauna": [
+        {
+          "name": "Bighorn Sheep",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Coyote",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Fox",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Hare",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Wolf",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Tarantula",
+          "cat": "Other",
+          "note": ""
+        },
+        {
+          "name": "Tortoise",
+          "cat": "Reptiles",
+          "note": ""
+        }
+      ],
+      "rocks": [
+        {
+          "name": "Desert Sand",
+          "raw": "DesertSand",
+          "kind": "soil",
+          "topDepth": 0,
+          "botDepth": 0
+        },
+        {
+          "name": "Sand",
+          "raw": "Sand",
+          "kind": "soil",
+          "topDepth": 4,
+          "botDepth": 6
+        },
+        {
+          "name": "Sandstone",
+          "raw": "Sandstone",
+          "kind": "stone",
+          "topDepth": 0,
+          "botDepth": 20
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "topDepth": 58,
+          "botDepth": 65
+        }
+      ],
+      "column": [
+        {
+          "name": "Sand",
+          "raw": "Sand",
+          "kind": "soil",
+          "from": 0,
+          "to": 6
+        },
+        {
+          "name": "Sandstone",
+          "raw": "Sandstone",
+          "kind": "stone",
+          "from": 6,
+          "to": 20
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "from": 20,
+          "to": 100
+        }
+      ],
+      "ores": [
+        {
+          "name": "Iron Ore",
+          "raw": "IronOre",
+          "minDepth": 0,
+          "maxDepth": 55,
+          "surface": true,
+          "onlyCrushed": false,
+          "traceDeep": true,
+          "maxVein": 300,
+          "bands": [
+            {
+              "dmin": 0,
+              "dmax": 1,
+              "hosts": ["Sandstone"],
+              "deposit": true
+            },
+            {
+              "dmin": 8,
+              "dmax": 24,
+              "hosts": ["Sandstone"],
+              "deposit": true
+            },
+            {
+              "dmin": 48,
+              "dmax": 55,
+              "hosts": ["Sandstone"],
+              "deposit": true
+            }
+          ],
+          "guaranteed": false
+        }
+      ]
+    },
+    "Taiga": {
+      "label": "Boreal Forest",
+      "desc": "Cold boreal forest of spruce. Granite bedrock with deep copper and gold.",
+      "climate": {
+        "temp": "Cold",
+        "moist": "Semi-dry",
+        "type": "Land"
+      },
+      "trees": [
+        {
+          "name": "Spruce",
+          "locked": false,
+          "yields": ["Spruce Log"]
+        }
+      ],
+      "harvest": [
+        {
+          "name": "Arctic Willow",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Deer Lichen",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Lupine",
+          "locked": false,
+          "yields": ["Lupine"]
+        },
+        {
+          "name": "Saxifrage",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        }
+      ],
+      "fauna": [
+        {
+          "name": "Elk",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Mountain Goat",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Wolf",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Marmot",
+          "cat": "Other",
+          "note": ""
+        },
+        {
+          "name": "Tarantula",
+          "cat": "Other",
+          "note": ""
+        }
+      ],
+      "rocks": [
+        {
+          "name": "Dirt",
+          "raw": "Dirt",
+          "kind": "soil",
+          "topDepth": 0,
+          "botDepth": 0
+        },
+        {
+          "name": "Rocky Soil",
+          "raw": "RockySoil",
+          "kind": "soil",
+          "topDepth": 1,
+          "botDepth": 3
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "topDepth": 0,
+          "botDepth": 20
+        },
+        {
+          "name": "Granite",
+          "raw": "Granite",
+          "kind": "stone",
+          "topDepth": 0,
+          "botDepth": 20
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "topDepth": 70,
+          "botDepth": 120
+        }
+      ],
+      "column": [
+        {
+          "name": "Rocky Soil",
+          "raw": "RockySoil",
+          "kind": "soil",
+          "from": 0,
+          "to": 3
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "from": 3,
+          "to": 20
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "from": 20,
+          "to": 100
+        }
+      ],
+      "ores": [
+        {
+          "name": "Copper Ore",
+          "raw": "CopperOre",
+          "minDepth": 25,
+          "maxDepth": 60,
+          "surface": true,
+          "onlyCrushed": false,
+          "traceDeep": false,
+          "maxVein": 100,
+          "bands": [
+            {
+              "dmin": 25,
+              "dmax": 60,
+              "hosts": ["Granite"],
+              "deposit": true
+            }
+          ],
+          "guaranteed": false
+        },
+        {
+          "name": "Gold Ore",
+          "raw": "GoldOre",
+          "minDepth": 50,
+          "maxDepth": 75,
+          "surface": false,
+          "onlyCrushed": false,
+          "traceDeep": false,
+          "maxVein": 15,
+          "bands": [
+            {
+              "dmin": 50,
+              "dmax": 60,
+              "hosts": ["Granite"],
+              "deposit": true
+            },
+            {
+              "dmin": 65,
+              "dmax": 75,
+              "hosts": ["Granite"],
+              "deposit": true
+            }
+          ],
+          "guaranteed": true
+        }
+      ]
+    },
+    "Tundra": {
+      "label": "Tundra",
+      "desc": "Frozen, near-treeless plain. Frozen soil and snow over granite, deep copper and sulfur.",
+      "climate": {
+        "temp": "Very cold",
+        "moist": "Semi-dry",
+        "type": "Land"
+      },
+      "trees": [],
+      "harvest": [
+        {
+          "name": "Arctic Willow",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Deer Lichen",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Dwarf Willow",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Fireweed",
+          "locked": true,
+          "yields": ["Fireweed Shoots"]
+        },
+        {
+          "name": "Saxifrage",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        }
+      ],
+      "fauna": [
+        {
+          "name": "Elk",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Mountain Goat",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Wolf",
+          "cat": "Mammals",
+          "note": ""
+        },
+        {
+          "name": "Marmot",
+          "cat": "Other",
+          "note": ""
+        },
+        {
+          "name": "Tarantula",
+          "cat": "Other",
+          "note": ""
+        }
+      ],
+      "rocks": [
+        {
+          "name": "Dirt",
+          "raw": "Dirt",
+          "kind": "soil",
+          "topDepth": 0,
+          "botDepth": 0
+        },
+        {
+          "name": "Rocky Soil",
+          "raw": "RockySoil",
+          "kind": "soil",
+          "topDepth": 1,
+          "botDepth": 3
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "topDepth": 0,
+          "botDepth": 30
+        },
+        {
+          "name": "Granite",
+          "raw": "Granite",
+          "kind": "stone",
+          "topDepth": 0,
+          "botDepth": 30
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "topDepth": 70,
+          "botDepth": 85
+        }
+      ],
+      "column": [
+        {
+          "name": "Rocky Soil",
+          "raw": "RockySoil",
+          "kind": "soil",
+          "from": 0,
+          "to": 3
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "from": 3,
+          "to": 30
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "from": 30,
+          "to": 100
+        }
+      ],
+      "ores": [
+        {
+          "name": "Sulfur",
+          "raw": "Sulfur",
+          "minDepth": 30,
+          "maxDepth": 100,
+          "surface": false,
+          "onlyCrushed": false,
+          "traceDeep": false,
+          "maxVein": 68,
+          "bands": [
+            {
+              "dmin": 30,
+              "dmax": 100,
+              "hosts": ["Granite"],
+              "deposit": true
+            }
+          ],
+          "guaranteed": true
+        },
+        {
+          "name": "Copper Ore",
+          "raw": "CopperOre",
+          "minDepth": 60,
+          "maxDepth": 100,
+          "surface": true,
+          "onlyCrushed": false,
+          "traceDeep": false,
+          "maxVein": 68,
+          "bands": [
+            {
+              "dmin": 60,
+              "dmax": 100,
+              "hosts": ["Granite"],
+              "deposit": true
+            }
+          ],
+          "guaranteed": true
+        },
+        {
+          "name": "Gold Ore",
+          "raw": "GoldOre",
+          "minDepth": 0,
+          "maxDepth": 0,
+          "surface": true,
+          "onlyCrushed": true,
+          "traceDeep": false,
+          "maxVein": 0,
+          "bands": [],
+          "guaranteed": false
+        }
+      ]
+    },
+    "Ice": {
+      "label": "Ice",
+      "desc": "Glacial ice sheets. Little life; copper runs through the granite beneath the ice.",
+      "climate": {
+        "temp": "Frozen",
+        "moist": "Dry",
+        "type": "Land"
+      },
+      "trees": [],
+      "harvest": [],
+      "fauna": [],
+      "rocks": [
+        {
+          "name": "Ice",
+          "raw": "Ice",
+          "kind": "soil",
+          "topDepth": 0,
+          "botDepth": 8
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "topDepth": 10,
+          "botDepth": 30
+        },
+        {
+          "name": "Granite",
+          "raw": "Granite",
+          "kind": "stone",
+          "topDepth": 0,
+          "botDepth": 30
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "topDepth": 70,
+          "botDepth": 100
+        }
+      ],
+      "column": [
+        {
+          "name": "Ice",
+          "raw": "Ice",
+          "kind": "soil",
+          "from": 0,
+          "to": 8
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "from": 8,
+          "to": 30
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "from": 30,
+          "to": 100
+        }
+      ],
+      "ores": [
+        {
+          "name": "Copper Ore",
+          "raw": "CopperOre",
+          "minDepth": 10,
+          "maxDepth": 60,
+          "surface": true,
+          "onlyCrushed": false,
+          "traceDeep": false,
+          "maxVein": 200,
+          "bands": [
+            {
+              "dmin": 10,
+              "dmax": 60,
+              "hosts": ["Granite"],
+              "deposit": true
+            }
+          ],
+          "guaranteed": true
+        }
+      ]
+    },
+    "WarmCoast": {
+      "label": "Warm Coast",
+      "desc": "Warm beaches and shallows. Sandy floor over sandstone with accessible iron.",
+      "climate": {
+        "temp": "Warm",
+        "moist": "\u2014",
+        "type": "Coast"
+      },
+      "trees": [],
+      "harvest": [
+        {
+          "name": "Seagrass",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        }
+      ],
+      "fauna": [
+        {
+          "name": "Bass",
+          "cat": "Fish",
+          "note": ""
+        },
+        {
+          "name": "Blue Shark",
+          "cat": "Fish",
+          "note": ""
+        },
+        {
+          "name": "Cod",
+          "cat": "Fish",
+          "note": ""
+        },
+        {
+          "name": "Pacific Sardine",
+          "cat": "Fish",
+          "note": ""
+        },
+        {
+          "name": "Tuna",
+          "cat": "Fish",
+          "note": ""
+        },
+        {
+          "name": "Crab",
+          "cat": "Invertebrates",
+          "note": ""
+        },
+        {
+          "name": "Moon Jellyfish",
+          "cat": "Invertebrates",
+          "note": ""
+        },
+        {
+          "name": "Otter",
+          "cat": "Mammals",
+          "note": ""
+        }
+      ],
+      "rocks": [
+        {
+          "name": "Sand",
+          "raw": "Sand",
+          "kind": "soil",
+          "topDepth": 0,
+          "botDepth": 0
+        },
+        {
+          "name": "Limestone",
+          "raw": "Limestone",
+          "kind": "stone",
+          "topDepth": 10,
+          "botDepth": 15
+        },
+        {
+          "name": "Sandstone",
+          "raw": "Sandstone",
+          "kind": "stone",
+          "topDepth": 18,
+          "botDepth": 25
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "topDepth": 50,
+          "botDepth": 55
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "topDepth": 55,
+          "botDepth": 60
+        }
+      ],
+      "column": [
+        {
+          "name": "Limestone",
+          "raw": "Limestone",
+          "kind": "stone",
+          "from": 0,
+          "to": 15
+        },
+        {
+          "name": "Sandstone",
+          "raw": "Sandstone",
+          "kind": "stone",
+          "from": 15,
+          "to": 25
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "from": 25,
+          "to": 55
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "from": 55,
+          "to": 100
+        }
+      ],
+      "ores": [
+        {
+          "name": "Iron Ore",
+          "raw": "IronOre",
+          "minDepth": 16,
+          "maxDepth": 36,
+          "surface": false,
+          "onlyCrushed": false,
+          "traceDeep": false,
+          "maxVein": 500,
+          "bands": [
+            {
+              "dmin": 16,
+              "dmax": 18,
+              "hosts": ["Sandstone"],
+              "deposit": false
+            },
+            {
+              "dmin": 31,
+              "dmax": 36,
+              "hosts": ["Sandstone"],
+              "deposit": true
+            }
+          ],
+          "guaranteed": true
+        }
+      ]
+    },
+    "ColdCoast": {
+      "label": "Cold Coast",
+      "desc": "Cold beaches and shallows. Limestone and sandstone floors, some iron at depth.",
+      "climate": {
+        "temp": "Cool",
+        "moist": "\u2014",
+        "type": "Coast"
+      },
+      "trees": [],
+      "harvest": [
+        {
+          "name": "Seagrass",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        }
+      ],
+      "fauna": [
+        {
+          "name": "Bass",
+          "cat": "Fish",
+          "note": ""
+        },
+        {
+          "name": "Blue Shark",
+          "cat": "Fish",
+          "note": ""
+        },
+        {
+          "name": "Cod",
+          "cat": "Fish",
+          "note": ""
+        },
+        {
+          "name": "Pacific Sardine",
+          "cat": "Fish",
+          "note": ""
+        },
+        {
+          "name": "Tuna",
+          "cat": "Fish",
+          "note": ""
+        },
+        {
+          "name": "Crab",
+          "cat": "Invertebrates",
+          "note": ""
+        },
+        {
+          "name": "Moon Jellyfish",
+          "cat": "Invertebrates",
+          "note": ""
+        },
+        {
+          "name": "Otter",
+          "cat": "Mammals",
+          "note": ""
+        }
+      ],
+      "rocks": [
+        {
+          "name": "Sand",
+          "raw": "Sand",
+          "kind": "soil",
+          "topDepth": 0,
+          "botDepth": 0
+        },
+        {
+          "name": "Limestone",
+          "raw": "Limestone",
+          "kind": "stone",
+          "topDepth": 8,
+          "botDepth": 14
+        },
+        {
+          "name": "Sandstone",
+          "raw": "Sandstone",
+          "kind": "stone",
+          "topDepth": 12,
+          "botDepth": 16
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "topDepth": 55,
+          "botDepth": 75
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "topDepth": 70,
+          "botDepth": 100
+        }
+      ],
+      "column": [
+        {
+          "name": "Limestone",
+          "raw": "Limestone",
+          "kind": "stone",
+          "from": 0,
+          "to": 14
+        },
+        {
+          "name": "Sandstone",
+          "raw": "Sandstone",
+          "kind": "stone",
+          "from": 14,
+          "to": 16
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "from": 16,
+          "to": 75
+        },
+        {
+          "name": "Gneiss",
+          "raw": "Gneiss",
+          "kind": "stone",
+          "from": 75,
+          "to": 100
+        }
+      ],
+      "ores": [
+        {
+          "name": "Iron Ore",
+          "raw": "IronOre",
+          "minDepth": 34,
+          "maxDepth": 37,
+          "surface": false,
+          "onlyCrushed": false,
+          "traceDeep": false,
+          "maxVein": 150,
+          "bands": [
+            {
+              "dmin": 34,
+              "dmax": 37,
+              "hosts": ["Sandstone"],
+              "deposit": true
+            }
+          ],
+          "guaranteed": false
+        }
+      ]
+    },
+    "Ocean": {
+      "label": "Ocean",
+      "desc": "Continental-shelf seas, abundant with life. Kelp, shellfish, and schooling fish.",
+      "climate": {
+        "temp": "\u2014",
+        "moist": "\u2014",
+        "type": "Sea"
+      },
+      "trees": [],
+      "harvest": [
+        {
+          "name": "Clam",
+          "locked": true,
+          "yields": ["Clam"]
+        },
+        {
+          "name": "Kelp",
+          "locked": true,
+          "yields": ["Kelp"]
+        },
+        {
+          "name": "Seagrass",
+          "locked": false,
+          "yields": ["Plant Fibers"]
+        },
+        {
+          "name": "Urchin",
+          "locked": true,
+          "yields": ["Urchin"]
+        }
+      ],
+      "fauna": [
+        {
+          "name": "Bass",
+          "cat": "Fish",
+          "note": ""
+        },
+        {
+          "name": "Blue Shark",
+          "cat": "Fish",
+          "note": ""
+        },
+        {
+          "name": "Cod",
+          "cat": "Fish",
+          "note": ""
+        },
+        {
+          "name": "Pacific Sardine",
+          "cat": "Fish",
+          "note": ""
+        },
+        {
+          "name": "Tuna",
+          "cat": "Fish",
+          "note": ""
+        },
+        {
+          "name": "Crab",
+          "cat": "Invertebrates",
+          "note": ""
+        },
+        {
+          "name": "Moon Jellyfish",
+          "cat": "Invertebrates",
+          "note": ""
+        },
+        {
+          "name": "Otter",
+          "cat": "Mammals",
+          "note": ""
+        }
+      ],
+      "rocks": [
+        {
+          "name": "Dirt",
+          "raw": "Dirt",
+          "kind": "soil",
+          "topDepth": 0,
+          "botDepth": 0
+        },
+        {
+          "name": "Sand",
+          "raw": "Sand",
+          "kind": "soil",
+          "topDepth": 4,
+          "botDepth": 15
+        },
+        {
+          "name": "Limestone",
+          "raw": "Limestone",
+          "kind": "stone",
+          "topDepth": 0,
+          "botDepth": 15
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "topDepth": 0,
+          "botDepth": 100
+        }
+      ],
+      "column": [
+        {
+          "name": "Sand",
+          "raw": "Sand",
+          "kind": "soil",
+          "from": 0,
+          "to": 15
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "from": 15,
+          "to": 100
+        }
+      ],
+      "ores": []
+    },
+    "DeepOcean": {
+      "label": "Deep Ocean",
+      "desc": "The deepest, darkest water. Basalt floor and the largest migrating fish.",
+      "climate": {
+        "temp": "\u2014",
+        "moist": "\u2014",
+        "type": "Sea"
+      },
+      "trees": [],
+      "harvest": [],
+      "fauna": [
+        {
+          "name": "Blue Shark",
+          "cat": "Fish",
+          "note": ""
+        },
+        {
+          "name": "Tuna",
+          "cat": "Fish",
+          "note": ""
+        }
+      ],
+      "rocks": [
+        {
+          "name": "Dirt",
+          "raw": "Dirt",
+          "kind": "soil",
+          "topDepth": 0,
+          "botDepth": 0
+        },
+        {
+          "name": "Sand",
+          "raw": "Sand",
+          "kind": "soil",
+          "topDepth": 2,
+          "botDepth": 10
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "topDepth": 0,
+          "botDepth": 100
+        }
+      ],
+      "column": [
+        {
+          "name": "Sand",
+          "raw": "Sand",
+          "kind": "soil",
+          "from": 0,
+          "to": 10
+        },
+        {
+          "name": "Basalt",
+          "raw": "Basalt",
+          "kind": "stone",
+          "from": 10,
+          "to": 100
+        }
+      ],
+      "ores": []
+    }
+  }
+}

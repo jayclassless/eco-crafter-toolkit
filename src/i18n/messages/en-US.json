@@ -12,6 +12,7 @@
   "nav": {
     "calculator": "Price Calculator",
     "crops": "Crop Tracker",
+    "resources": "Biome Resources",
     "toolSwitcher": "Switch tool"
   },
   "dataset": {
@@ -239,6 +240,75 @@
     "statusGrowing": "Growing",
     "statusPickable": "Pickable",
     "statusReady": "Ready"
+  },
+  "biomeResources": {
+    "title": "Biome Resources",
+    "groups": {
+      "land": "Land",
+      "coast": "Coast",
+      "sea": "Sea"
+    },
+    "climate": {
+      "temp": "Temp",
+      "moisture": "Moisture"
+    },
+    "counts": "{trees} trees · {plants} plants · {animals} animals",
+    "belowSurface": {
+      "title": "Below the Surface",
+      "noOres": "No ores generate in this biome — it's a place to fish and forage, not mine.",
+      "rocksHeading": "Rock & excavatable strata",
+      "dig": "dig",
+      "mine": "mine"
+    },
+    "chart": {
+      "legendDeposit": "hatched = deposit vein",
+      "legendSeam": "solid = seam",
+      "legendDepthNote": "depths are blocks below local surface",
+      "flecksLabel": "{name} flecks",
+      "tooltip": "{name} · {min}–{max} deep · {kind} in {hosts}",
+      "tooltipFlecks": "{name} · crushed flecks at the surface",
+      "depositVein": "deposit vein",
+      "seam": "seam"
+    },
+    "depthRange": "{min}–{max} deep",
+    "surfaceOnly": "surface",
+    "tags": {
+      "surfaceFlecksOnly": "Surface flecks only",
+      "surfaceFlecks": "Surface flecks",
+      "alwaysPresent": "Always present",
+      "traceDeep": "Trace to bedrock",
+      "vein": {
+        "massive": "Massive veins",
+        "large": "Large veins",
+        "medium": "Medium veins",
+        "small": "Small pockets"
+      }
+    },
+    "floraFauna": {
+      "title": "Flora & Fauna",
+      "trees": "Trees",
+      "plants": "Harvestable plants",
+      "wildlife": "Wildlife"
+    },
+    "none": "None.",
+    "noWildlife": "No wildlife spawns here.",
+    "legend": {
+      "iron": "Iron",
+      "copper": "Copper",
+      "gold": "Gold",
+      "coal": "Coal",
+      "sulfur": "Sulfur",
+      "native": "biome-native plant",
+      "climate": "climate-driven"
+    },
+    "footer": {
+      "readingLead": "How to read this.",
+      "readingBody": "Depths are blocks below the local surface, not absolute altitude — an ore band at 20–45 sits 20 to 45 blocks under wherever you start digging. Seams (solid) are scattered blocks within a rock layer; deposit veins (hatched) are connected clusters that grow from a seed point, so bigger veins mean a richer single find. \"Surface flecks\" are crushed-ore bits that generate at ground level. An ore marked always present is guaranteed at least one vein somewhere in the biome even if the random placement would otherwise skip it — a floor on presence, not a promise of abundance.",
+      "plantsLead": "Plants & wildlife.",
+      "plantsBody": "Plants marked biome-native are locked to this biome by world-gen; climate-driven plants appear wherever temperature and moisture suit them, so they may also turn up in neighbouring biomes. Animal ranges are derived from where each species' food grows; freshwater fish follow rivers and lakes through the land biomes shown.",
+      "sourceLead": "Source.",
+      "sourceBody": "Extracted from the {world} and the core species definitions. A server running a custom world config will differ. Ore abundance also depends on difficulty settings not shown here."
+    }
   },
   "gameNews": {
     "title": "Game News",

@@ -1,0 +1,3 @@
+.ore-detail-row + .ore-detail-row {
+  border-top: 1px solid var(--surface-border);
+}

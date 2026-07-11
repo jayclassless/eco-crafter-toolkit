@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import type { Store } from 'tinybase'
 import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -65,6 +65,11 @@ function makeStores() {
   }
 }
 
+function LocationProbe() {
+  const loc = useLocation()
+  return <div data-testid="location">{loc.pathname}</div>
+}
+
 function renderNav(
   stores: { gameDataStore: Store; buildStore: Store; uiStore: Store },
   opts: { onOpenConfig?: () => void } = {}
@@ -93,6 +98,25 @@ function renderNav(
   )
 }
 
+// Renders the NavBar as the resources tool: dataset-scoped, no build props.
+function renderResourcesNav(stores: { gameDataStore: Store; buildStore: Store; uiStore: Store }) {
+  return render(
+    <StoreContext.Provider
+      value={{
+        ...stores,
+        gameDataPersister: stubPersister(),
+        buildPersister: stubPersister(),
+        uiPersister: stubPersister(),
+      }}
+    >
+      <MemoryRouter initialEntries={['/ds1/resources']}>
+        <NavBar tool="resources" datasetId="ds1" onOpenSettings={() => {}} />
+        <LocationProbe />
+      </MemoryRouter>
+    </StoreContext.Provider>
+  )
+}
+
 describe('NavBar', () => {
   it('renders the dataset name from the game-data store', () => {
     const stores = makeStores()
@@ -100,11 +124,52 @@ describe('NavBar', () => {
     expect(screen.getByText('Eco vTest')).toBeInTheDocument()
   })
 
-  it('renders the tool switcher with both tools', () => {
+  it('renders the tool switcher with all three tools', () => {
     renderNav(makeStores())
     // The switcher is icon-only; tool names are exposed via aria-label/title.
     expect(screen.getByLabelText('Price Calculator')).toBeInTheDocument()
     expect(screen.getByLabelText('Crop Tracker')).toBeInTheDocument()
+    expect(screen.getByLabelText('Biome Resources')).toBeInTheDocument()
+  })
+
+  it('navigates to the build-less resources route when resources is selected', () => {
+    render(
+      <StoreContext.Provider
+        value={{
+          ...makeStores(),
+          gameDataPersister: stubPersister(),
+          buildPersister: stubPersister(),
+          uiPersister: stubPersister(),
+        }}
+      >
+        <MemoryRouter initialEntries={['/ds1/calculator/b1']}>
+          <NavBar
+            tool="calculator"
+            datasetId="ds1"
+            buildId="b1"
+            onSelectBuild={() => {}}
+            onDeletedBuild={() => {}}
+            onOpenSettings={() => {}}
+          />
+          <LocationProbe />
+        </MemoryRouter>
+      </StoreContext.Provider>
+    )
+    fireEvent.click(screen.getByLabelText('Biome Resources'))
+    expect(screen.getByTestId('location')).toHaveTextContent('/ds1/resources')
+  })
+
+  it('hides the build selector when no build props are passed', () => {
+    renderResourcesNav(makeStores())
+    expect(screen.queryByText(/New build/i)).not.toBeInTheDocument()
+  })
+
+  it('navigates to the build-redirect route when leaving the resources tool', () => {
+    renderResourcesNav(makeStores())
+    fireEvent.click(screen.getByLabelText('Crop Tracker'))
+    // No build in scope: the bare tool route lets BuildRedirect restore the
+    // last-viewed build for the dataset.
+    expect(screen.getByTestId('location')).toHaveTextContent('/ds1/crops')
   })
 
   it('shows a count badge on the hamburger button when there are unseen releases', async () => {

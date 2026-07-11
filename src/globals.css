@@ -55,3 +55,10 @@ body {
 .p-menuitem.p-menuitem-danger > .p-menuitem-content > .p-menuitem-link .p-menuitem-text {
   color: var(--red-500);
 }
+
+/* The bundled Lara themes predate Tag's "secondary" severity, so it falls
+   back to the primary background — give it a neutral look instead. */
+.p-tag.p-tag-secondary {
+  background: var(--surface-100);
+  color: var(--text-color-secondary);
+}

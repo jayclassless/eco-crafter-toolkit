@@ -1,0 +1,6 @@
+/* Match the tool switcher's height: SelectButton labels render at
+   line-height 1, while the dropdown label uses the browser default (~1.2),
+   leaving the dropdown a few px taller in the navbar row. */
+.biome-selector-dropdown .p-dropdown-label {
+  line-height: 1;
+}

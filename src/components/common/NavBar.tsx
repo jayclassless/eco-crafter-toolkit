@@ -1,6 +1,7 @@
 import { Button } from 'primereact/button'
 import { SelectButton } from 'primereact/selectbutton'
 import { Tag } from 'primereact/tag'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
@@ -11,16 +12,22 @@ import { useLocalization } from '@/hooks/use-localization'
 import { useReleasesBadgeCount } from '@/hooks/use-releases-badge'
 import { useStores } from '@/stores/providers'
 
-type ToolName = 'calculator' | 'crops'
+type ToolName = 'calculator' | 'crops' | 'resources'
 
 interface Props {
   tool: ToolName
   datasetId: string
-  buildId: string
-  onSelectBuild: (buildId: string) => void
-  onDeletedBuild: (buildId: string) => void
+  // Build props are absent on dataset-scoped tools (resources); the build
+  // selector is hidden and tool switching goes through the build-redirect
+  // routes, which restore the last-viewed build.
+  buildId?: string
+  onSelectBuild?: (buildId: string) => void
+  onDeletedBuild?: (buildId: string) => void
   onOpenSettings: () => void
   onOpenConfig?: () => void
+  // Tool-specific controls rendered immediately after the tool switcher (e.g.
+  // the biome selector on the resources page).
+  children?: ReactNode
 }
 
 // Shared top navigation for every tool. Hosts the tool switcher, dataset name,
@@ -34,6 +41,7 @@ export function NavBar({
   onDeletedBuild,
   onOpenSettings,
   onOpenConfig,
+  children,
 }: Props) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -45,6 +53,7 @@ export function NavBar({
   const toolOptions = [
     { value: 'calculator' as ToolName, label: t('nav.calculator'), icon: 'pi pi-calculator' },
     { value: 'crops' as ToolName, label: t('nav.crops'), icon: '' },
+    { value: 'resources' as ToolName, label: t('nav.resources'), icon: 'pi pi-map' },
   ]
 
   return (
@@ -82,15 +91,21 @@ export function NavBar({
         }
         onChange={(e) => {
           const next = e.value as ToolName | null
-          if (next && next !== tool) navigate(`/${datasetId}/${next}/${buildId}`)
+          if (!next || next === tool) return
+          if (next === 'resources') navigate(`/${datasetId}/resources`)
+          else if (buildId) navigate(`/${datasetId}/${next}/${buildId}`)
+          else navigate(`/${datasetId}/${next}`)
         }}
       />
-      <BuildSelector
-        datasetId={datasetId}
-        activeBuildId={buildId}
-        onSelect={onSelectBuild}
-        onDeleted={onDeletedBuild}
-      />
+      {children}
+      {buildId && onSelectBuild && onDeletedBuild && (
+        <BuildSelector
+          datasetId={datasetId}
+          activeBuildId={buildId}
+          onSelect={onSelectBuild}
+          onDeleted={onDeletedBuild}
+        />
+      )}
       <NewsBadgeButton />
       <Button
         icon="pi pi-bars"
