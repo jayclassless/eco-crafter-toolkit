@@ -2,6 +2,7 @@ export interface TalentRow {
   id: string
   userTalentId: string
   name: string
+  description?: string
   talentGroupName: string
   level: number
   isLevelable: boolean

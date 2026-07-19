@@ -180,6 +180,9 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
         maxTalentLevel,
       })
       addLocalizedNames(localizedNames, 'talent', talentId, t.LocalizedName)
+      if (t.LocalizedDescription) {
+        addLocalizedNames(localizedNames, 'talentDescription', talentId, t.LocalizedDescription)
+      }
 
       for (let idx = 0; idx < bonuses.length; idx++) {
         const b = bonuses[idx]

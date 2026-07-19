@@ -44,6 +44,8 @@
       "addSkill": "Add skill...",
       "level": "Level",
       "talents": "Talents",
+      "talentLevel": "{name} (level {level}/{maxLevel})",
+      "talentLevelHint": "(click to increase, shift/right-click to decrease)",
       "craftingTables": "Crafting Tables",
       "craftingTablesCount": "Crafting Tables ({count})",
       "addTable": "Add crafting table...",

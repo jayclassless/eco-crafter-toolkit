@@ -4,6 +4,7 @@
 
 - Added a Biome Resources tool that shows the minerals, flora, and fauna that
   can be found in each biome of Eco.
+- Added descriptions to Talents.
 - Fixed display of Tag ingredient names in Custom Recipe editor.
 - Fixed (maybe?) the calculation of tree timings in the Crop Tracker.
 

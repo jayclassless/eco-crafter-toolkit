@@ -83,6 +83,7 @@ export function SkillsPanel({ buildId, datasetId }: Props) {
         id: t.id,
         userTalentId: userTalentIdByTalentId.get(t.id) ?? '',
         name: getName('talent', t.id),
+        description: getName('talentDescription', t.id),
         talentGroupName: t.talentGroupName,
         level: t.level,
         isLevelable: t.isLevelable,

@@ -1,5 +1,6 @@
 import { Tooltip } from 'primereact/tooltip'
 import { memo, type MouseEvent as ReactMouseEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { TalentIcon } from '@/components/common/TalentIcon'
 
@@ -23,13 +24,24 @@ export const TalentChipView = memo(function TalentChipView({
   onToggle,
   onSetLevel,
 }: Props) {
+  const { t } = useTranslation()
   const tooltipClass = `talent-tooltip-${talent.id.replace(/[^a-zA-Z0-9]/g, '')}`
 
   const isLevelable = talent.isLevelable
   const active = isLevelable ? talentLevel > 0 : enabled
-  const tooltipContent = isLevelable
-    ? `${talent.name} (level ${talentLevel}/${talent.maxTalentLevel})\n\n(click to increase, shift/right-click to decrease)`
-    : talent.name
+  const tooltipContent = [
+    isLevelable
+      ? t('priceCalculator.config.talentLevel', {
+          name: talent.name,
+          level: talentLevel,
+          maxLevel: talent.maxTalentLevel,
+        })
+      : talent.name,
+    talent.description,
+    isLevelable ? t('priceCalculator.config.talentLevelHint') : undefined,
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 
   const handleClick = (e: ReactMouseEvent) => {
     if (isLevelable) {

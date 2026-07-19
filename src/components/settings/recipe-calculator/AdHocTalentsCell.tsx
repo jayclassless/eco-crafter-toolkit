@@ -37,6 +37,7 @@ export function AdHocTalentsCell({
         id: tl.id,
         userTalentId: '',
         name: getName('talent', tl.id) || tl.name,
+        description: getName('talentDescription', tl.id),
         talentGroupName: tl.talentGroupName,
         level: tl.level,
         isLevelable: tl.isLevelable,

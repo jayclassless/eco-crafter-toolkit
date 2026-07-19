@@ -25,6 +25,7 @@ export interface SkillJson {
 export interface TalentJson {
   Name: string
   LocalizedName: LocalizedNames
+  LocalizedDescription?: LocalizedNames
   TalentGroupName: string
   Value: number
   Level: number

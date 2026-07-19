@@ -210,6 +210,25 @@ describe('parseDataset', () => {
     expect(oak.maturityAgeDays).toBe(7)
   })
 
+  it('records a talent description under the talentDescription entity type', () => {
+    const data = makeMinimalDataset()
+    data.Skills[0].Talents[0].LocalizedDescription = {
+      'en-US': 'Increases the damage of related tools by 1.',
+    }
+    const result = parseDataset(data, 'test-dataset')
+    const talent = result.talents.find((t) => t.name === 'TestTalent')!
+    const desc = result.localizedNames.find(
+      (n) =>
+        n.entityType === 'talentDescription' && n.entityId === talent.id && n.locale === 'en-US'
+    )
+    expect(desc?.name).toBe('Increases the damage of related tools by 1.')
+  })
+
+  it('omits talentDescription entries for datasets without descriptions', () => {
+    const result = parseDataset(makeMinimalDataset(), 'test-dataset')
+    expect(result.localizedNames.some((n) => n.entityType === 'talentDescription')).toBe(false)
+  })
+
   it('leaves non-crop items without growth fields (back-compat)', () => {
     const result = parseDataset(makeMinimalDataset(), 'test-dataset')
     const wood = result.items.find((i) => i.name === 'WoodItem')!

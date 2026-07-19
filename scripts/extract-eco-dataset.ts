@@ -201,6 +201,7 @@ interface RawTagDef {
 interface RawTalentGroup {
   name: string
   display: string
+  description?: string
   owningSkill?: string
   level: number
   talents: string[]
@@ -318,19 +319,20 @@ function parseSkillFile(src: string) {
 function parseTalentFile(src: string) {
   // Talent groups
   const groupRe =
-    /\[LocDisplayName\("([^"]+)"\)\][\s\S]*?public\s+partial\s+class\s+(\w+TalentGroup)\s*:\s*TalentGroup[\s\S]*?\{([\s\S]*?)\n\s{4}\}/g
+    /\[LocDisplayName\("([^"]+)"\)\]\s*(?:\[LocDescription\("([^"]*)"\)\]\s*)?[\s\S]*?public\s+partial\s+class\s+(\w+TalentGroup)\s*:\s*TalentGroup[\s\S]*?\{([\s\S]*?)\n\s{4}\}/g
   let g: RegExpExecArray | null
   while ((g = groupRe.exec(src))) {
     const display = g[1]
-    const name = g[2]
-    const body = g[3]
+    const description = g[2]
+    const name = g[3]
+    const body = g[4]
     const owning = /OwningSkill\s*=\s*typeof\((\w+)\)/.exec(body)?.[1]
     const level = Number(/this\.Level\s*=\s*(\d+)/.exec(body)?.[1] ?? 0)
     const tts: string[] = []
     const tre = /typeof\((\w+Talent)\)/g
     let mt: RegExpExecArray | null
     while ((mt = tre.exec(body))) tts.push(mt[1])
-    talentGroups.push({ name, display, owningSkill: owning, level, talents: tts })
+    talentGroups.push({ name, display, description, owningSkill: owning, level, talents: tts })
   }
   // Individual Talents
   const talentRe =
@@ -1504,6 +1506,9 @@ async function main() {
         Name: tn,
         LocalizedName: mergeLocalized(tg.display, translations),
         TalentGroupName: tg.name,
+        ...(tg.description
+          ? { LocalizedDescription: mergeLocalized(tg.description, translations) }
+          : {}),
         Value: bonuses.length > 0 ? 0 : (t?.value ?? 0),
         Level: tg.level,
       }
