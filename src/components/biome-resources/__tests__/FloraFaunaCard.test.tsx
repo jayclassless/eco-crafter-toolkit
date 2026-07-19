@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { BIOME_ATLAS } from '../biome-atlas'
 import { FloraFaunaCard } from '../FloraFaunaCard'
+import { faunaIconName } from '../species-icons'
 
 import '@/i18n'
 
@@ -24,14 +25,14 @@ describe('FloraFaunaCard', () => {
 
   it('sorts wildlife by name', () => {
     render(<FloraFaunaCard biome={BIOME_ATLAS.biomes.Grassland} />)
-    // Data order is category-then-name (Turkey first); the list re-sorts by
-    // name alone, putting Beaver ahead of the birds and fish.
+    // Data order is category-then-name (Turkey first, as a bird); the list
+    // re-sorts by name alone, putting Bison ahead of the birds and fish.
     const names = BIOME_ATLAS.biomes.Grassland.fauna.map((f) => f.name)
     const rows = screen
       .getAllByText((_, el) => el?.tagName === 'SPAN' && names.includes(el.textContent ?? ''))
       .map((el) => el.textContent)
     expect(rows).toEqual([...names].sort((a, b) => a.localeCompare(b)))
-    expect(rows[0]).toBe('Beaver')
+    expect(rows[0]).toBe('Bison')
   })
 
   it('shows the category tag for every animal, ignoring notes', () => {
@@ -73,15 +74,36 @@ describe('FloraFaunaCard', () => {
     expect(roseBush.querySelector('img')?.src).toContain('/eco-icons/items/RoseItem.png')
   })
 
-  it('resolves fauna icons as items, carcasses, or none', () => {
+  it('resolves fauna icons as items or carcasses', () => {
     render(<FloraFaunaCard biome={BIOME_ATLAS.biomes.Grassland} />)
     const salmon = screen.getByText('Salmon').parentElement!
     expect(salmon.querySelector('img')?.src).toContain('/eco-icons/items/SalmonItem.png')
     const bison = screen.getByText('Bison').parentElement!
     expect(bison.querySelector('img')?.src).toContain('/eco-icons/items/BisonCarcassItem.png')
-    // Tarantula has no item or carcass icon; the row renders without an image.
-    const tarantula = screen.getByText('Tarantula').parentElement!
-    expect(tarantula.querySelector('img')).toBeNull()
+  })
+
+  it('resolves the two irregular carcass names', () => {
+    render(<FloraFaunaCard biome={BIOME_ATLAS.biomes.Desert} />)
+    // Bighorn Sheep's carcass item drops the "Sheep"; Tortoise skips the
+    // carcass layer and yields raw meat directly.
+    const bighorn = screen.getByText('Bighorn Sheep').parentElement!
+    expect(bighorn.querySelector('img')?.src).toContain('/eco-icons/items/BighornCarcassItem.png')
+    const tortoise = screen.getByText('Tortoise').parentElement!
+    expect(tortoise.querySelector('img')?.src).toContain('/eco-icons/items/RawMeatItem.png')
+  })
+
+  it('gives every species in the atlas an icon', () => {
+    // All 26 v13 species are huntable and have a dropped item; a species with
+    // no icon means the atlas gained an entry the icon lists do not cover.
+    const missing = Object.values(BIOME_ATLAS.biomes)
+      .flatMap((b) => b.fauna)
+      .filter((f) => faunaIconName(f) === null)
+      .map((f) => f.name)
+    expect(missing).toEqual([])
+  })
+
+  it('resolves an unknown species to no icon', () => {
+    expect(faunaIconName({ name: 'Squirrel', cat: 'Mammals', note: '' })).toBeNull()
   })
 
   it('renders empty states for the Ice biome', () => {

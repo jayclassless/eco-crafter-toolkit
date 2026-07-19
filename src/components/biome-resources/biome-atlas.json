@@ -147,16 +147,6 @@
           "name": "Wolf",
           "cat": "Mammals",
           "note": ""
-        },
-        {
-          "name": "Beaver",
-          "cat": "Other",
-          "note": ""
-        },
-        {
-          "name": "Tarantula",
-          "cat": "Other",
-          "note": ""
         }
       ],
       "rocks": [
@@ -428,16 +418,6 @@
           "name": "Wolf",
           "cat": "Mammals",
           "note": ""
-        },
-        {
-          "name": "Beaver",
-          "cat": "Other",
-          "note": ""
-        },
-        {
-          "name": "Tarantula",
-          "cat": "Other",
-          "note": ""
         }
       ],
       "rocks": [
@@ -652,11 +632,6 @@
         {
           "name": "Wolf",
           "cat": "Mammals",
-          "note": ""
-        },
-        {
-          "name": "Tarantula",
-          "cat": "Other",
           "note": ""
         }
       ],
@@ -1084,11 +1059,6 @@
           "note": ""
         },
         {
-          "name": "Beaver",
-          "cat": "Other",
-          "note": ""
-        },
-        {
           "name": "Alligator",
           "cat": "Reptiles",
           "note": ""
@@ -1303,11 +1273,6 @@
           "note": ""
         },
         {
-          "name": "Tarantula",
-          "cat": "Other",
-          "note": ""
-        },
-        {
           "name": "Tortoise",
           "cat": "Reptiles",
           "note": ""
@@ -1451,16 +1416,6 @@
         {
           "name": "Wolf",
           "cat": "Mammals",
-          "note": ""
-        },
-        {
-          "name": "Marmot",
-          "cat": "Other",
-          "note": ""
-        },
-        {
-          "name": "Tarantula",
-          "cat": "Other",
           "note": ""
         }
       ],
@@ -1621,16 +1576,6 @@
         {
           "name": "Wolf",
           "cat": "Mammals",
-          "note": ""
-        },
-        {
-          "name": "Marmot",
-          "cat": "Other",
-          "note": ""
-        },
-        {
-          "name": "Tarantula",
-          "cat": "Other",
           "note": ""
         }
       ],

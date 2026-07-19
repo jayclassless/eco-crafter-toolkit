@@ -93,10 +93,12 @@ const FAUNA_CARCASS = new Set([
   'Wolf',
 ])
 
-// Animals whose carcass item drops the qualifier, plus species with no item
-// at all (Beaver, Marmot, Tarantula, Tortoise) which resolve to null.
+// Animals whose dropped item doesn't follow <Name>CarcassItem: Bighorn Sheep's
+// carcass drops the qualifier, and Tortoise is the one species that skips the
+// carcass layer entirely, yielding RawMeatItem straight from its ResourceList.
 const FAUNA_SPECIAL: Record<string, string> = {
   'Bighorn Sheep': 'BighornCarcassItem',
+  Tortoise: 'RawMeatItem',
 }
 
 export function faunaIconName(fauna: BiomeFauna): string | null {
