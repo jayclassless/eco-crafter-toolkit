@@ -1,6 +1,6 @@
 # Eco Crafter Toolkit Change Log
 
-## 0.6.0 (TBD)
+## 0.6.0 (2026-07-19)
 
 - Added a Biome Resources tool that shows the minerals, flora, and fauna that
   can be found in each biome of Eco.
