@@ -15,7 +15,7 @@ import { useNowTick } from '@/hooks/use-now-tick'
 import { useSettings } from '@/hooks/use-settings'
 import { useCellValue, useStoreRevision, useTableRowIdsRevision } from '@/hooks/use-store-revision'
 import { useTrackActiveBuild } from '@/hooks/use-track-active-build'
-import { computeHarvestDate } from '@/lib/crop-growth'
+import { computeHarvestWindow } from '@/lib/crop-growth'
 import { generateId } from '@/lib/ids'
 import { useStores } from '@/stores/providers'
 
@@ -73,6 +73,8 @@ export function CropTracker() {
         maturityAgeDays: maturity,
         postHarvestingGrowth: (item.postHarvestingGrowth as number) ?? 0,
         pickableAtPercent: (item.pickableAtPercent as number) ?? 0,
+        primaryResourceMin: (item.primaryResourceMin as number) ?? 0,
+        primaryResourceMax: (item.primaryResourceMax as number) ?? 0,
       })
     }
     out.sort((a, b) => a.name.localeCompare(b.name))
@@ -118,16 +120,17 @@ export function CropTracker() {
           (buildStore.getCell('userPlantings', id, 'hasRegrown') as boolean) ?? false
         const name = (buildStore.getCell('userPlantings', id, 'name') as string) ?? ''
         const crop = cropItemId ? cropsByIdRef.current.get(cropItemId) : undefined
-        const harvest =
+        const window =
           crop && plantedAt
-            ? computeHarvestDate(plantedAt, crop, growthRateModifier, hasRegrown)
+            ? computeHarvestWindow(plantedAt, crop, growthRateModifier, { hasRegrown })
             : null
         return {
           id,
           fieldName: name || crop?.name || '',
           plantName: crop?.name ?? '',
           plantedAtMs: plantedAt ? Date.parse(plantedAt) : null,
-          harvestMs: harvest ? harvest.getTime() : null,
+          firstYieldMs: window ? window.firstYieldAt.getTime() : null,
+          harvestMs: window ? window.maxYieldAt.getTime() : null,
         }
       })
     return sortPlantings(rows, sortField, sortDir).map((r) => r.id)
@@ -142,6 +145,7 @@ export function CropTracker() {
       { label: t('cropTracker.sortField.name'), value: 'name' },
       { label: t('cropTracker.sortField.plant'), value: 'plant' },
       { label: t('cropTracker.sortField.planted'), value: 'planted' },
+      { label: t('cropTracker.sortField.firstYield'), value: 'firstYield' },
       { label: t('cropTracker.sortField.harvest'), value: 'harvest' },
     ],
     [t]

@@ -6,6 +6,7 @@ const make = (over: Partial<SortablePlanting> & { id: string }): SortablePlantin
   fieldName: '',
   plantName: '',
   plantedAtMs: null,
+  firstYieldMs: null,
   harvestMs: null,
   ...over,
 })
@@ -38,13 +39,24 @@ describe('sortPlantings', () => {
     expect(ids(sortPlantings(rows, 'planted', 'desc'))).toEqual(['unplanted', 'late', 'early'])
   })
 
-  it('sorts by harvest time, missing harvests last in ascending', () => {
+  it('sorts by harvest time (full yield), missing harvests last in ascending', () => {
     const rows = [
       make({ id: 'soon', harvestMs: 50 }),
       make({ id: 'none' }),
       make({ id: 'later', harvestMs: 500 }),
     ]
     expect(ids(sortPlantings(rows, 'harvest', 'asc'))).toEqual(['soon', 'later', 'none'])
+  })
+
+  it('sorts by first-yield time independently of full-yield time', () => {
+    // A tree yields something early but finishes last; a crop is the reverse.
+    const rows = [
+      make({ id: 'crop', firstYieldMs: 400, harvestMs: 500 }),
+      make({ id: 'tree', firstYieldMs: 100, harvestMs: 900 }),
+      make({ id: 'none' }),
+    ]
+    expect(ids(sortPlantings(rows, 'firstYield', 'asc'))).toEqual(['tree', 'crop', 'none'])
+    expect(ids(sortPlantings(rows, 'harvest', 'asc'))).toEqual(['crop', 'tree', 'none'])
   })
 
   it('is stable for ties and does not mutate the input', () => {

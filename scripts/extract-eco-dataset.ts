@@ -190,6 +190,11 @@ interface RawItem {
   maturityAgeDays?: number
   postHarvestingGrowth?: number
   pickableAtPercent?: number
+  // Yield range of the species' *primary* resource (ResourceList[0]), which is
+  // what Plant.Ripe gates first-harvest on — not necessarily this item's own
+  // range (RoseBush's primary is PlantFibers, but the tracked item is Rose).
+  primaryResourceMin?: number
+  primaryResourceMax?: number
   seedItemName?: string
   plantDisplay?: string // in-world species name, e.g. "Oak" (vs the item's "Oak Log")
   isTree?: boolean
@@ -249,7 +254,9 @@ const bonusesByTalentName = new Map<string, RawBonus[]>()
 // resolve the crop item after pass 1.
 interface RawPlant {
   displayName: string // the species' in-world name, e.g. "Oak", "Bolete Mushroom"
-  resourceNames: string[]
+  // ResourceList entries in declaration order; index 0 is the species' primary
+  // resource, whose Range drives the ripeness gate (Species.ResourceRange).
+  resources: { name: string; min: number; max: number }[]
   isTree: boolean
   maturityAgeDays: number
   postHarvestingGrowth: number
@@ -517,6 +524,24 @@ function parseTagDefinitionsFile(src: string) {
 // step in main) by picking the Crop-tagged item (food crops) or, for trees, the
 // Wood-tagged log. Capturing the ResourceList rather than filtering on a
 // *SeedItem also catches crops that propagate via spores/bulbs or self-seed.
+// Pull `new SpeciesResource(typeof(X), new Range(min, max), ...)` entries out of
+// a ResourceList block, keeping declaration order. Entries without a Range are
+// skipped rather than defaulted — a missing range would silently become 0-0 and
+// read downstream as "this crop never yields".
+function extractSpeciesResources(block: string): { name: string; min: number; max: number }[] {
+  const out: { name: string; min: number; max: number }[] = []
+  const re =
+    /new\s+SpeciesResource\(\s*typeof\((\w+)\)\s*,\s*new\s+Range\(\s*(-?[\d.]+f?)\s*,\s*(-?[\d.]+f?)\s*\)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(block))) {
+    const min = parseFloatLit(m[2])
+    const max = parseFloatLit(m[3])
+    if (Number.isNaN(min) || Number.isNaN(max)) continue
+    out.push({ name: m[1], min, max })
+  }
+  return out
+}
+
 function parsePlantFile(src: string) {
   const classRe = /public\s+(?:partial\s+)?class\s+(\w+)Species\s*:\s*(Plant|Tree)Species\b/g
   let m: RegExpExecArray | null
@@ -534,8 +559,8 @@ function parsePlantFile(src: string) {
     if (rlOpen < 0) continue
     const rlEnd = matchBrace(block, rlOpen)
     if (rlEnd < 0) continue
-    const resourceNames = extractTypeNames(block.slice(rlOpen, rlEnd))
-    if (resourceNames.length === 0) continue
+    const resources = extractSpeciesResources(block.slice(rlOpen, rlEnd))
+    if (resources.length === 0) continue
 
     const displayName = /DisplayName\s*=\s*Localizer\.DoStr\("([^"]+)"\)/.exec(block)?.[1]
     if (!displayName) continue
@@ -549,7 +574,7 @@ function parsePlantFile(src: string) {
 
     rawPlants.push({
       displayName,
-      resourceNames,
+      resources,
       isTree,
       maturityAgeDays: maturity,
       postHarvestingGrowth: Number.isNaN(postHarvest) ? 0 : postHarvest,
@@ -1203,7 +1228,7 @@ async function main() {
   // get no seed link.
   let cropCount = 0
   for (const plant of rawPlants) {
-    const resourceItems = plant.resourceNames.map((n) => items.get(n)).filter((it) => it != null)
+    const resourceItems = plant.resources.map((r) => items.get(r.name)).filter((it) => it != null)
     const harvest =
       resourceItems.find((it) => it.tags.includes('Crop')) ??
       (plant.isTree ? resourceItems.find((it) => it.tags.includes('Wood')) : undefined)
@@ -1212,6 +1237,9 @@ async function main() {
     harvest.maturityAgeDays = plant.maturityAgeDays
     harvest.postHarvestingGrowth = plant.postHarvestingGrowth
     harvest.pickableAtPercent = plant.pickableAtPercent
+    // Always ResourceList[0], regardless of which entry we merged onto.
+    harvest.primaryResourceMin = plant.resources[0].min
+    harvest.primaryResourceMax = plant.resources[0].max
     harvest.plantDisplay = plant.displayName
     harvest.isTree = plant.isTree
     if (seed) harvest.seedItemName = seed.name
@@ -1569,6 +1597,8 @@ async function main() {
       j.MaturityAgeDays = it.maturityAgeDays
       j.PostHarvestingGrowth = it.postHarvestingGrowth ?? 0
       j.PickableAtPercent = it.pickableAtPercent ?? 0
+      if (it.primaryResourceMin != null) j.PrimaryResourceMin = it.primaryResourceMin
+      if (it.primaryResourceMax != null) j.PrimaryResourceMax = it.primaryResourceMax
       if (it.seedItemName) j.SeedItem = it.seedItemName
       if (it.plantDisplay) j.PlantName = mergeLocalized(it.plantDisplay, translations)
       if (it.isTree) j.IsTree = true

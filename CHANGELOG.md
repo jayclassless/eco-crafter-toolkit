@@ -2,7 +2,7 @@
 
 ## 0.7.0 (TBD)
 
--
+- Another attempt at fixing the calculations in the Crop Tracker.
 
 ## 0.6.0 (2026-07-19)
 

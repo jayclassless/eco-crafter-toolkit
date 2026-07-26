@@ -147,6 +147,9 @@ function sweepBuildStore(
       }
     }
 
+    // Every buildStore column holding a game-data row id must be listed here —
+    // a missing entry silently orphans that reference on the next update, since
+    // the old dataset (and its ids) are purged straight after this sweep.
     remapField('userSkills', 'skillId', remap.skills)
     remapField('userTalents', 'talentId', remap.talents)
     remapField('userCraftingTables', 'craftingTableId', remap.craftingTables)
@@ -156,6 +159,8 @@ function sweepBuildStore(
     remapField('userPrices', 'primaryItemId', remap.items)
     remapField('userProductMargins', 'itemOrTagId', remap.items)
     remapField('userProductShares', 'productItemOrTagId', remap.items)
+    remapField('userReintegratedProducts', 'productItemOrTagId', remap.items)
+    remapField('userPlantings', 'cropItemId', remap.items)
     remapField('hiddenSkills', 'skillId', remap.skills)
     remapField('hiddenCraftingTables', 'craftingTableId', remap.craftingTables)
     remapField('hiddenTags', 'tagId', remap.items)

@@ -233,6 +233,77 @@ describe('applyDatasetUpdate', () => {
     expect(stores.game.hasRow('items', oldPlankId)).toBe(false)
   })
 
+  // Guards every buildStore column that stores a game-data row id. A column
+  // missing from the sweep is orphaned permanently, because the old dataset is
+  // purged right after — so each one gets an explicit assertion here.
+  it('remaps every buildStore column that references a game-data id', async () => {
+    const { stores, oldDatasetId } = await setupV1Install()
+
+    const oldSkillId = findRowIdByCell(stores.game, 'skills', 'name', 'Mining')!
+    const oldRecipeId = findRowIdByCell(stores.game, 'recipes', 'name', 'PlankRecipe')!
+    const oldCtId = findRowIdByCell(stores.game, 'craftingTables', 'name', 'Workbench')!
+    const oldPmId = findRowIdByCell(stores.game, 'pluginModules', 'name', 'BasicUpgrade')!
+    const oldWoodId = findRowIdByCell(stores.game, 'items', 'name', 'Wood')!
+    const oldPlankId = findRowIdByCell(stores.game, 'items', 'name', 'Plank')!
+    const oldTagId = findRowIdByCell(stores.game, 'items', 'name', 'WoodTag')!
+    const oldTalentId = findRowIdByCell(stores.game, 'talents', 'name', 'Sharp')!
+
+    stores.build.setRow('builds', 'b1', {
+      id: 'b1',
+      datasetId: oldDatasetId,
+      name: 'My Build',
+      createdAt: '2026-01-01',
+    })
+    const rows: [string, string, Record<string, unknown>][] = [
+      ['userSkills', 'skillId', { skillId: oldSkillId, level: 5 }],
+      ['userTalents', 'talentId', { talentId: oldTalentId, enabled: true }],
+      ['userCraftingTables', 'craftingTableId', { craftingTableId: oldCtId }],
+      ['userCraftingTables', 'pluginModuleId', { pluginModuleId: oldPmId }],
+      ['userRecipes', 'recipeId', { recipeId: oldRecipeId }],
+      ['userPrices', 'itemOrTagId', { itemOrTagId: oldWoodId }],
+      ['userPrices', 'primaryItemId', { primaryItemId: oldPlankId }],
+      ['userProductMargins', 'itemOrTagId', { itemOrTagId: oldPlankId }],
+      ['userProductShares', 'productItemOrTagId', { productItemOrTagId: oldPlankId }],
+      ['userReintegratedProducts', 'productItemOrTagId', { productItemOrTagId: oldPlankId }],
+      ['userPlantings', 'cropItemId', { cropItemId: oldWoodId }],
+      ['hiddenSkills', 'skillId', { skillId: oldSkillId }],
+      ['hiddenCraftingTables', 'craftingTableId', { craftingTableId: oldCtId }],
+      ['hiddenTags', 'tagId', { tagId: oldTagId }],
+      ['computedPrices', 'itemOrTagId', { itemOrTagId: oldWoodId }],
+      ['computedPrices', 'recipeId', { recipeId: oldRecipeId }],
+    ]
+    rows.forEach(([table, field, cells], i) => {
+      const rowId = `${table}-${field}-${i}`
+      stores.build.setRow(table, rowId, { id: rowId, buildId: 'b1', ...cells })
+    })
+
+    stubFetch(minimalDataset())
+    await applyDatasetUpdate(v2Entry, stores.game, stores.build, stores.ui)
+    vi.unstubAllGlobals()
+
+    const newIds: Record<string, string> = {
+      [oldSkillId]: findRowIdByCell(stores.game, 'skills', 'name', 'Mining')!,
+      [oldTalentId]: findRowIdByCell(stores.game, 'talents', 'name', 'Sharp')!,
+      [oldCtId]: findRowIdByCell(stores.game, 'craftingTables', 'name', 'Workbench')!,
+      [oldPmId]: findRowIdByCell(stores.game, 'pluginModules', 'name', 'BasicUpgrade')!,
+      [oldRecipeId]: findRowIdByCell(stores.game, 'recipes', 'name', 'PlankRecipe')!,
+      [oldWoodId]: findRowIdByCell(stores.game, 'items', 'name', 'Wood')!,
+      [oldPlankId]: findRowIdByCell(stores.game, 'items', 'name', 'Plank')!,
+      [oldTagId]: findRowIdByCell(stores.game, 'items', 'name', 'WoodTag')!,
+    }
+
+    rows.forEach(([table, field, cells], i) => {
+      const rowId = `${table}-${field}-${i}`
+      const oldValue = cells[field] as string
+      const expected = newIds[oldValue]
+      // The import must actually have minted fresh ids, or this proves nothing.
+      expect(expected, `no new id for ${table}.${field}`).not.toBe(oldValue)
+      expect(stores.build.getCell(table, rowId, field), `${table}.${field} was not remapped`).toBe(
+        expected
+      )
+    })
+  })
+
   it('does not touch builds attached to other datasets', async () => {
     const { stores } = await setupV1Install()
     const otherDatasetId = 'other-ds'

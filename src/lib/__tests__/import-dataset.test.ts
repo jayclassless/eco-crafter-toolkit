@@ -48,6 +48,8 @@ function makeMinimalDataset(): DatasetJson {
         MaturityAgeDays: 0.8,
         PostHarvestingGrowth: 0,
         PickableAtPercent: 0,
+        PrimaryResourceMin: 1,
+        PrimaryResourceMax: 3,
         SeedItem: 'CornSeedItem',
         PlantName: { 'en-US': 'Corn' },
       },
@@ -195,8 +197,20 @@ describe('parseDataset', () => {
     expect(corn.maturityAgeDays).toBe(0.8)
     expect(corn.postHarvestingGrowth).toBe(0)
     expect(corn.pickableAtPercent).toBe(0)
+    expect(corn.primaryResourceMin).toBe(1)
+    expect(corn.primaryResourceMax).toBe(3)
     expect(corn.seedItemId).toBe(cornSeed.id)
     expect(corn.isTree).toBe(false)
+  })
+
+  it('defaults the primary resource range to 0 for datasets that omit it', () => {
+    // Datasets extracted before ranges were captured must import cleanly; the
+    // crop-growth fallback keys on a non-positive max.
+    const result = parseDataset(makeMinimalDataset(), 'test-dataset')
+    const oak = result.items.find((i) => i.name === 'OakLogItem')!
+    expect(oak.maturityAgeDays).toBe(7)
+    expect(oak.primaryResourceMin).toBe(0)
+    expect(oak.primaryResourceMax).toBe(0)
   })
 
   it('records the in-world species name under the plant entity type', () => {

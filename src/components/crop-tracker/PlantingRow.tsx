@@ -13,8 +13,7 @@ import {
 } from '@/components/common/GroupedSinglePicker'
 import { useCellValue } from '@/hooks/use-store-revision'
 import {
-  computeHarvestDate,
-  computePickableDate,
+  computeHarvestWindow,
   formatTimeUntil,
   harvestProgress,
   isRegrowCrop,
@@ -118,21 +117,34 @@ export function PlantingRow({
     }
   }
 
-  const harvestDate =
-    crop && isPlanted ? computeHarvestDate(plantedAt, crop, growthRateModifier, hasRegrown) : null
-  const pickableDate =
-    crop && isPlanted ? computePickableDate(plantedAt, crop, growthRateModifier, hasRegrown) : null
+  const window =
+    crop && isPlanted
+      ? computeHarvestWindow(plantedAt, crop, growthRateModifier, { hasRegrown })
+      : null
 
   const plantedDate = isPlanted ? new Date(plantedAt) : null
-  const progress = plantedDate && harvestDate ? harvestProgress(plantedDate, harvestDate, now) : 0
+  // Progress runs to full yield; first yield is a marker along the way.
+  const progress = plantedDate && window ? harvestProgress(plantedDate, window.maxYieldAt, now) : 0
 
-  const status: 'ready' | 'pickable' | 'growing' | null = !isPlanted
+  // Species whose first yield only arrives at full growth (Pineapple's 1-1
+  // range, or a dataset with no range data) have a single milestone — showing
+  // two identical timestamps reads as a bug.
+  const hasSeparateFirstYield = window != null && window.firstYieldGrowth < 1
+
+  const status: 'ready' | 'partial' | 'growing' | null = !isPlanted
     ? null
-    : harvestDate && now >= harvestDate
+    : window && now >= window.maxYieldAt
       ? 'ready'
-      : pickableDate && now >= pickableDate
-        ? 'pickable'
+      : window && hasSeparateFirstYield && now >= window.firstYieldAt
+        ? 'partial'
         : 'growing'
+
+  // Where the first-yield marker sits on the bar. The bar spans the visible
+  // cycle, which for a regrow starts partway up, so rescale into that span.
+  const firstYieldMarker =
+    window && hasSeparateFirstYield
+      ? (window.firstYieldGrowth - window.cycleStartGrowth) / (1 - window.cycleStartGrowth)
+      : null
 
   const selectedOption: CropOption | null = crop
     ? { id: crop.id, name: crop.name, rawName: crop.rawName }
@@ -194,22 +206,32 @@ export function PlantingRow({
               <Tag
                 value={t(`cropTracker.status${status[0].toUpperCase()}${status.slice(1)}`)}
                 severity={
-                  status === 'ready' ? 'success' : status === 'pickable' ? 'warning' : 'info'
+                  status === 'ready' ? 'success' : status === 'partial' ? 'warning' : 'info'
                 }
               />
             )}
             {plantedDate && (
               <span>{t('cropTracker.plantedAt', { time: timeFormat.format(plantedDate) })}</span>
             )}
-            {pickableDate && (
-              <span>{t('cropTracker.pickableAt', { time: timeFormat.format(pickableDate) })}</span>
-            )}
-            {harvestDate &&
+            {window &&
+              hasSeparateFirstYield &&
               (() => {
-                const until = formatTimeUntil(harvestDate, now)
+                const until = formatTimeUntil(window.firstYieldAt, now)
                 return (
                   <span>
-                    {t('cropTracker.harvestAt', { time: timeFormat.format(harvestDate) })}
+                    {t('cropTracker.firstYieldAt', {
+                      time: timeFormat.format(window.firstYieldAt),
+                    })}
+                    {until && ` (${t('cropTracker.timeUntil', { duration: until })})`}
+                  </span>
+                )
+              })()}
+            {window &&
+              (() => {
+                const until = formatTimeUntil(window.maxYieldAt, now)
+                return (
+                  <span>
+                    {t('cropTracker.fullYieldAt', { time: timeFormat.format(window.maxYieldAt) })}
                     {until && ` (${t('cropTracker.timeUntil', { duration: until })})`}
                   </span>
                 )
@@ -221,21 +243,23 @@ export function PlantingRow({
               showValue={false}
               style={{ height: '0.5rem' }}
             />
-            {crop &&
-              crop.pickableAtPercent > 0 && (
-                // Marker showing where the crop becomes early-pickable.
-                <div
-                  className="absolute"
-                  title={t('cropTracker.statusPickable')}
-                  style={{
-                    left: `${crop.pickableAtPercent * 100}%`,
-                    top: 0,
-                    bottom: 0,
-                    width: '2px',
-                    background: 'var(--yellow-500)',
-                  }}
-                />
-              )}
+            {firstYieldMarker != null && (
+              // Marker showing where the plant starts yielding something.
+              <div
+                className="absolute"
+                title={t('cropTracker.statusPartial')}
+                style={{
+                  left: `${firstYieldMarker * 100}%`,
+                  top: 0,
+                  bottom: 0,
+                  width: '4px',
+                  // Centre the marker on the threshold rather than letting it
+                  // grow rightwards, which would read as a later time.
+                  transform: 'translateX(-50%)',
+                  background: 'var(--yellow-500)',
+                }}
+              />
+            )}
           </div>
         </>
       )}

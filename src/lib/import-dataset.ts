@@ -220,6 +220,8 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
       item.maturityAgeDays = i.MaturityAgeDays
       item.postHarvestingGrowth = i.PostHarvestingGrowth ?? 0
       item.pickableAtPercent = i.PickableAtPercent ?? 0
+      item.primaryResourceMin = i.PrimaryResourceMin ?? 0
+      item.primaryResourceMax = i.PrimaryResourceMax ?? 0
       item.isTree = i.IsTree ?? false
       if (i.SeedItem) pendingCropSeeds.push({ crop: item, seedName: i.SeedItem })
       // The in-world species name is shown in the Crop Tracker picker. Stored

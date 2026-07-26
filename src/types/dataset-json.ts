@@ -70,6 +70,10 @@ export interface ItemJson {
   MaturityAgeDays?: number
   PostHarvestingGrowth?: number // 0 = single harvest, 0.5 = regrows from 50%
   PickableAtPercent?: number
+  // Yield range of the species' primary resource (ResourceList[0]). Gates when
+  // the plant first yields anything; absent in datasets extracted before v13.
+  PrimaryResourceMin?: number
+  PrimaryResourceMax?: number
   SeedItem?: string // item Name link to the seed
   PlantName?: LocalizedNames // the in-world species name (e.g. "Oak" vs item "Oak Log")
   IsTree?: boolean

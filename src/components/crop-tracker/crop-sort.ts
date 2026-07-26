@@ -1,4 +1,4 @@
-export type CropSortField = 'name' | 'plant' | 'planted' | 'harvest'
+export type CropSortField = 'name' | 'plant' | 'planted' | 'firstYield' | 'harvest'
 export type CropSortDir = 'asc' | 'desc'
 
 // A planting reduced to the values the field list sorts on.
@@ -7,7 +7,8 @@ export interface SortablePlanting {
   fieldName: string // effective field label (custom name, else plant name)
   plantName: string // the crop/plant display name
   plantedAtMs: number | null // null when not yet planted
-  harvestMs: number | null // null when not planted or no crop selected
+  firstYieldMs: number | null // earliest harvest returning anything; null when unplanted
+  harvestMs: number | null // full yield (growth 1.0); null when unplanted
 }
 
 // Missing times sort last in ascending order (and first in descending), since
@@ -22,6 +23,8 @@ function compare(a: SortablePlanting, b: SortablePlanting, field: CropSortField)
       return a.plantName.localeCompare(b.plantName, undefined, { sensitivity: 'base' })
     case 'planted':
       return timeKey(a.plantedAtMs) - timeKey(b.plantedAtMs)
+    case 'firstYield':
+      return timeKey(a.firstYieldMs) - timeKey(b.firstYieldMs)
     case 'harvest':
       return timeKey(a.harvestMs) - timeKey(b.harvestMs)
   }

@@ -1,34 +1,41 @@
 // Crop growth math for the Crop Tracker.
 //
-// Growth times are derived from the dataset's per-crop values rather than
-// hardcoded. In the game, `MaturityAgeDays` is expressed in simulation days;
-// at the default plant-growth rate one simulation day equals 24 real hours, so
-// the real time to fully grow is `MaturityAgeDays * 24 / growthRateModifier`.
-// Regenerating crops (`postHarvestingGrowth > 0`) regrow from a fraction of
-// maturity after harvest, so subsequent cycles take `(1 - postHarvestingGrowth)`
-// of the base time. Crops with `pickableAtPercent > 0` can be picked early, at
-// that fraction of the growth time (before reaching full yield).
+// Growth is purely time-based. The server hands every living, unblocked plant a
+// per-tick increment of `tickDays / MaturityAgeDays` and scales it by the
+// server's plant-growth-rate multiplier, so crossing a growth interval takes
 //
-// Trees are a special case in two independent ways:
-//  1. In the game a tree becomes harvestable ("Ripe") once it grows past the
-//     sapling stage — `TreeObject.SaplingGrowthPercent`, a constant 0.3 across
-//     species/versions — not at full `MaturityAgeDays` maturity. So a tree's
-//     harvest time is only 30% of its full growth time; treating it as 100%
-//     (like a food crop) over-predicts harvest by ~3.3x.
-//  2. Trees respond to the server growth-rate modifier *quadratically* while
-//     food crops respond linearly. In-game soil-sampler readings across growth
-//     rates 1 and 2 show food full-growth time scaling as `24 / rate` but tree
-//     full-growth time scaling as `24 / rate^2` (at rate 1 the two coincide, so
-//     the divergence only shows once the rate leaves 1). The mechanism lives in
-//     Eco's closed-source simulation; this is an empirical fit, cleanest as a
-//     square.
+//   hours(g0 -> g1) = (g1 - g0) * MaturityAgeDays * 24 / growthRateMultiplier
+//
+// identically for crops and trees. No biome, habitability, rainfall or soil
+// term appears in the growth path — the environment affects how *much* a plant
+// yields, never how fast it grows.
+//
+// What differs between species is which growth fraction first counts as
+// harvestable, and that is what this module computes: two milestones per
+// planting.
+//
+//   first yield — the earliest growth at which harvesting returns anything
+//   full yield  — growth 1.0, where every species peaks
+//
+// The yield formulas below exist only to locate the first-yield threshold (a
+// 1-3 crop crosses it at 1/sqrt(2), a 1-4 crop at 1/sqrt(3)). The tracker does
+// not predict harvest quantities, so they stay module-private.
+//
+// Sources, Eco v13.0.4: `Mods/__core__/Objects/TreeObject.cs` for the tree
+// gates; `Plant.Ripe` / `Plant.CalculateResourceYield` and
+// `PlantEntity.CanHarvest` for the crop gates.
 
 const HOURS_PER_MATURITY_DAY = 24
 const MS_PER_HOUR = 60 * 60 * 1000
 
-// Growth fraction at which a tree becomes harvestable (past the sapling stage).
-// Mirrors Eco's `TreeObject.SaplingGrowthPercent => 0.3f`.
-const TREE_HARVEST_GROWTH_PERCENT = 0.3
+// `TreeEntity.Ripe` gates purely on the sapling stage — a tree is harvestable
+// once past `TreeObject.SaplingGrowthPercent`, a constant 0.3 across species
+// and versions. Below it `TryKillSapling` returns nothing.
+const TREE_FIRST_YIELD_GROWTH = 0.3
+
+// `PlantEntity.CanHarvest`: a regrowing plant with no early-pick window has to
+// clear its post-harvest growth by this margin before it can be harvested again.
+const REGROW_HARVEST_MARGIN = 0.1
 
 // The subset of an Item's fields this module needs. Accepting a narrow shape
 // keeps the math easy to unit-test without constructing full store rows.
@@ -37,68 +44,154 @@ export interface CropGrowth {
   postHarvestingGrowth?: number
   pickableAtPercent?: number
   isTree?: boolean
+  // Yield range of the species' primary resource (its `ResourceList[0]`), which
+  // is what the ripeness gate reads. Both 0 when the dataset predates range
+  // extraction; see `firstYieldGrowth`.
+  primaryResourceMin?: number
+  primaryResourceMax?: number
+}
+
+// The two milestones for one growth cycle, plus the growth fractions they sit
+// at (the UI needs those to place a marker on the progress bar).
+export interface HarvestWindow {
+  firstYieldAt: Date
+  maxYieldAt: Date
+  firstYieldGrowth: number
+  cycleStartGrowth: number
 }
 
 export function isRegrowCrop(crop: CropGrowth): boolean {
   return (crop.postHarvestingGrowth ?? 0) > 0
 }
 
-// The growth fraction at which this plant is considered harvestable: trees at
-// the sapling threshold, food crops only when fully grown.
-function harvestGrowthFraction(crop: CropGrowth): number {
-  return crop.isTree ? TREE_HARVEST_GROWTH_PERCENT : 1
+// Where a cycle begins: 0 for a fresh planting, and the post-harvest growth for
+// a regrowing plant, which resumes partway up rather than from bare ground.
+export function cycleStartGrowth(crop: CropGrowth, hasRegrown: boolean): number {
+  return hasRegrown && isRegrowCrop(crop) ? (crop.postHarvestingGrowth ?? 0) : 0
 }
 
-// Real hours from planting to fully grown, accounting for the server growth
-// rate and whether this is a regrow cycle. Returns 0 for non-crop input.
-export function growthHours(
+// Eco's `Mathf.RoundPositively` — rounds .5 up rather than to even. Only ever
+// applied to non-negative values here.
+const roundHalfUp = (value: number) => Math.floor(value + 0.5)
+
+// `YieldPercent` is a second accumulator, separate from growth: it advances by
+// `envFactor * growthDelta`, where `envFactor` is the plant's habitability times
+// its worst soil nutrient — the "% match" the in-game Soil Sampler prints. On
+// harvest the game resets it to the post-harvest growth, which is why a regrown
+// crop out-yields a first-growth one in a poor location.
+function yieldPercentAt(
   crop: CropGrowth,
-  growthRateModifier: number,
+  growth: number,
+  envFactor: number,
   hasRegrown: boolean
 ): number {
-  const maturity = crop.maturityAgeDays ?? 0
-  if (maturity <= 0) return 0
-  const modifier = growthRateModifier > 0 ? growthRateModifier : 1
-  // Trees take the growth-rate modifier quadratically, food crops linearly.
-  const effectiveModifier = crop.isTree ? modifier * modifier : modifier
-  let hours = (maturity * HOURS_PER_MATURITY_DAY) / effectiveModifier
-  if (hasRegrown && isRegrowCrop(crop)) {
-    hours *= 1 - (crop.postHarvestingGrowth ?? 0)
+  const start = cycleStartGrowth(crop, hasRegrown)
+  return Math.min(1, start + envFactor * Math.max(0, growth - start))
+}
+
+// `Plant.CalculateResourceYield`. Non-decreasing in `growth`, so a crop's
+// maximum is always at growth 1.0.
+function cropYield(min: number, max: number, growth: number, yieldPercent: number): number {
+  return Math.floor((roundHalfUp((max - min) * yieldPercent) + min) * growth * growth)
+}
+
+// Smallest growth at which the primary resource yields at least one item.
+//
+// `cropYield` is non-decreasing in growth (both factors are non-negative and
+// non-decreasing), so a bisection lands on the exact crossing. That matters:
+// the thresholds are irrational for most species — 1/sqrt(2) for a 1-3 range,
+// 1/sqrt(3) for 1-4 — and a fixed scan grid would round them off.
+function solveYieldGate(
+  crop: CropGrowth,
+  min: number,
+  max: number,
+  envFactor: number,
+  hasRegrown: boolean
+): number {
+  const yieldsSomething = (growth: number) =>
+    cropYield(min, max, growth, yieldPercentAt(crop, growth, envFactor, hasRegrown)) >= 1
+  // A zero-width range (Pineapple's 1-1) only reaches 1 at full growth.
+  if (!yieldsSomething(1)) return 1
+  let lo = 0 // growth 0 always yields 0
+  let hi = 1
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2
+    if (yieldsSomething(mid)) hi = mid
+    else lo = mid
   }
-  return hours
+  return hi
 }
 
-// The harvestable moment — full maturity for food crops, but the 30% sapling
-// threshold for trees (see `TREE_HARVEST_GROWTH_PERCENT`). Returns null if the
-// input isn't a crop or `plantedAtIso` is missing/invalid.
-export function computeHarvestDate(
-  plantedAtIso: string,
-  crop: CropGrowth,
-  growthRateModifier: number,
-  hasRegrown: boolean
-): Date | null {
-  const plantedMs = Date.parse(plantedAtIso)
-  if (Number.isNaN(plantedMs)) return null
-  const hours = growthHours(crop, growthRateModifier, hasRegrown)
-  if (hours <= 0) return null
-  return new Date(plantedMs + hours * harvestGrowthFraction(crop) * MS_PER_HOUR)
-}
+// The earliest growth fraction at which harvesting this plant returns anything.
+//
+// `envFactor` is the environment match in [0, 1]; lower values push crop
+// thresholds later (a 1-2 crop moves 0.7071 -> 0.8333 at 0.6) and never affect
+// trees. It is plumbed through but not yet user-facing, so it defaults to the
+// optimistic case.
+export function firstYieldGrowth(crop: CropGrowth, envFactor = 1, hasRegrown = false): number {
+  // `TreeEntity.Ripe` overrides the crop rules outright: trees gate on the
+  // sapling stage and ignore both yield ranges and the environment.
+  if (crop.isTree) return TREE_FIRST_YIELD_GROWTH
 
-// The early-pickable moment. Null when the crop has no early-pick window
-// (`pickableAtPercent <= 0`) — those crops are only pickable when fully grown.
-export function computePickableDate(
-  plantedAtIso: string,
-  crop: CropGrowth,
-  growthRateModifier: number,
-  hasRegrown: boolean
-): Date | null {
+  const min = crop.primaryResourceMin ?? 0
+  const max = crop.primaryResourceMax ?? 0
+  // Datasets extracted before ranges were captured: report "fully grown" rather
+  // than inventing a threshold from data we do not have.
+  if (!(max > 0)) return 1
+
+  const yieldGate = solveYieldGate(crop, min, max, envFactor, hasRegrown)
+
+  // `PlantEntity.CanHarvest`. An early-pick window supersedes the regrow margin;
+  // plants with neither are gated on the yield alone.
   const pickAt = crop.pickableAtPercent ?? 0
-  if (pickAt <= 0) return null
+  const post = crop.postHarvestingGrowth ?? 0
+  const harvestGate = pickAt > 0 ? pickAt : post > 0 ? post + REGROW_HARVEST_MARGIN : 0
+
+  return Math.min(1, Math.max(yieldGate, harvestGate))
+}
+
+// Real hours to grow from one growth fraction to another. Every duration in
+// this module is a delta between two fractions — chaining multipliers instead
+// (`hours * postHarvest * pickableAt`) double-counts the regrow cycle.
+export function hoursBetweenGrowth(
+  crop: CropGrowth,
+  from: number,
+  to: number,
+  growthRateModifier: number
+): number {
+  const maturity = crop.maturityAgeDays ?? 0
+  if (!(maturity > 0)) return 0
+  const rate = growthRateModifier > 0 ? growthRateModifier : 1
+  return (Math.max(0, to - from) * maturity * HOURS_PER_MATURITY_DAY) / rate
+}
+
+// Both harvest milestones for a planting. Returns null if the input isn't a
+// crop or `plantedAtIso` is missing/invalid.
+export function computeHarvestWindow(
+  plantedAtIso: string,
+  crop: CropGrowth,
+  growthRateModifier: number,
+  options: { hasRegrown?: boolean; envFactor?: number } = {}
+): HarvestWindow | null {
   const plantedMs = Date.parse(plantedAtIso)
   if (Number.isNaN(plantedMs)) return null
-  const hours = growthHours(crop, growthRateModifier, hasRegrown)
-  if (hours <= 0) return null
-  return new Date(plantedMs + hours * pickAt * MS_PER_HOUR)
+  if (!((crop.maturityAgeDays ?? 0) > 0)) return null
+
+  const hasRegrown = options.hasRegrown ?? false
+  const envFactor = options.envFactor ?? 1
+  const start = cycleStartGrowth(crop, hasRegrown)
+  // A regrow cycle resumes mid-growth, so clamp to the cycle start: a threshold
+  // the plant is already past is reached immediately, not in negative time.
+  const first = Math.max(start, firstYieldGrowth(crop, envFactor, hasRegrown))
+  const dateAt = (growth: number) =>
+    new Date(plantedMs + hoursBetweenGrowth(crop, start, growth, growthRateModifier) * MS_PER_HOUR)
+
+  return {
+    firstYieldAt: dateAt(first),
+    maxYieldAt: dateAt(1),
+    firstYieldGrowth: first,
+    cycleStartGrowth: start,
+  }
 }
 
 // A compact "time remaining" string from `now` until `target`, showing the two
@@ -124,7 +217,7 @@ export function formatTimeUntil(target: Date, now: Date): string | null {
   return parts.slice(0, 2).join(' ')
 }
 
-// Growth progress in [0, 1] from planting to the fully-grown date.
+// Growth progress in [0, 1] from planting to the given target date.
 export function harvestProgress(plantedAt: Date, harvestDate: Date, now: Date): number {
   const total = harvestDate.getTime() - plantedAt.getTime()
   if (total <= 0) return 1

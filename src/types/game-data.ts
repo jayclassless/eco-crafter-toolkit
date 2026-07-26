@@ -44,6 +44,10 @@ export interface Item {
   maturityAgeDays?: number
   postHarvestingGrowth?: number // 0 = single harvest, 0.5 = regrows from 50%
   pickableAtPercent?: number
+  // Yield range of the species' primary resource; drives the first-yield gate.
+  // 0/0 means the dataset predates range extraction (see crop-growth.ts).
+  primaryResourceMin?: number
+  primaryResourceMax?: number
   seedItemId?: string // links to the seed item used to plant this crop
   isTree?: boolean // distinguishes trees from food crops for grouping
 }

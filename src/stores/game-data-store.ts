@@ -59,6 +59,10 @@ export function createGameDataStore() {
       maturityAgeDays: { type: 'number', default: 0 },
       postHarvestingGrowth: { type: 'number', default: 0 },
       pickableAtPercent: { type: 'number', default: 0 },
+      // Primary-resource yield range. The schema is flat, so this is two scalar
+      // columns rather than a nested object. Both 0 = range data unavailable.
+      primaryResourceMin: { type: 'number', default: 0 },
+      primaryResourceMax: { type: 'number', default: 0 },
       seedItemId: { type: 'string', default: '' },
       isTree: { type: 'boolean', default: false },
     },
