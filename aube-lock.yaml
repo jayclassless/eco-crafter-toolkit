@@ -57,8 +57,8 @@ importers:
         specifier: ^7.18.2
         version: 7.18.2(react@19.2.8)(react-dom@19.2.8(react@19.2.8))
       tinybase:
-        specifier: ^8.5.0
-        version: 8.5.0(react@19.2.8)(react-dom@19.2.8(react@19.2.8))(zod@4.4.3)
+        specifier: ^9.3.0
+        version: 9.3.0(react@19.2.8)(react-dom@19.2.8(react@19.2.8))(zod@4.4.3)
       uuid:
         specifier: ^14.0.1
         version: 14.0.1
@@ -2049,35 +2049,35 @@ packages:
   symbol-tree@3.2.4:
     resolution: {integrity: sha512-9QNk5KwDF+Bvz+PyObkmSYjI5ksVUYtjW7AU22r2NKcfLJcXp96hkDWU3+XndOsUb+AQ9QhfzfCT2O+CNWT5Tw==}
 
-  tinybase@8.5.0:
-    resolution: {integrity: sha512-4PSCmCVH2Eq5LK7vHI1h4HoVWDYwhwH+js6qS1wmgGoYxmSn16icGvHM4/GOOWGCRYwVJ46Ve3UbiDkFL+3O6Q==}
+  tinybase@9.3.0:
+    resolution: {integrity: sha512-jJxoeuL1PSFroVjUBJCTEceAktzhylRyu4xpwvwGtT3yzKY0VKtOeFgxDj/5xereDGtOxzhEoDZ5lqEkk08HdQ==}
     peerDependencies:
       '@automerge/automerge-repo': ^2.5.6
-      '@cloudflare/workers-types': ^4.20260621.1
-      '@electric-sql/pglite': ^0.5.3
+      '@cloudflare/workers-types': ^5.20260726.1
+      '@electric-sql/pglite': ^0.5.4
       '@libsql/client': ^0.17.4
-      '@powersync/common': ^1.55.0
-      '@sinclair/typebox': ^0.34.49
+      '@powersync/common': ^2.0.0
+      '@sinclair/typebox': ^0.34.52
       '@sqlite.org/sqlite-wasm': ^3.53.0-build1
       '@vlcn.io/crsqlite-wasm': ^0.16.0
-      arktype: ^2.2.1
+      arktype: ^2.2.3
       bun: ^1.3.14
-      effect: ^3.21.4
+      effect: ^3.22.0
       electric-sql: ^0.12.1
-      expo: ^56.0.12
-      expo-sqlite: ^56.0.5
+      expo: ^57.0.8
+      expo-sqlite: ^57.0.1
       partykit: ^0.0.115
-      partysocket: ^1.2.0
+      partysocket: ^1.3.0
       postgres: ^3.4.9
-      react: ^19.2.7
-      react-dom: ^19.2.7
-      react-native-mmkv: 4.3.1
+      react: ^19.2.8
+      react-dom: ^19.2.8
+      react-native-mmkv: 4.3.2
       react-native-sqlite-storage: ^6.0.1
-      solid-js: ^1.9.13
+      solid-js: ^1.9.14
       sqlite3: ^5.1.7
-      svelte: ^5.56.3
-      valibot: ^1.4.1
-      ws: ^8.21.0
+      svelte: ^5.56.8
+      valibot: ^1.4.2
+      ws: ^8.21.1
       yjs: ^13.6.31
       zod: ^4.4.3
     peerDependenciesMeta:
@@ -4255,7 +4255,7 @@ snapshots:
 
   symbol-tree@3.2.4: {}
 
-  tinybase@8.5.0(react@19.2.8)(react-dom@19.2.8(react@19.2.8))(zod@4.4.3):
+  tinybase@9.3.0(react@19.2.8)(react-dom@19.2.8(react@19.2.8))(zod@4.4.3):
     dependencies:
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
