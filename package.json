@@ -19,7 +19,7 @@
   },
   "devDependencies": {
     "@sentry/vite-plugin": "^5.4.0",
-    "@testing-library/jest-dom": "^6.10.0",
+    "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@types/adm-zip": "^0.5.8",
     "@types/node": "^25.9.5",
@@ -30,7 +30,7 @@
     "@vitest/coverage-v8": "^4.1.10",
     "adm-zip": "^0.5.18",
     "fake-indexeddb": "^6.2.5",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.1",
     "knip": "^6.29.0",
     "oxfmt": "^0.61.0",
     "oxlint": "^1.76.0",
