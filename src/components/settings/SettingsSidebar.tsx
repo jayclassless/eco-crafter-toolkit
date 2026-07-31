@@ -15,6 +15,8 @@ interface Props {
   onOpenRecipeCalculator?: () => void
   // Optional: omit in tools without a production planner.
   onOpenProductionPlanner?: () => void
+  // Optional: omit in tools without a gathering calculator.
+  onOpenGatheringCalculator?: () => void
   onOpenGameNews: () => void
   onOpenDatasets: () => void
   onOpenCustomEntities: () => void
@@ -28,6 +30,7 @@ export function SettingsSidebar({
   onHide,
   onOpenRecipeCalculator,
   onOpenProductionPlanner,
+  onOpenGatheringCalculator,
   onOpenGameNews,
   onOpenDatasets,
   onOpenCustomEntities,
@@ -70,6 +73,13 @@ export function SettingsSidebar({
       }
     : undefined
 
+  const handleSelectGatheringCalculator = onOpenGatheringCalculator
+    ? () => {
+        onHide()
+        onOpenGatheringCalculator()
+      }
+    : undefined
+
   const handleSelectGameNews = () => {
     onHide()
     onOpenGameNews()
@@ -96,6 +106,7 @@ export function SettingsSidebar({
         <SidebarMenuView
           onSelectRecipeCalculator={handleSelectRecipeCalculator}
           onSelectProductionPlanner={handleSelectProductionPlanner}
+          onSelectGatheringCalculator={handleSelectGatheringCalculator}
           onSelectGameNews={handleSelectGameNews}
           onSelectDatasets={handleSelectDatasets}
           onSelectCustomEntities={handleSelectCustomEntities}

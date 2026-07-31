@@ -57,6 +57,10 @@ interface GameDataIndexes {
    * components that render talent UIs. Avoids one `gameDataStore.getRow` per
    * talent on every SkillsPanel rebuild. */
   talentDetailsBySkillId: Map<string, TalentDetails[]>
+  /** Items the Gathering Calculator can price. Used by the Materials row
+   * action for an O(1) "does this row have a gathering estimate?" test, with
+   * no per-row store reads. Dataset-immutable, so it rides this cache. */
+  gatherableItemIds: Set<string>
 }
 
 const cache = new WeakMap<Store, GameDataIndexes>()
@@ -167,6 +171,26 @@ function buildItemIdsByTagId(store: Store): Map<string, string[]> {
   return map
 }
 
+/** Items with any gathering data, plus every log item a tree species yields.
+ * Mirrors the classification in `gathering-data.ts`; a rock whose block has no
+ * rubble is excluded there and here, since it can't be priced. */
+function buildGatherableItemIds(store: Store): Set<string> {
+  const out = new Set<string>()
+  for (const itemId of store.getRowIds('items')) {
+    const row = store.getRow('items', itemId)
+    const minable =
+      ((row.minableHardness as number) ?? 0) > 0 && ((row.rubbleItemsPerBlock as number) ?? 0) > 0
+    if (minable || row.requiresShovel === true || ((row.animalHealth as number) ?? 0) > 0) {
+      out.add(itemId)
+    }
+  }
+  for (const speciesId of store.getRowIds('treeSpecies')) {
+    const logItemId = store.getCell('treeSpecies', speciesId, 'logItemId') as string
+    if (logItemId) out.add(logItemId)
+  }
+  return out
+}
+
 function build(store: Store): GameDataIndexes {
   const recipeIndexes = buildRecipeIndexes(store)
   const productItemIdsByRecipeId = buildRecipeProductItemIds(store)
@@ -190,6 +214,7 @@ function build(store: Store): GameDataIndexes {
     talentsBySkillId: recipeIndexes.talentsBySkillId,
     bonusesByTalentId: recipeIndexes.bonusesByTalentId,
     talentDetailsBySkillId: buildTalentDetailsBySkillId(store),
+    gatherableItemIds: buildGatherableItemIds(store),
   }
 }
 

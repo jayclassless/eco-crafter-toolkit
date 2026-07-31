@@ -14,6 +14,8 @@ import type {
   Modifier,
   RecipeUnlock,
   LocalizedName,
+  GatheringTool,
+  TreeSpecies,
 } from '@/types/game-data'
 
 import { generateId } from './ids'
@@ -85,6 +87,27 @@ export function validateDatasetJson(data: unknown): ValidationResult {
     }
   }
 
+  // Gathering sections are optional (datasets extracted before gathering
+  // support omit them), but when present every cross-reference must resolve —
+  // a dangling one would silently drop the tool or species at import time.
+  for (const tool of typed.GatheringTools ?? []) {
+    if (!itemNames.has(tool.Name)) {
+      errors.push(`Gathering tool "${tool.Name}" is not an item in this dataset`)
+    }
+    if (tool.CalorieSkill && !skillNames.has(tool.CalorieSkill)) {
+      errors.push(
+        `Gathering tool "${tool.Name}" references non-existent skill "${tool.CalorieSkill}"`
+      )
+    }
+  }
+  for (const species of typed.TreeSpecies ?? []) {
+    if (!itemNames.has(species.LogItem)) {
+      errors.push(
+        `Tree species "${species.Name}" references non-existent log item "${species.LogItem}"`
+      )
+    }
+  }
+
   return { valid: errors.length === 0, errors }
 }
 
@@ -102,6 +125,8 @@ export interface ParsedDataset {
   recipeElements: RecipeElement[]
   modifiers: Modifier[]
   recipeUnlocks: RecipeUnlock[]
+  gatheringTools: GatheringTool[]
+  treeSpecies: TreeSpecies[]
   localizedNames: LocalizedName[]
 }
 
@@ -119,9 +144,12 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
   const recipeElements: RecipeElement[] = []
   const modifiers: Modifier[] = []
   const recipeUnlocks: RecipeUnlock[] = []
+  const gatheringTools: GatheringTool[] = []
+  const treeSpecies: TreeSpecies[] = []
   const localizedNames: LocalizedName[] = []
 
   const skillIdByName = new Map<string, string>()
+  const talentIdByName = new Map<string, string>()
   const itemIdByName = new Map<string, string>()
   const craftingTableIdByName = new Map<string, string>()
   const recipeIdByName = new Map<string, string>()
@@ -156,6 +184,7 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
 
     for (const t of s.Talents) {
       const talentId = generateId()
+      talentIdByName.set(t.Name, talentId)
       const bonuses = t.Bonuses ?? []
       let isLevelable = false
       let maxTalentLevel = 0
@@ -228,6 +257,22 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
       // under the 'plant' entity type so it doesn't shadow the item's own name.
       if (i.PlantName) addLocalizedNames(localizedNames, 'plant', itemId, i.PlantName)
     }
+    // Gathering data. Each block is independent — an item carries at most one,
+    // since the four gathering classes are disjoint.
+    if (i.MinableHardness != null) {
+      item.minableHardness = i.MinableHardness
+      item.rubbleItemsPerBlock = i.RubbleItemsPerBlock ?? 0
+      item.rubbleMaxItemsPerBlock = i.RubbleMaxItemsPerBlock ?? 0
+      item.rubbleExtraHitsPerBlock = i.RubbleExtraHitsPerBlock ?? 0
+    }
+    if (i.RequiresShovel) item.requiresShovel = true
+    if (i.AnimalHealth != null) {
+      item.animalHealth = i.AnimalHealth
+      // Stored under 'animal' so the species name (e.g. "Deer") doesn't shadow
+      // the carcass item's own name, mirroring how 'plant' is used for crops.
+      if (i.AnimalName) addLocalizedNames(localizedNames, 'animal', itemId, i.AnimalName)
+    }
+    if (i.ClothingCalorieRate != null) item.clothingCalorieRate = i.ClothingCalorieRate
     items.push(item)
     addLocalizedNames(localizedNames, 'item', itemId, i.LocalizedName)
 
@@ -424,6 +469,48 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
     }
   }
 
+  // Gathering tools. Skill and talent names are resolved to row ids here; an
+  // unresolvable name becomes '' rather than dropping the tool. That is the
+  // mechanism by which the abstract `ToolEfficiencyTalent` — which shovels and
+  // bows reference but which is never granted to any skill, so no talent row
+  // bears that name — correctly ends up as a no-op.
+  for (const gt of data.GatheringTools ?? []) {
+    const itemId = itemIdByName.get(gt.Name)
+    if (!itemId) continue
+    gatheringTools.push({
+      id: generateId(),
+      datasetId,
+      itemId,
+      kind: gt.Kind,
+      tier: gt.Tier,
+      baseCalories: gt.BaseCalories,
+      calorieSkillId: skillIdByName.get(gt.CalorieSkill) ?? '',
+      baseDamage: gt.BaseDamage,
+      damageUsesToolCurve: gt.DamageUsesToolCurve,
+      efficiencyTalentId: gt.EfficiencyTalent
+        ? (talentIdByName.get(gt.EfficiencyTalent) ?? '')
+        : '',
+      strengthTalentId: gt.StrengthTalent ? (talentIdByName.get(gt.StrengthTalent) ?? '') : '',
+      maxTake: gt.MaxTake ?? 0,
+    })
+  }
+
+  for (const ts of data.TreeSpecies ?? []) {
+    const logItemId = itemIdByName.get(ts.LogItem)
+    if (!logItemId) continue
+    const speciesId = generateId()
+    treeSpecies.push({
+      id: speciesId,
+      datasetId,
+      name: ts.Name,
+      logItemId,
+      treeHealth: ts.TreeHealth,
+      logsPerTreeMin: ts.LogsPerTreeMin,
+      logsPerTreeMax: ts.LogsPerTreeMax,
+    })
+    addLocalizedNames(localizedNames, 'treeSpecies', speciesId, ts.LocalizedName)
+  }
+
   return {
     skills,
     talents,
@@ -438,6 +525,8 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
     recipeElements,
     modifiers,
     recipeUnlocks,
+    gatheringTools,
+    treeSpecies,
     localizedNames,
   }
 }

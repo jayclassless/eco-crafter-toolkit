@@ -23,6 +23,8 @@ interface Props {
   /** When provided, the menu shows a "Price mode: {mode}" entry that opens
    * a sub-picker with the same radio list `PriceModeButton` uses. */
   priceMode?: PriceModeAction
+  /** Only set for rows whose item can be gathered from the world. */
+  onOpenGatheringCalculator?: () => void
 }
 
 // Vertical-ellipsis trigger that opens a popup menu with the row's
@@ -31,7 +33,11 @@ interface Props {
 //
 // Returns null when no actions apply, so callers can render this in a
 // dedicated column without padding rows that have nothing to offer.
-export const RowActionsMenu = memo(function RowActionsMenu({ onMoveToProducts, priceMode }: Props) {
+export const RowActionsMenu = memo(function RowActionsMenu({
+  onMoveToProducts,
+  priceMode,
+  onOpenGatheringCalculator,
+}: Props) {
   const { t } = useTranslation()
   const op = useRef<OverlayPanel>(null)
   const modeOp = useRef<OverlayPanel>(null)
@@ -39,7 +45,8 @@ export const RowActionsMenu = memo(function RowActionsMenu({ onMoveToProducts, p
 
   const hasMove = !!onMoveToProducts
   const hasMode = !!priceMode
-  if (!hasMove && !hasMode) return null
+  const hasGathering = !!onOpenGatheringCalculator
+  if (!hasMove && !hasMode && !hasGathering) return null
 
   return (
     <>
@@ -68,6 +75,20 @@ export const RowActionsMenu = memo(function RowActionsMenu({ onMoveToProducts, p
               pt={{ label: { className: 'text-left flex-1' } }}
               onClick={() => {
                 onMoveToProducts?.()
+                op.current?.hide()
+              }}
+            />
+          )}
+          {onOpenGatheringCalculator && (
+            <Button
+              label={t('priceCalculator.materials.gatheringCalculator')}
+              icon="pi pi-compass"
+              text
+              size="small"
+              className="w-full"
+              pt={{ label: { className: 'text-left flex-1' } }}
+              onClick={() => {
+                onOpenGatheringCalculator()
                 op.current?.hide()
               }}
             />

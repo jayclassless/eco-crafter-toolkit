@@ -14,6 +14,8 @@ interface Props {
   onSelectRecipeCalculator?: () => void
   // Calculator-specific; omitted in tools without a production planner.
   onSelectProductionPlanner?: () => void
+  // Optional: omit in tools without a gathering calculator.
+  onSelectGatheringCalculator?: () => void
   onSelectGameNews: () => void
   onSelectDatasets: () => void
   onSelectCustomEntities: () => void
@@ -58,6 +60,7 @@ function badgedTemplate(count: number, format: (n: number) => string) {
 export function SidebarMenuView({
   onSelectRecipeCalculator,
   onSelectProductionPlanner,
+  onSelectGatheringCalculator,
   onSelectGameNews,
   onSelectDatasets,
   onSelectCustomEntities,
@@ -85,6 +88,15 @@ export function SidebarMenuView({
             label: t('settings.menu.productionPlanner'),
             icon: 'pi pi-sitemap',
             command: onSelectProductionPlanner,
+          },
+        ]
+      : []),
+    ...(onSelectGatheringCalculator
+      ? [
+          {
+            label: t('settings.menu.gatheringCalculator'),
+            icon: 'pi pi-compass',
+            command: onSelectGatheringCalculator,
           },
         ]
       : []),

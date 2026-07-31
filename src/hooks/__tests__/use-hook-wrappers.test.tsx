@@ -109,6 +109,8 @@ describe('hook wrappers (provider-backed)', () => {
         recipeElements: [],
         modifiers: [],
         recipeUnlocks: [],
+        gatheringTools: [],
+        treeSpecies: [],
         localizedNames: [],
       },
       'X'

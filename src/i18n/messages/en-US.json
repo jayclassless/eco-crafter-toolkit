@@ -5,6 +5,7 @@
     "none": "None",
     "notApplicable": "N/A",
     "ok": "OK",
+    "close": "Close",
     "back": "Back",
     "clearSearch": "Clear Search",
     "missingIcon": "Missing Icon"
@@ -99,7 +100,8 @@
         "noComputedPrice": "—"
       },
       "calculatedFromTagTooltip": "Calculated based on the cost of the items in this tag",
-      "calculatedFromRecipeTooltip": "Calculated based on a Product recipe"
+      "calculatedFromRecipeTooltip": "Calculated based on a Product recipe",
+      "gatheringCalculator": "Estimate gathering cost…"
     },
     "products": {
       "title": "Products ({count})",
@@ -347,7 +349,8 @@
       "datasets": "Game Datasets",
       "customEntities": "Custom Recipes/Items",
       "uiSettings": "UI Settings",
-      "about": "About this App"
+      "about": "About this App",
+      "gatheringCalculator": "Gathering Calculator"
     },
     "adHocRecipeCalculator": {
       "title": "Ad-Hoc Recipe Calculator",
@@ -491,6 +494,67 @@
       "historyRetry": "Retry",
       "historyEmpty": "No releases yet.",
       "noNotes": "No release notes provided."
+    },
+    "gatheringCalculator": {
+      "title": "Gathering Calculator",
+      "pickTarget": "Search for a rock, log, excavatable or carcass…",
+      "kinds": {
+        "rock": "Rocks & Ores",
+        "excavatable": "Excavatables",
+        "log": "Logs",
+        "carcass": "Carcasses"
+      },
+      "tool": "Tool",
+      "noTool": "No tool available",
+      "clothing": "Clothing",
+      "noClothing": "None equipped",
+      "clothingMultiplier": "{percent}% calorie cost",
+      "talents": {
+        "efficiency": "Tool Efficiency",
+        "strength": "Tool Strength",
+        "empower": "Empower: Blacksmith",
+        "luckyBreak": "Lucky Break",
+        "deadeye": "Deadeye",
+        "arrowRecovery": "Arrow Recovery"
+      },
+      "rubblePickupCalories": "Calories per rubble pickup",
+      "logsPerTree": "Logs per tree",
+      "logsPerTreeRange": "A fully grown tree yields {max}; younger ones scale down toward {min}",
+      "hitRate": "Hit rate",
+      "headshot": "Aim for the head",
+      "arrowPrice": "Arrow price",
+      "perAction": "{calories} cal per action",
+      "damagePerHit": "{damage} damage per hit",
+      "lineHeader": "Step",
+      "costHeader": "Cost",
+      "lines": {
+        "break": "Break the block",
+        "split": "Split large rubble",
+        "pickup": "Pick up rubble",
+        "fell": "Fell the tree",
+        "slice": "Slice the trunk",
+        "dig": "Dig the block",
+        "shots": "Shots fired",
+        "arrows": "Arrows consumed"
+      },
+      "total": "Total per {source}",
+      "pricePerUnit": "{price} per {name}",
+      "apply": "Apply as price",
+      "applied": "Applied to {name}",
+      "needsInput": "Fill in the remaining assumptions to see an estimate.",
+      "noCalorieCost": "Calorie Cost is 0 in this build, so every gathering estimate is 0. Set it in Build Options.",
+      "noData": "This dataset has no gathering data. Update it from the Datasets dialog to use the calculator.",
+      "sources": {
+        "rock": "block",
+        "excavatable": "dig",
+        "log": "tree",
+        "carcass": "animal"
+      },
+      "yield": "{count} {name} per {source}",
+      "actionsHeader": "Actions / {source}",
+      "caloriesPerSourceHeader": "Cal / {source}",
+      "caloriesPerItemHeader": "Cal / {name}",
+      "species": "Species"
     }
   }
 }

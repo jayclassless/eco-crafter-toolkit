@@ -50,6 +50,45 @@ export interface Item {
   primaryResourceMax?: number
   seedItemId?: string // links to the seed item used to plant this crop
   isTree?: boolean // distinguishes trees from food crops for grouping
+  // Gathering data (see src/lib/gathering-calc.ts). Each block of fields is
+  // present only on items obtained that way; the four classes are disjoint.
+  minableHardness?: number // pickaxe: [Minable(N)] hardness of the source block
+  rubbleItemsPerBlock?: number // pickaxe: items yielded per block broken
+  rubbleMaxItemsPerBlock?: number // pickaxe: yield under MiningLuckyBreakTalent
+  rubbleExtraHitsPerBlock?: number // pickaxe: expected extra swings to split rubble
+  requiresShovel?: boolean // shovel: one block, one item, one swing
+  animalHealth?: number // bow: health of the species dropping this carcass
+  clothingCalorieRate?: number // clothing: UserStatType.CalorieRate, e.g. -0.3
+}
+
+/** A world-gathering tool. See `GatheringToolJson` for field semantics — the
+ * only difference is that names are resolved to row ids here, with `''` for a
+ * name that resolves to nothing (notably the abstract, never-granted
+ * `ToolEfficiencyTalent` that shovels and bows reference). */
+export interface GatheringTool {
+  id: string
+  datasetId: string
+  itemId: string
+  kind: string
+  tier: number
+  baseCalories: number
+  calorieSkillId: string
+  baseDamage: number
+  damageUsesToolCurve: boolean
+  efficiencyTalentId: string
+  strengthTalentId: string
+  maxTake: number
+}
+
+/** A tree species. Many-to-one with the log item it yields. */
+export interface TreeSpecies {
+  id: string
+  datasetId: string
+  name: string
+  logItemId: string
+  treeHealth: number
+  logsPerTreeMin: number
+  logsPerTreeMax: number
 }
 
 export interface ItemPart {

@@ -65,6 +65,51 @@ export function createGameDataStore() {
       primaryResourceMax: { type: 'number', default: 0 },
       seedItemId: { type: 'string', default: '' },
       isTree: { type: 'boolean', default: false },
+      // Gathering data, present only on items gathered from the world. The four
+      // classes are disjoint, so a single non-zero field identifies the kind:
+      // minableHardness -> rock, requiresShovel -> excavatable,
+      // animalHealth -> carcass. Logs are keyed off the `treeSpecies` table
+      // instead, since two species can yield the same log item.
+      minableHardness: { type: 'number', default: 0 },
+      rubbleItemsPerBlock: { type: 'number', default: 0 },
+      rubbleMaxItemsPerBlock: { type: 'number', default: 0 },
+      rubbleExtraHitsPerBlock: { type: 'number', default: 0 },
+      requiresShovel: { type: 'boolean', default: false },
+      animalHealth: { type: 'number', default: 0 },
+      // Clothing only: UserStatType.CalorieRate, a negative per-action modifier.
+      clothingCalorieRate: { type: 'number', default: 0 },
+    },
+    // World-gathering tools (pickaxe/shovel/axe/bow/drill). Talent and skill
+    // references are row ids, or '' when the name resolves to nothing — which
+    // is how the abstract, never-granted ToolEfficiencyTalent that shovels and
+    // bows name in their C# correctly becomes a no-op.
+    gatheringTools: {
+      id: { type: 'string' },
+      datasetId: { type: 'string' },
+      itemId: { type: 'string' },
+      kind: { type: 'string' },
+      tier: { type: 'number', default: 0 },
+      baseCalories: { type: 'number', default: 0 },
+      calorieSkillId: { type: 'string', default: '' },
+      baseDamage: { type: 'number', default: 0 },
+      // True when the C# used CreateDamageValue(), so ToolItem's damage curve
+      // applies. False for ConstantValue() — pickaxes get no level scaling.
+      damageUsesToolCurve: { type: 'boolean', default: false },
+      efficiencyTalentId: { type: 'string', default: '' },
+      strengthTalentId: { type: 'string', default: '' },
+      maxTake: { type: 'number', default: 0 },
+    },
+    // Tree species. Deliberately not flattened onto the log item: Redwood and
+    // Old-Growth Redwood both yield RedwoodLogItem with very different health
+    // and log counts, so a flat column would silently drop one of them.
+    treeSpecies: {
+      id: { type: 'string' },
+      datasetId: { type: 'string' },
+      name: { type: 'string' },
+      logItemId: { type: 'string' },
+      treeHealth: { type: 'number', default: 0 },
+      logsPerTreeMin: { type: 'number', default: 0 },
+      logsPerTreeMax: { type: 'number', default: 0 },
     },
     itemParts: {
       id: { type: 'string' },

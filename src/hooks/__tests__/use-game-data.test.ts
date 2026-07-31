@@ -24,6 +24,8 @@ const emptyParsed = (): ParsedDataset => ({
   recipeElements: [],
   modifiers: [],
   recipeUnlocks: [],
+  gatheringTools: [],
+  treeSpecies: [],
   localizedNames: [],
 })
 

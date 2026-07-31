@@ -35,6 +35,7 @@ import { validateDatasetJson } from '../src/lib/import-dataset'
 import type {
   DatasetJson,
   ElementJson,
+  GatheringToolJson,
   ItemJson,
   LocalizedNames,
   ModifierJson,
@@ -44,6 +45,7 @@ import type {
   TalentBonusJson,
   TalentBonusScopeJson,
   TalentJson,
+  TreeSpeciesJson,
   DynamicValueJson,
 } from '../src/types/dataset-json'
 
@@ -198,6 +200,16 @@ interface RawItem {
   seedItemName?: string
   plantDisplay?: string // in-world species name, e.g. "Oak" (vs the item's "Oak Log")
   isTree?: boolean
+  // Gathering data, merged after pass 1 from the block / species that yields
+  // this item. See the "Merge gathering data" block in main().
+  minableHardness?: number
+  rubbleItemsPerBlock?: number
+  rubbleMaxItemsPerBlock?: number
+  rubbleExtraHitsPerBlock?: number
+  requiresShovel?: boolean
+  animalHealth?: number
+  animalDisplay?: string // in-world species name, e.g. "Deer" (vs "Deer Carcass")
+  clothingCalorieRate?: number
 }
 interface RawTagDef {
   name: string
@@ -253,6 +265,9 @@ const bonusesByTalentName = new Map<string, RawBonus[]>()
 // so we stash each species' ResourceList item names and growth values and
 // resolve the crop item after pass 1.
 interface RawPlant {
+  /** The species class stem, e.g. 'Oak' from `OakSpecies`. Joins to the health
+   * values in Organisms/Tree/<X>.cs, which live in a different file. */
+  speciesName: string
   displayName: string // the species' in-world name, e.g. "Oak", "Bolete Mushroom"
   // ResourceList entries in declaration order; index 0 is the species' primary
   // resource, whose Range drives the ripeness gate (Species.ResourceRange).
@@ -263,6 +278,55 @@ interface RawPlant {
   pickableAtPercent: number
 }
 const rawPlants: RawPlant[] = []
+
+// ---- Gathering raw state ---------------------------------------------------
+
+/** A world-gathering tool parsed from AutoGen/Tool/*.cs. */
+interface RawGatheringTool {
+  name: string
+  kind: string
+  tier: number
+  baseCalories: number
+  calorieSkill: string
+  baseDamage: number
+  /** True when the C# used CreateDamageValue() rather than ConstantValue(),
+   * meaning ToolItem's damage curve scales it with the skill's level. */
+  damageUsesToolCurve: boolean
+  efficiencyTalent?: string
+  strengthTalent?: string
+  maxTake?: number
+}
+const rawTools: RawGatheringTool[] = []
+
+/** Rubble yield of one minable block, derived from its BecomesRubble graph. */
+interface RawRubble {
+  itemName: string
+  itemsPerBlock: number
+  maxItemsPerBlock: number
+  extraHitsPerBlock: number
+}
+/** Keyed by block class name, e.g. 'GraniteBlock'. */
+const rawRubble = new Map<string, RawRubble>()
+
+/** `[Minable(N)]` hardness, keyed by block class name. */
+const rawMinables = new Map<string, number>()
+/** `RepresentedItemType`, mapping a block class name to its item class name. */
+const blockToItem = new Map<string, string>()
+
+/** An AnimalSpecies. Its ResourceList[0] is the carcass it drops. */
+interface RawAnimal {
+  displayName: string
+  health: number
+  resources: { name: string; min: number; max: number }[]
+}
+const rawAnimals: RawAnimal[] = []
+
+/** Trunk health from Organisms/Tree/<X>.cs, keyed by species stem ('Oak').
+ * LogHealth is deliberately ignored — nothing in the game reads it. */
+interface RawTreeHealth {
+  treeHealth: number
+}
+const rawTreeHealth = new Map<string, RawTreeHealth>()
 
 // Used to deduplicate stub items
 function ensureItem(name: string, display?: string): RawItem {
@@ -573,6 +637,7 @@ function parsePlantFile(src: string) {
     if (!(maturity > 0)) continue
 
     rawPlants.push({
+      speciesName: m[1],
       displayName,
       resources,
       isTree,
@@ -580,6 +645,230 @@ function parsePlantFile(src: string) {
       postHarvestingGrowth: Number.isNaN(postHarvest) ? 0 : postHarvest,
       pickableAtPercent: Number.isNaN(pickable) ? 0 : pickable,
     })
+  }
+}
+
+// ---- Gathering parsers ------------------------------------------------------
+
+/** Pairs each class declaration in `src` with the attribute text immediately
+ * preceding it. Rubble files pack attributes and declarations onto shared
+ * lines, so the backward line-walk used by parseItemAndRecipeFile doesn't fit;
+ * slicing between consecutive declarations does. */
+function classesWithAttributes(src: string): { name: string; base: string; attrs: string }[] {
+  const re = /public\s+(?:partial\s+)?class\s+(\w+)\s*:\s*([^\s{]+)/g
+  const out: { name: string; base: string; attrs: string }[] = []
+  let prevEnd = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(src))) {
+    out.push({ name: m[1], base: m[2], attrs: src.slice(prevEnd, m.index) })
+    prevEnd = re.lastIndex
+  }
+  return out
+}
+
+/** Every `[BecomesRubble(typeof(A), typeof(B), ...)]` in `attrs`, as one entry
+ * per attribute (a block declares one per alternative spawn set). */
+function parseBecomesRubble(attrs: string): string[][] {
+  const out: string[][] = []
+  const re = /\[BecomesRubble\(([^\]]*?)\)\]/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(attrs))) {
+    const names = [...m[1].matchAll(/typeof\((\w+)\)/g)].map((x) => x[1])
+    if (names.length > 0) out.push(names)
+  }
+  return out
+}
+
+/**
+ * AutoGen/Rubble/<X>.cs. A minable block declares several alternative
+ * `[BecomesRubble(...)]` sets; a chunk tagged MinableRubble carries its own
+ * BecomesRubble and needs one extra pickaxe swing to split into pickupables.
+ *
+ * Counting the graph rather than hardcoding matters: v11 ships 11 rubble
+ * materials against 12 Minable blocks (SlagBlock has no rubble file at all and
+ * therefore yields nothing).
+ */
+function parseRubbleFile(src: string) {
+  const classes = classesWithAttributes(src)
+  if (classes.length === 0) return
+
+  const childrenOf = new Map<string, string[][]>()
+  let itemName = ''
+  let blockName = ''
+  for (const c of classes) {
+    const sets = parseBecomesRubble(c.attrs)
+    if (sets.length > 0) childrenOf.set(c.name, sets)
+    if (c.base === 'Block') blockName = c.name
+    const rubbleOf = /^RubbleObject<(\w+)>$/.exec(c.base)
+    if (rubbleOf && !itemName) itemName = rubbleOf[1]
+  }
+  if (!blockName || !itemName) return
+  const rootSets = childrenOf.get(blockName)
+  if (!rootSets || rootSets.length === 0) return
+
+  // A node with its own BecomesRubble is breakable: it costs one extra swing
+  // and resolves to its children. Anything else is a single pickupable item.
+  const walk = (node: string): { leaves: number; breaks: number } => {
+    const sets = childrenOf.get(node)
+    if (!sets || sets.length === 0) return { leaves: 1, breaks: 0 }
+    let leaves = 0
+    let breaks = 1
+    for (const child of sets[0]) {
+      const sub = walk(child)
+      leaves += sub.leaves
+      breaks += sub.breaks
+    }
+    return { leaves, breaks }
+  }
+
+  let totalLeaves = 0
+  let totalBreaks = 0
+  let maxLeaves = 0
+  for (const set of rootSets) {
+    let leaves = 0
+    let breaks = 0
+    for (const child of set) {
+      const sub = walk(child)
+      leaves += sub.leaves
+      breaks += sub.breaks
+    }
+    totalLeaves += leaves
+    totalBreaks += breaks
+    if (leaves > maxLeaves) maxLeaves = leaves
+  }
+
+  rawRubble.set(blockName, {
+    itemName,
+    itemsPerBlock: totalLeaves / rootSets.length,
+    maxItemsPerBlock: maxLeaves,
+    extraHitsPerBlock: totalBreaks / rootSets.length,
+  })
+}
+
+/**
+ * AutoGen/Tool/<X>.cs. The generated `private static IDynamicValue` block is
+ * one statement per line, so each assignment can be read in isolation.
+ *
+ * `EfficiencyTalent`/`StrengthTalent` are recorded by name and resolved at
+ * import time; the abstract `ToolEfficiencyTalent` that shovels, hammers and
+ * bows reference is never granted to any skill, so it resolves to nothing and
+ * becomes a no-op without needing a special case here.
+ */
+function parseToolFile(src: string) {
+  // Drills are deliberately excluded: DrillItem only prospects (surveys what
+  // is underground) and never breaks a block, so it has no damage value.
+  const classRe = /public\s+partial\s+class\s+(\w+Item)\s*:\s*(Pickaxe|Shovel|Axe|Bow)Item\b/g
+  let m: RegExpExecArray | null
+  while ((m = classRe.exec(src))) {
+    const name = m[1]
+    const kind = m[2]
+    const open = src.indexOf('{', classRe.lastIndex)
+    if (open < 0) continue
+    const end = matchBrace(src, open)
+    if (end < 0) continue
+    const body = src.slice(open, end)
+
+    const stmt = (field: string): string =>
+      new RegExp(`\\b${field}\\s*=([^;]*);`).exec(body)?.[1] ?? ''
+
+    const calStmt = stmt('caloriesBurn')
+    const cal = /CreateCalorieValue\(\s*(-?[\d.]+f?)\s*,\s*typeof\((\w+)\)/.exec(calStmt)
+    if (!cal) continue // a tool with no calorie cost isn't a gathering tool
+
+    const dmgStmt = stmt('damage')
+    const dmgCurve = /CreateDamageValue\(\s*(-?[\d.]+f?)\s*,\s*typeof\((\w+)\)/.exec(dmgStmt)
+    const dmgConst = /new\s+ConstantValue\(\s*(-?[\d.]+f?)\s*\)/.exec(dmgStmt)
+
+    // The strength talent is summed into damage/perkDamage with an explicit
+    // base of 0; the efficiency talent multiplies calories with a base of 1.
+    const strengthTalent =
+      /TalentModifiedValue\(typeof\(\w+\),\s*typeof\((\w+Talent)\)\s*,\s*0\s*\)/.exec(
+        dmgStmt + stmt('perkDamage')
+      )?.[1]
+    const efficiencyTalent =
+      /TalentModifiedValue\(typeof\(\w+\),\s*typeof\((\w+Talent)\)\s*\)/.exec(calStmt)?.[1]
+
+    const maxTake = /MaxTake\s*=>\s*(\d+)/.exec(body)?.[1]
+
+    rawTools.push({
+      name,
+      kind,
+      tier: parseFloatLit(
+        /\btier\s*=\s*new\s+ConstantValue\(\s*(-?[\d.]+f?)\s*\)/.exec(body)?.[1] ?? '0'
+      ),
+      baseCalories: parseFloatLit(cal[1]),
+      calorieSkill: cal[2],
+      baseDamage: parseFloatLit(dmgCurve?.[1] ?? dmgConst?.[1] ?? '0'),
+      damageUsesToolCurve: dmgCurve != null,
+      efficiencyTalent,
+      strengthTalent,
+      maxTake: maxTake ? Number(maxTake) : undefined,
+    })
+  }
+}
+
+/** AutoGen/Clothing/<X>.cs — the `UserStatType.CalorieRate` flat stat, a
+ * negative per-action calorie modifier (e.g. -0.3 for Builder Boots). */
+function parseClothingFile(src: string) {
+  const classRe = /public\s+partial\s+class\s+(\w+Item)\s*:\s*\n?\s*ClothingItem\b/g
+  let m: RegExpExecArray | null
+  while ((m = classRe.exec(src))) {
+    const open = src.indexOf('{', classRe.lastIndex)
+    if (open < 0) continue
+    const end = matchBrace(src, open)
+    if (end < 0) continue
+    const rate = /UserStatType\.CalorieRate\s*,\s*(-?[\d.]+f?)/.exec(src.slice(open, end))
+    if (!rate) continue
+    const value = parseFloatLit(rate[1])
+    if (Number.isNaN(value) || value === 0) continue
+    ensureItem(m[1]).clothingCalorieRate = value
+  }
+}
+
+/** AutoGen/Animal/<X>.cs — `AnimalSpecies.Health` plus the carcass it drops. */
+function parseAnimalFile(src: string) {
+  const classRe = /public\s+(?:partial\s+)?class\s+(\w+)Species\s*:\s*AnimalSpecies\b/g
+  let m: RegExpExecArray | null
+  while ((m = classRe.exec(src))) {
+    const open = src.indexOf('{', m.index)
+    if (open < 0) continue
+    const end = matchBrace(src, open)
+    if (end < 0) continue
+    const block = src.slice(open, end)
+
+    const health = parseFloatLit(/this\.Health\s*=\s*(-?[\d.]+f?)/.exec(block)?.[1] ?? '')
+    if (!(health > 0)) continue
+    const displayName = /DisplayName\s*=\s*Localizer\.DoStr\("([^"]+)"\)/.exec(block)?.[1]
+    if (!displayName) continue
+
+    const rlStart = block.search(/ResourceList\s*=\s*new\s+List<SpeciesResource>\s*\(\)/)
+    if (rlStart < 0) continue
+    const rlOpen = block.indexOf('{', rlStart)
+    if (rlOpen < 0) continue
+    const rlEnd = matchBrace(block, rlOpen)
+    if (rlEnd < 0) continue
+    const resources = extractSpeciesResources(block.slice(rlOpen, rlEnd))
+    if (resources.length === 0) continue
+
+    rawAnimals.push({ displayName, health, resources })
+  }
+}
+
+/** Organisms/Tree/<X>.cs — `TreeHealth`, the trunk hit points that set how many
+ * swings it takes to fell the tree. Lives outside AutoGen and is keyed by
+ * species stem, joining to the ResourceList parsed from AutoGen/Plant/<X>.cs. */
+function parseTreeHealthFile(src: string) {
+  const classRe = /public\s+partial\s+class\s+(\w+)Species\s*:\s*TreeSpecies\b/g
+  let m: RegExpExecArray | null
+  while ((m = classRe.exec(src))) {
+    const open = src.indexOf('{', classRe.lastIndex)
+    if (open < 0) continue
+    const end = matchBrace(src, open)
+    if (end < 0) continue
+    const block = src.slice(open, end)
+    const treeHealth = parseFloatLit(/this\.TreeHealth\s*=\s*(-?[\d.]+f?)/.exec(block)?.[1] ?? '')
+    if (!(treeHealth > 0)) continue
+    rawTreeHealth.set(m[1], { treeHealth })
   }
 }
 
@@ -739,6 +1028,23 @@ function parseItemAndRecipeFile(src: string) {
     while ((tm = tagRe.exec(attrs))) {
       if (!it.tags.includes(tm[1])) it.tags.push(tm[1])
     }
+
+    // Gathering attributes. `[Minable(N)]` sits on the *block* class, so stash
+    // it by block name and record the block's RepresentedItemType; the two are
+    // joined to the item after pass 1 (the item may be declared elsewhere).
+    // `[RequiresTool(typeof(ShovelItem))]` is the only RequiresTool usage in
+    // the game and marks everything dug with a shovel.
+    // Written as a combined attribute — `[Solid, Wall, Cliff, Minable(3)]` —
+    // so this must not anchor on the enclosing brackets.
+    const minable = /\bMinable\((\d+)\)/.exec(attrs)
+    if (minable) {
+      rawMinables.set(name, Number(minable[1]))
+      const represented = /RepresentedItemType\s*\{[^}]*typeof\((\w+Item)\)/.exec(
+        src.slice(m.index, m.index + 2000)
+      )
+      if (represented) blockToItem.set(name, represented[1])
+    }
+    if (/\[RequiresTool\(typeof\(ShovelItem\)\)\]/.test(attrs)) it.requiresShovel = true
 
     // Crafting table plugin module detection from [AllowPluginModules] attribute.
     // The attribute can appear on *Object classes (checked via attrs or nearby source)
@@ -1207,6 +1513,12 @@ async function main() {
     if (file.includes(`${path.sep}Tech${path.sep}`)) parseSkillFile(src)
     if (file.includes(`${path.sep}Benefit${path.sep}`)) parseTalentFile(src)
     if (file.includes(`${path.sep}Plant${path.sep}`)) parsePlantFile(src)
+    if (file.includes(`${path.sep}Animal${path.sep}`)) parseAnimalFile(src)
+    // `Tool` (singular) is AutoGen/Tool/; the handwritten base classes live in
+    // __core__/Tools/ (plural) and are deliberately not matched here.
+    if (file.includes(`${path.sep}Tool${path.sep}`)) parseToolFile(src)
+    if (file.includes(`${path.sep}Clothing${path.sep}`)) parseClothingFile(src)
+    if (file.includes(`${path.sep}Rubble${path.sep}`)) parseRubbleFile(src)
     parseItemAndRecipeFile(src)
     // Variants are `class <X>Recipe : Recipe` with AddTagProduct(...). They
     // can live in any AutoGen subtree (Recipe/, Block/, Item/, WorldObject/);
@@ -1284,6 +1596,90 @@ async function main() {
       `[extract] parsed ${benefitsFiles.length} bonus files; ${bonusesByTalentName.size} talents carry bonuses`
     )
   }
+
+  // Pass 1d: tree health lives outside AutoGen in __core__/Organisms/Tree.
+  // Walked on its own rather than added to `handwrittenDirs` so these files
+  // don't also flow through parseItemAndRecipeFile — widening that walk risks
+  // surfacing new item classes and breaking the `--compare` zero-delta gate.
+  const treeDir = path.join(coreRoot, 'Organisms', 'Tree')
+  const treeFiles = await walk(treeDir).catch(() => [] as string[])
+  for (const file of treeFiles) {
+    parseTreeHealthFile(await fs.readFile(file, 'utf8'))
+  }
+
+  // Merge gathering data onto the item each source yields. Mirrors the crop
+  // merge above: species- and block-level facts are resolved to the item only
+  // once every file has been read.
+  let rockCount = 0
+  const rubbleless: string[] = []
+  for (const [blockName, hardness] of rawMinables) {
+    const rubble = rawRubble.get(blockName)
+    const itemName = blockToItem.get(blockName) ?? rubble?.itemName
+    if (!itemName) continue
+    // A block with no rubble graph (v11's SlagBlock) yields nothing at all —
+    // emitting it would give the calculator a zero-yield divisor.
+    if (!rubble || rubble.itemsPerBlock <= 0) {
+      rubbleless.push(blockName)
+      continue
+    }
+    const item = ensureItem(itemName)
+    item.minableHardness = hardness
+    item.rubbleItemsPerBlock = rubble.itemsPerBlock
+    item.rubbleMaxItemsPerBlock = rubble.maxItemsPerBlock
+    item.rubbleExtraHitsPerBlock = rubble.extraHitsPerBlock
+    rockCount++
+  }
+  console.log(`[extract] merged rubble yield onto ${rockCount} minable item(s)`)
+  if (rubbleless.length > 0) {
+    console.warn(
+      `[extract] ${rubbleless.length} minable block(s) have no rubble and were skipped: ${rubbleless.join(', ')}`
+    )
+  }
+
+  // Carcasses. Restricted to drops named *CarcassItem, which excludes fish
+  // (they drop BassItem etc.) and Tortoise (drops RawMeatItem directly, and
+  // would otherwise stamp animal health onto the shared raw-meat item).
+  let carcassCount = 0
+  for (const animal of rawAnimals) {
+    const drop = animal.resources[0]
+    if (!drop || !drop.name.endsWith('CarcassItem')) continue
+    const item = ensureItem(drop.name)
+    item.animalHealth = animal.health
+    item.animalDisplay = animal.displayName
+    carcassCount++
+  }
+  console.log(`[extract] merged animal health onto ${carcassCount} carcass item(s)`)
+
+  // Tree species. Emitted as their own section rather than flattened onto the
+  // log item, because the mapping is many-to-one: Redwood and Old-Growth
+  // Redwood both yield RedwoodLogItem with very different health and yields.
+  // Localization happens in the emit section below, once the translations zip
+  // has been read, so this pass keeps the raw en-US display name.
+  const resolvedTreeSpecies: {
+    name: string
+    displayName: string
+    logItem: string
+    treeHealth: number
+    min: number
+    max: number
+  }[] = []
+  for (const plant of rawPlants) {
+    if (!plant.isTree) continue
+    const health = rawTreeHealth.get(plant.speciesName)
+    if (!health) continue
+    const log = plant.resources.find((r) => items.get(r.name)?.tags.includes('Wood'))
+    if (!log) continue
+    resolvedTreeSpecies.push({
+      name: plant.speciesName,
+      displayName: plant.displayName,
+      logItem: log.name,
+      treeHealth: health.treeHealth,
+      min: log.min,
+      max: log.max,
+    })
+  }
+  resolvedTreeSpecies.sort((a, b) => a.name.localeCompare(b.name))
+  console.log(`[extract] resolved ${resolvedTreeSpecies.length} tree species`)
 
   // Tag definitions
   try {
@@ -1523,11 +1919,16 @@ async function main() {
     return out
   }
 
+  // Talents that actually reach a skill. `talentByName` also holds abstract
+  // bases like ToolEfficiencyTalent, which belong to no talent group and are
+  // never granted — gathering tools must not reference those.
+  const emittedTalentNames = new Set<string>()
   for (const tg of talentGroups) {
     if (!tg.owningSkill) continue
     const skill = skillByName.get(tg.owningSkill)
     if (!skill) continue
     for (const tn of tg.talents) {
+      emittedTalentNames.add(tn)
       const t = talentByName.get(tn)
       const bonuses = resolveBonuses(tn)
       const tj: TalentJson = {
@@ -1603,8 +2004,21 @@ async function main() {
       if (it.plantDisplay) j.PlantName = mergeLocalized(it.plantDisplay, translations)
       if (it.isTree) j.IsTree = true
     }
+    if (it.minableHardness != null) {
+      j.MinableHardness = it.minableHardness
+      j.RubbleItemsPerBlock = it.rubbleItemsPerBlock ?? 0
+      j.RubbleMaxItemsPerBlock = it.rubbleMaxItemsPerBlock ?? 0
+      j.RubbleExtraHitsPerBlock = it.rubbleExtraHitsPerBlock ?? 0
+    }
+    if (it.requiresShovel) j.RequiresShovel = true
+    if (it.animalHealth != null) {
+      j.AnimalHealth = it.animalHealth
+      if (it.animalDisplay) j.AnimalName = mergeLocalized(it.animalDisplay, translations)
+    }
+    if (it.clothingCalorieRate != null) j.ClothingCalorieRate = it.clothingCalorieRate
     itemJsons.push(j)
   }
+  const keptItemNames = new Set(itemJsons.map((j) => j.Name))
 
   // 3e) Tags — merge TagDefinitions + any tag referenced via [Tag(...)] or recipe ingredients
   const allTagNames = new Set<string>()
@@ -1635,12 +2049,55 @@ async function main() {
     LocalizedName: mergeLocalized(r.LocalizedName['en-US'] ?? r.FamilyName, translations),
   }))
 
+  // 3g) Gathering sections. Both cross-reference `Items` by name, and the item
+  // emit above drops unreferenced entries, so filter to what actually shipped —
+  // validateDatasetJson rejects a dangling reference.
+  const gatheringToolJsons: GatheringToolJson[] = rawTools
+    .filter((t) => keptItemNames.has(t.name))
+    .map((t) => {
+      const j: GatheringToolJson = {
+        Name: t.name,
+        LocalizedName: mergeLocalized(items.get(t.name)?.display ?? t.name, translations),
+        Kind: t.kind,
+        Tier: t.tier,
+        BaseCalories: t.baseCalories,
+        CalorieSkill: t.calorieSkill,
+        BaseDamage: t.baseDamage,
+        DamageUsesToolCurve: t.damageUsesToolCurve,
+      }
+      // A talent name with no talent behind it (the abstract ToolEfficiencyTalent
+      // that shovels, hammers and bows reference) is dropped here rather than
+      // shipped as a reference that can never resolve.
+      if (t.efficiencyTalent && emittedTalentNames.has(t.efficiencyTalent)) {
+        j.EfficiencyTalent = t.efficiencyTalent
+      }
+      if (t.strengthTalent && emittedTalentNames.has(t.strengthTalent)) {
+        j.StrengthTalent = t.strengthTalent
+      }
+      if (t.maxTake != null) j.MaxTake = t.maxTake
+      return j
+    })
+    .sort((a, b) => a.Name.localeCompare(b.Name))
+
+  const treeSpeciesJsons: TreeSpeciesJson[] = resolvedTreeSpecies
+    .filter((s) => keptItemNames.has(s.logItem))
+    .map((s) => ({
+      Name: s.name,
+      LocalizedName: mergeLocalized(s.displayName, translations),
+      LogItem: s.logItem,
+      TreeHealth: s.treeHealth,
+      LogsPerTreeMin: s.min,
+      LogsPerTreeMax: s.max,
+    }))
+
   const dataset: DatasetJson = {
     Version: args.version,
     Skills: [...skillByName.values()].sort((a, b) => a.Name.localeCompare(b.Name)),
     Items: itemJsons,
     Tags: tagJsons.sort((a, b) => a.Name.localeCompare(b.Name)),
     Recipes: recipeJsons.sort((a, b) => a.Name.localeCompare(b.Name)),
+    GatheringTools: gatheringToolJsons,
+    TreeSpecies: treeSpeciesJsons,
   }
 
   const validation = validateDatasetJson(dataset)

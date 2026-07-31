@@ -2,6 +2,8 @@
 
 ## 0.7.0 (TBD)
 
+- Added a calculator for gatherable resources like rocks, logs, animals,
+  and excavatables.
 - Another attempt at fixing the calculations in the Crop Tracker.
 
 ## 0.6.0 (2026-07-19)

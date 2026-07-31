@@ -38,6 +38,8 @@ interface Props {
   buildId: string
   datasetId: string
   priceSignal: PriceSignal
+  /** Opens the Gathering Calculator with this row's item preselected. */
+  onOpenGatheringCalculator: (itemOrTagId: string) => void
 }
 
 // Tables this panel's view-model depends on. Typing into the local search
@@ -65,7 +67,7 @@ function groupsEqual(a: MaterialGroup[], b: MaterialGroup[]): boolean {
   return arrayEquals(a, b, groupEquals)
 }
 
-function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
+function MaterialsImpl({ buildId, datasetId, priceSignal, onOpenGatheringCalculator }: Props) {
   const { t } = useTranslation()
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
@@ -81,6 +83,13 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
   // to that one cell so the view-model rebuilds on toggle.
   const isOverrideRev = useCellInTableRevision(buildStore, 'userPrices', 'isOverride')
   const gameRev = useStoreRevision(gameDataStore, GAME_TABLES)
+
+  // Dataset-immutable, so it only needs recomputing when the game data does.
+  const gatherableItemIds = useMemo(
+    () => getGameDataIndexes(gameDataStore).gatherableItemIds,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [gameDataStore, gameRev]
+  )
 
   const rawAllGroups = useMemo<MaterialGroup[]>(
     () => {
@@ -350,9 +359,20 @@ function MaterialsImpl({ buildId, datasetId, priceSignal }: Props) {
               onSelect: onSelectMode,
             }
           : undefined
-      return <RowActionsMenu onMoveToProducts={moveToProducts} priceMode={priceMode} />
+      // O(1) membership test against a dataset-immutable, cached index — no
+      // per-row store reads.
+      const openGathering = gatherableItemIds.has(row.itemOrTagId)
+        ? () => onOpenGatheringCalculator(row.itemOrTagId)
+        : undefined
+      return (
+        <RowActionsMenu
+          onMoveToProducts={moveToProducts}
+          priceMode={priceMode}
+          onOpenGatheringCalculator={openGathering}
+        />
+      )
     },
-    [buildStore, onMoveToProducts, onSelectMode]
+    [buildStore, onMoveToProducts, onSelectMode, gatherableItemIds, onOpenGatheringCalculator]
   )
 
   const priceTemplate = useCallback(

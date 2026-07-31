@@ -19,6 +19,7 @@ import { useStores } from '@/stores/providers'
 
 import { ConfigPanel } from './build-options/ConfigPanel'
 import { ConfigPanelDrawer } from './build-options/ConfigPanelDrawer'
+import { GatheringCalculatorDialog } from './gathering-calculator/GatheringCalculatorDialog'
 import { Materials } from './materials/Materials'
 import { Products } from './products/Products'
 
@@ -46,8 +47,18 @@ export function PriceCalculator() {
   const [aboutVisible, setAboutVisible] = useState(false)
   const [recipeCalculatorVisible, setRecipeCalculatorVisible] = useState(false)
   const [productionPlannerVisible, setProductionPlannerVisible] = useState(false)
+  const [gatheringVisible, setGatheringVisible] = useState(false)
+  // Set before `visible` flips, so the dialog's seed effect can depend on it.
+  const [gatheringItemId, setGatheringItemId] = useState('')
   const [configDrawerVisible, setConfigDrawerVisible] = useState(false)
   const isTablet = useIsTablet()
+
+  // Shared by both entry points: the sidebar menu opens it empty, a Materials
+  // row action opens it with that item preselected.
+  const openGathering = useCallback((itemId = '') => {
+    setGatheringItemId(itemId)
+    setGatheringVisible(true)
+  }, [])
 
   // Auto-close the drawer when crossing back to the desktop breakpoint
   // (e.g. iPad rotation, window resize) so it doesn't reopen unexpectedly
@@ -213,7 +224,12 @@ export function PriceCalculator() {
           className={`${isTablet ? 'col-5' : 'col-4'} p-3 flex flex-column`}
           style={{ minHeight: 0 }}
         >
-          <Materials buildId={buildId} datasetId={datasetId} priceSignal={priceSignal} />
+          <Materials
+            buildId={buildId}
+            datasetId={datasetId}
+            priceSignal={priceSignal}
+            onOpenGatheringCalculator={openGathering}
+          />
         </div>
         <div
           className={`${isTablet ? 'col-7' : 'col-5'} p-3 flex flex-column`}
@@ -233,6 +249,7 @@ export function PriceCalculator() {
         onHide={() => setSettingsVisible(false)}
         onOpenRecipeCalculator={() => setRecipeCalculatorVisible(true)}
         onOpenProductionPlanner={() => setProductionPlannerVisible(true)}
+        onOpenGatheringCalculator={() => openGathering()}
         onOpenGameNews={() => navigate('/game-news')}
         onOpenDatasets={() => setDatasetsDialogVisible(true)}
         onOpenCustomEntities={() => setCustomEntitiesVisible(true)}
@@ -266,6 +283,14 @@ export function PriceCalculator() {
         buildId={buildId}
         datasetId={datasetId}
         solverOutput={result}
+      />
+      <GatheringCalculatorDialog
+        visible={gatheringVisible}
+        onHide={() => setGatheringVisible(false)}
+        buildId={buildId}
+        datasetId={datasetId}
+        priceSignal={priceSignal}
+        initialItemId={gatheringItemId}
       />
       <Toast ref={solverToastRef} position="top-right" />
     </div>

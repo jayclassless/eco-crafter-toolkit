@@ -39,6 +39,9 @@ const BUILD_SCOPED_TABLES = [
 const DATASET_SCOPED_TABLES = [
   'skills',
   'talents',
+  // Was missing here while present in the two equivalent lists in
+  // use-game-data.ts, so purged datasets left their talent bonuses behind.
+  'talentBonuses',
   'items',
   'itemParts',
   'tagItems',
@@ -49,6 +52,8 @@ const DATASET_SCOPED_TABLES = [
   'recipeElements',
   'modifiers',
   'recipeUnlocks',
+  'gatheringTools',
+  'treeSpecies',
 ] as const
 
 /**

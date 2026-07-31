@@ -98,6 +98,10 @@ export function createBuildStore() {
       defaultShareForSecondaryItems: { type: 'number', default: 20 },
       blueprintMode: { type: 'string', default: 'include' },
       growthRateModifier: { type: 'number', default: 1 },
+      // Gathering Calculator: calories burned picking up one piece of rubble.
+      // 1 in every shipped game version, but it lives only in the compiled
+      // server binary rather than in dataset data, so it stays user-editable.
+      caloriesPerRubblePickup: { type: 'number', default: 1 },
     },
     computedPrices: {
       id: { type: 'string' },

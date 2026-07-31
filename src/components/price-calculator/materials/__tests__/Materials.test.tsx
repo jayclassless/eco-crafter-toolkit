@@ -5,6 +5,7 @@ import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-d
 import { describe, expect, it } from 'vitest'
 
 import { usePriceSignal } from '@/hooks/use-prices-signal'
+import { clearGameDataIndexesCache } from '@/lib/game-data-indexes'
 import { createBuildStore } from '@/stores/build-store'
 import { createGameDataStore } from '@/stores/game-data-store'
 import { StoreContext } from '@/stores/providers'
@@ -106,7 +107,10 @@ function makeStores() {
   return { gameDataStore, buildStore, uiStore }
 }
 
-function renderMaterials(stores: { gameDataStore: Store; buildStore: Store; uiStore: Store }) {
+function renderMaterials(
+  stores: { gameDataStore: Store; buildStore: Store; uiStore: Store },
+  onOpenGathering?: (itemOrTagId: string) => void
+) {
   const { result } = renderHook(() => usePriceSignal())
   return render(
     <StoreContext.Provider
@@ -117,7 +121,12 @@ function renderMaterials(stores: { gameDataStore: Store; buildStore: Store; uiSt
         uiPersister: stubPersister(),
       }}
     >
-      <Materials buildId={BUILD} datasetId={DS} priceSignal={result.current} />
+      <Materials
+        buildId={BUILD}
+        datasetId={DS}
+        priceSignal={result.current}
+        onOpenGatheringCalculator={onOpenGathering ?? (() => {})}
+      />
     </StoreContext.Provider>
   )
 }
@@ -408,5 +417,49 @@ describe('Materials (smoke)', () => {
       // placeholder which counts as a single row in the tbody.
       expect(document.body.querySelectorAll('.p-datatable-tbody tr').length).toBeLessThan(before)
     })
+  })
+
+  it('offers the gathering action only for a gatherable row, with its item id', async () => {
+    const stores = makeStores()
+    // it-ore is the recipe's ingredient, so it lands in Materials. Making it
+    // minable is what should surface the action.
+    stores.gameDataStore.setCell('items', 'it-ore', 'minableHardness', 3)
+    stores.gameDataStore.setCell('items', 'it-ore', 'rubbleItemsPerBlock', 4)
+    clearGameDataIndexesCache(stores.gameDataStore)
+
+    const opened: string[] = []
+    renderMaterials(stores, (itemOrTagId) => opened.push(itemOrTagId))
+
+    const trigger = document.body.querySelector(
+      '.p-datatable-tbody button[aria-label="Row actions"]'
+    ) as HTMLButtonElement
+    expect(trigger).toBeTruthy()
+    fireEvent.click(trigger)
+
+    // The OverlayPanel's contents sit outside the accessibility tree, so this
+    // matches how RowActionsMenu.test.tsx reaches them.
+    const action = await waitFor(() => {
+      const found = Array.from(document.body.querySelectorAll('button')).find((b) =>
+        /Estimate gathering cost/i.test(b.textContent ?? '')
+      )
+      expect(found).toBeTruthy()
+      return found!
+    })
+    fireEvent.click(action)
+    expect(opened).toEqual(['it-ore'])
+  })
+
+  it('hides the gathering action for a row that cannot be gathered', () => {
+    const stores = makeStores()
+    clearGameDataIndexesCache(stores.gameDataStore)
+    renderMaterials(stores)
+    const trigger = document.body.querySelector(
+      '.p-datatable-tbody button[aria-label="Row actions"]'
+    ) as HTMLButtonElement | null
+    if (trigger) fireEvent.click(trigger)
+    const found = Array.from(document.body.querySelectorAll('button')).find((b) =>
+      /Estimate gathering cost/i.test(b.textContent ?? '')
+    )
+    expect(found).toBeUndefined()
   })
 })
