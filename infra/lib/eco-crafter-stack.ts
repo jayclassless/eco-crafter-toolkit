@@ -62,7 +62,7 @@ export class EcoCrafterStack extends Stack {
     }
 
     const steamNewsFn = new lambda_nodejs.NodejsFunction(this, 'SteamNewsFn', {
-      entry: path.join(__dirname, '../lambda/steam-news/lambda.ts'),
+      entry: path.join(import.meta.dirname, '../lambda/steam-news/lambda.ts'),
       handler: 'handler',
       runtime: lambda.Runtime.NODEJS_22_X,
       memorySize: 256,

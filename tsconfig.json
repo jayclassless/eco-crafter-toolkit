@@ -9,6 +9,10 @@
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
+    // vite.config.ts must import the steam-news handler with an explicit `.ts`
+    // extension: once the config is ESM, Node's native config loader resolves
+    // the specifier itself and will not infer the extension.
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",

@@ -31,12 +31,17 @@ function findMockUsingTestFiles(): string[] {
         visit(full)
       } else if (/\.test\.tsx?$/.test(entry.name)) {
         if (/\bvi\.(mock|doMock)\s*\(/.test(fs.readFileSync(full, 'utf8'))) {
-          found.push(path.relative(__dirname, full).split(path.sep).join('/'))
+          found.push(
+            path
+              .relative(import.meta.dirname, full)
+              .split(path.sep)
+              .join('/')
+          )
         }
       }
     }
   }
-  for (const root of ['src', 'infra']) visit(path.resolve(__dirname, root))
+  for (const root of ['src', 'infra']) visit(path.resolve(import.meta.dirname, root))
   return found
 }
 
@@ -51,7 +56,7 @@ function steamNewsDevProxy(): Plugin {
     configureServer(server) {
       server.middlewares.use('/api/game-news', async (req, res) => {
         try {
-          const { handleSteamNews } = await import('./infra/lambda/steam-news/handler')
+          const { handleSteamNews } = await import('./infra/lambda/steam-news/handler.ts')
           const url = new URL(req.url ?? '/', 'http://localhost')
           const result = await handleSteamNews({ count: url.searchParams.get('count') })
           res.statusCode = result.status
@@ -94,7 +99,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
     },
   },
   test: {
