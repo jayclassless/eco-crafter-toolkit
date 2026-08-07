@@ -35,6 +35,7 @@ import { validateDatasetJson } from '../src/lib/import-dataset'
 import type {
   DatasetJson,
   ElementJson,
+  GarbageQuantityJson,
   GatheringToolJson,
   ItemJson,
   LocalizedNames,
@@ -179,10 +180,20 @@ interface RawItem {
   isPart?: boolean
   requiredParts?: Array<{ typeName: string; quantity: number }>
   isPluginModule?: boolean
+  // v11–v13 module shape, read from the `base(ModuleTypes.X, pct, …)` ctor.
+  // Mutually exclusive with the v14 fields below — see the gate in
+  // parseItemAndRecipeFile.
   pluginType?: string
   pluginModulePercent?: number
   pluginModuleSkill?: string
   pluginModuleSkillPercent?: number
+  // v14 module shape, read from `override IEnumerable<Bonus> Bonuses`.
+  moduleSlot?: string
+  moduleBonuses?: RawBonus[]
+  isDeprecated?: boolean
+  /** `[SalvageCost(typeof(Mat), qty, …)]` — garbage-material names, resolved to
+   * real item names after pass 1 (see resolveSalvageMaterials). New in v14. */
+  salvageCost?: Array<{ material: string; quantity: number }>
   isCraftingTable?: boolean
   // raw upgrade module specs from [AllowPluginModules(...)]
   craftingTableModuleTags?: string[]
@@ -247,6 +258,7 @@ interface RawVariant {
   displayName: string
   ingredients: ElementJson[]
   products: ElementJson[]
+  garbageOutputs: GarbageQuantityJson[]
   tableType: string
   parentClassName: string
 }
@@ -327,6 +339,31 @@ interface RawTreeHealth {
   treeHealth: number
 }
 const rawTreeHealth = new Map<string, RawTreeHealth>()
+
+/** GarbageMaterial class name → the item type it actually yields, read from
+ * `__core__/Items/GarbageMaterials.cs` (23 entries in v14.0.1).
+ *
+ * `[SalvageCost(...)]` and `GarbageOutput(...)` both name *materials*, not items,
+ * and the mapping is not derivable by suffixing "Item": `Trash → GarbageItem`,
+ * `StoneRubble → CrushedMixedRockItem`, `MetalScrap → MixedMetalScrapItem`.
+ * Resolving here keeps the dataset referencing only real item names, so
+ * `validateDatasetJson`'s existing item-reference checks keep working unchanged.
+ *
+ * Empty on v11–v13, which have no garbage system at all. */
+const garbageMaterialToItem = new Map<string, string>()
+
+function parseGarbageMaterialsFile(src: string) {
+  // public class Trash : GarbageMaterial
+  // {
+  //     public override Type OutputItemType => typeof(GarbageItem);
+  const re =
+    /public\s+(?:partial\s+)?class\s+(\w+)\s*:\s*GarbageMaterial\b[\s\S]{0,600}?OutputItemType\s*=>\s*typeof\((\w+)\)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(src))) {
+    garbageMaterialToItem.set(m[1], m[2])
+    ensureItem(m[2])
+  }
+}
 
 // Used to deduplicate stub items
 function ensureItem(name: string, display?: string): RawItem {
@@ -453,6 +490,139 @@ function extractStringLits(block: string): string[] {
   return out
 }
 
+/** A `new Bonus { … }` object that was located but whose effect payload could
+ * not be read. Callers decide whether that is benign (talents: BonusEffectChance
+ * is outside price calc) or fatal (modules: every effect must parse). */
+interface UnparsedBonus {
+  effectType: string
+  reason: string
+}
+
+// Parse every `new Bonus { … }` object initializer found in `text`.
+//
+// TWO DECLARATION SYNTAXES EXIST and both must work — this is the reason the
+// scan anchors on `new Bonus` rather than on the surrounding statement:
+//
+//   talents (__core__/Benefits/*.cs):
+//     this.Bonuses.Add(new Bonus { … });
+//   modules (AutoGen/PluginModule/*.cs, new in v14):
+//     public override IEnumerable<Bonus> Bonuses => new[] { new Bonus { … }, … };
+//
+// The old talent-only parser anchored on `this.Bonuses.Add(`, so run over a v14
+// module it found zero bonuses and reported success. `new\s+Bonus\s*\{` cannot
+// match `new BonusEffectMultiplicative {` or `new BonusCause {` — the `{` must
+// follow `Bonus` directly — so widening the anchor is safe.
+//
+// Verified against v11/v12/v13.0.4/v14.0.1: outside SampleTalents.cs (which the
+// Benefits walk skips by name) every `new Bonus {` in __core__/Benefits is
+// reached via `this.Bonuses.Add(`, so the wider anchor yields byte-identical
+// talent output on every shipped version. SampleTalents.cs is the only file
+// where the two disagree — it registers Bonus objects on a `component.BonusList`
+// instead — which is why that skip is load-bearing rather than cosmetic.
+function parseBonusObjects(text: string): {
+  bonuses: RawBonus[]
+  unparsed: UnparsedBonus[]
+} {
+  const bonuses: RawBonus[] = []
+  const unparsed: UnparsedBonus[] = []
+  const re = /new\s+Bonus\s*(?=\{)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text))) {
+    const objOpenIdx = text.indexOf('{', m.index + m[0].length)
+    if (objOpenIdx < 0) continue
+    const objEndIdx = matchBrace(text, objOpenIdx)
+    if (objEndIdx < 0) continue
+    const obj = text.slice(objOpenIdx + 1, objEndIdx - 1)
+    // Keep the scan from re-entering this object's own braces.
+    re.lastIndex = objEndIdx
+
+    // Action — only CraftBonusCause has an Action on a scope relevant to us,
+    // but HarvestBonusCause / ActionCause also declare BonusAction.X; we
+    // capture whichever first appears.
+    const action = /BonusAction\.(\w+)/.exec(obj)?.[1]
+    if (!action) {
+      unparsed.push({ effectType: 'unknown', reason: 'no BonusAction' })
+      continue
+    }
+
+    // Scope — from the first CraftBonusCause block (we don't support multi-
+    // cause bonuses; they don't exist in v13 or v14 core data).
+    const scopeBlock = extractInitializerBlock(obj, 'CraftBonusCause') ?? obj
+    const recipes = extractSetTypeNames(scopeBlock, 'Recipes')
+    const skillTypes = extractSetTypeNames(scopeBlock, 'SkillTypes')
+    const craftStationTypes = extractSetTypeNames(scopeBlock, 'CraftStationTypes')
+    const itemTags = extractSetStrings(scopeBlock, 'ItemTags')
+
+    // Effect — first `new BonusEffect<Kind> { ... }` after `Effects =`.
+    const effectsIdx = obj.search(/Effects\s*=/)
+    const afterEffects = effectsIdx >= 0 ? obj.slice(effectsIdx) : obj
+    const effMatch = /new\s+(BonusEffect\w+)\s*\{([^}]*)\}/.exec(afterEffects)
+    if (!effMatch) {
+      unparsed.push({ effectType: 'unknown', reason: 'no BonusEffect initializer' })
+      continue
+    }
+    const effectType = effMatch[1].replace(/^BonusEffect/, '')
+    const params = effMatch[2]
+
+    // The magnitude field is NOT uniform. Every effect type in __core__/Benefits
+    // spells it `Value =`, but v14's `BonusEffectAdditivePercent` — which appears
+    // only on plugin modules — spells it `Percent =`. Reading `Value` alone
+    // silently dropped every module ResourceCost and LaborCost bonus, i.e.
+    // exactly the discounts the v14 work exists to model.
+    const rawVal =
+      /Value\s*=\s*([0-9.\-+f]+)/.exec(params)?.[1] ??
+      /Percent\s*=\s*([0-9.\-+f]+)/.exec(params)?.[1]
+    const val = parseFloatLit(rawVal ?? 'NaN')
+    if (Number.isNaN(val)) {
+      // BonusEffectChance uses Chance / SuccessValue — outside price calc.
+      unparsed.push({ effectType, reason: 'no numeric Value/Percent' })
+      continue
+    }
+    const capStr = /Cap\s*=\s*([0-9.\-+f]+)/.exec(params)?.[1]
+    const cap = capStr !== undefined ? parseFloatLit(capStr) : undefined
+    const lowerStr = /LowerIsBetter\s*=\s*(true|false)/.exec(params)?.[1]
+    const lowerIsBetter = lowerStr === undefined ? undefined : lowerStr === 'true'
+
+    bonuses.push({
+      action,
+      effectType,
+      value: val,
+      cap,
+      lowerIsBetter,
+      recipes,
+      skillTypes,
+      craftStationTypes,
+      itemTags,
+    })
+  }
+  return { bonuses, unparsed }
+}
+
+/** Pure RawBonus → JSON conversion, shared by talents and plugin modules.
+ *
+ * Note this emits NO synthetic recipe modifier. Talents additionally push a
+ * `Talent` modifier onto each matching recipe (see attachBonusToTalent), but
+ * modules deliberately do not: baking module bonuses into the `modifiers` table
+ * would add ~23k rows to a table that currently holds ~11.5k, and module scope is
+ * cheap to evaluate at solve time instead. */
+function toBonusJson(b: RawBonus): TalentBonusJson {
+  const scope: TalentBonusScopeJson = {}
+  if (b.recipes.length) scope.Recipes = b.recipes
+  if (b.skillTypes.length) scope.SkillTypes = b.skillTypes
+  if (b.craftStationTypes.length) scope.CraftStationTypes = b.craftStationTypes
+  if (b.itemTags.length) scope.ItemTags = b.itemTags
+
+  const json: TalentBonusJson = {
+    Action: b.action,
+    EffectType: b.effectType,
+    Value: b.value,
+    Scope: scope,
+  }
+  if (b.cap !== undefined) json.Cap = b.cap
+  if (b.lowerIsBetter !== undefined) json.LowerIsBetter = b.lowerIsBetter
+  return json
+}
+
 function parseBonusFile(src: string): void {
   // For each partial Talent class in this file, pull out the Bonuses added
   // within its constructor body.
@@ -466,68 +636,17 @@ function parseBonusFile(src: string): void {
     if (closeIdx < 0) continue
     const classBody = src.slice(openIdx, closeIdx)
 
-    // Each Bonus object is `this.Bonuses.Add(new Bonus { ... });` — find the
-    // opening `{` of the object initializer and walk braces to its end.
-    const addRe = /this\.Bonuses\.Add\s*\(\s*new\s+Bonus\s*/g
-    let am: RegExpExecArray | null
-    while ((am = addRe.exec(classBody))) {
-      const objOpenIdx = classBody.indexOf('{', am.index + am[0].length)
-      if (objOpenIdx < 0) continue
-      const objEndIdx = matchBrace(classBody, objOpenIdx)
-      if (objEndIdx < 0) continue
-      const obj = classBody.slice(objOpenIdx + 1, objEndIdx - 1)
+    // Unparsed bonuses are tolerated here: BonusEffectChance (Chance /
+    // SuccessValue) is outside price calc and has always been skipped.
+    const { bonuses } = parseBonusObjects(classBody)
+    if (bonuses.length === 0) continue
 
-      // Action — only CraftBonusCause has an Action on a scope relevant to us,
-      // but HarvestBonusCause / ActionCause also declare BonusAction.X; we
-      // capture whichever first appears.
-      const action = /BonusAction\.(\w+)/.exec(obj)?.[1]
-      if (!action) continue
-
-      // Scope — from the first CraftBonusCause block (we don't support multi-
-      // cause bonuses; they don't exist in v13 core data).
-      const scopeBlock = extractInitializerBlock(obj, 'CraftBonusCause') ?? obj
-      const recipes = extractSetTypeNames(scopeBlock, 'Recipes')
-      const skillTypes = extractSetTypeNames(scopeBlock, 'SkillTypes')
-      const craftStationTypes = extractSetTypeNames(scopeBlock, 'CraftStationTypes')
-      const itemTags = extractSetStrings(scopeBlock, 'ItemTags')
-
-      // Effect — first `new BonusEffect<Kind> { ... }` after `Effects =`.
-      const effectsIdx = obj.search(/Effects\s*=/)
-      const afterEffects = effectsIdx >= 0 ? obj.slice(effectsIdx) : obj
-      const effMatch = /new\s+(BonusEffect\w+)\s*\{([^}]*)\}/.exec(afterEffects)
-      if (!effMatch) continue
-      const effectType = effMatch[1].replace(/^BonusEffect/, '')
-      const params = effMatch[2]
-
-      const val = parseFloatLit(/Value\s*=\s*([0-9.\-+f]+)/.exec(params)?.[1] ?? 'NaN')
-      if (Number.isNaN(val)) {
-        // BonusEffectChance uses Chance / SuccessValue — outside price calc.
-        continue
-      }
-      const capStr = /Cap\s*=\s*([0-9.\-+f]+)/.exec(params)?.[1]
-      const cap = capStr !== undefined ? parseFloatLit(capStr) : undefined
-      const lowerStr = /LowerIsBetter\s*=\s*(true|false)/.exec(params)?.[1]
-      const lowerIsBetter = lowerStr === undefined ? undefined : lowerStr === 'true'
-
-      const bonus: RawBonus = {
-        action,
-        effectType,
-        value: val,
-        cap,
-        lowerIsBetter,
-        recipes,
-        skillTypes,
-        craftStationTypes,
-        itemTags,
-      }
-
-      let list = bonusesByTalentName.get(talentName)
-      if (!list) {
-        list = []
-        bonusesByTalentName.set(talentName, list)
-      }
-      list.push(bonus)
+    let list = bonusesByTalentName.get(talentName)
+    if (!list) {
+      list = []
+      bonusesByTalentName.set(talentName, list)
     }
+    list.push(...bonuses)
   }
 }
 
@@ -905,6 +1024,34 @@ function parseIngredientsFromBody(body: string): ElementJson[] {
   return out
 }
 
+// ---- Garbage outputs (v14) --------------------------------------------------
+//
+// `garbages: new List<GarbageOutput> { new GarbageOutput(typeof(Trash), 0.2f), }`
+// sits between `ingredients:` and `items:` in recipe.Init(...). Absent entirely
+// in v11–v13; frequently present-but-empty in v14, which is not an error.
+//
+// Values here are LITERAL output quantities — unlike the salvage-derived half of
+// a recipe's garbage, they are NOT scaled by CraftGarbageRatio. Keeping that
+// distinction is the whole reason these are extracted separately from
+// ItemJson.SalvageCost.
+function parseGarbageFromBody(body: string, recipeName: string): GarbageQuantityJson[] {
+  const block = /garbages:\s*new\s+List<GarbageOutput>\s*\{([\s\S]*?)\}\s*,/.exec(body)?.[1]
+  if (!block) return []
+  const out: GarbageQuantityJson[] = []
+  const re = /new\s+GarbageOutput\(\s*typeof\((\w+)\)\s*,\s*([0-9.\-+f]+)\s*\)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(block))) {
+    const qty = parseFloatLit(m[2])
+    if (Number.isNaN(qty)) {
+      throw new Error(
+        `[extract] recipe ${recipeName}: unparseable GarbageOutput quantity for ${m[1]}`
+      )
+    }
+    out.push({ ItemOrTag: m[1], Quantity: qty })
+  }
+  return out
+}
+
 function parseProductsFromBody(body: string): ElementJson[] {
   const block =
     /items:\s*new\s+List<CraftingElement>\s*\{([\s\S]*?)\}\s*\)\s*;/.exec(body)?.[1] ?? ''
@@ -1078,31 +1225,114 @@ function parseItemAndRecipeFile(src: string) {
     // Plugin module detection: real plugin modules extend EfficiencyModule (not ModuleItem which is for crafting tables that host modules)
     if (/EfficiencyModule/.test(baseClass)) {
       it.isPluginModule = true
-      // Look forward for the constructor : base(...)
-      const after = src.slice(m.index, m.index + 4000)
-      const ctor = /base\(([\s\S]*?)\)\s*\{/.exec(after)
-      if (ctor) {
-        const args = ctor[1].split(',').map((s) => s.trim())
-        // arg0: ModuleTypes flags (e.g. ModuleTypes.ResourceEfficiency | ModuleTypes.SpeedEfficiency)
-        // arg1: percent (number expression)
-        // arg2: typeof(SomeSkill)
-        // arg3: skill percent
-        const flags = args[0] ?? ''
-        const typeNames: string[] = []
-        if (/ResourceEfficiency/.test(flags)) typeNames.push('Resource')
-        if (/SpeedEfficiency/.test(flags)) typeNames.push('Speed')
-        if (/SkillEfficiency/.test(flags)) typeNames.push('Skill')
-        if (typeNames.length) it.pluginType = typeNames.join('&')
-        if (args[1]) {
-          const v = parseFloatLit(args[1])
-          if (!Number.isNaN(v)) it.pluginModulePercent = v
+      const classOpenIdx = src.indexOf('{', m.index + m[0].length)
+      const classCloseIdx = classOpenIdx >= 0 ? matchBrace(src, classOpenIdx) : -1
+      const classBody =
+        classOpenIdx >= 0 && classCloseIdx >= 0
+          ? src.slice(classOpenIdx, classCloseIdx)
+          : src.slice(m.index, m.index + 4000)
+
+      // ---- Version gate -----------------------------------------------------
+      // The discriminator is the PRESENCE OF THE `Bonuses` OVERRIDE, never the
+      // presence of a `base(...)` ctor. v14 modules still declare a ctor —
+      // `base(ModuleTypes.None, 1f)` — and the legacy parser below reads it
+      // quite happily: `ModuleTypes.None` matches none of the Resource/Speed/
+      // Skill tests so `pluginType` stays unset, while `pluginModulePercent` is
+      // set to 1. That is a silent no-op module (a 0% discount) that passes
+      // validation, and it would also fool the import-time normalizer into
+      // treating a v14 module as legacy. Gate on the override instead.
+      const hasBonusOverride = /override\s+IEnumerable<Bonus>\s+Bonuses/.test(classBody)
+
+      if (hasBonusOverride) {
+        // ---- v14 shape ------------------------------------------------------
+        const { bonuses, unparsed } = parseBonusObjects(classBody)
+        if (unparsed.length > 0) {
+          // Hard failure, not a `continue`. Every v14 module effect is either
+          // AdditivePercent or Multiplicative and both parse; anything else means
+          // the format moved under us, and dropping it silently would understate
+          // a discount rather than break loudly.
+          const detail = unparsed.map((u) => `${u.effectType} (${u.reason})`).join(', ')
+          throw new Error(
+            `[extract] plugin module ${name}: ${unparsed.length} bonus(es) could not be parsed: ${detail}`
+          )
         }
-        const sk = /typeof\((\w+)\)/.exec(args[2] ?? '')?.[1]
-        if (sk) it.pluginModuleSkill = sk
-        if (args[3]) {
-          const v = parseFloatLit(args[3])
-          if (!Number.isNaN(v)) it.pluginModuleSkillPercent = v
+        if (bonuses.length === 0) {
+          throw new Error(
+            `[extract] plugin module ${name} declares 'override IEnumerable<Bonus> Bonuses' but no bonuses were parsed from it`
+          )
         }
+        it.moduleBonuses = bonuses
+
+        // Slot comes from the [Tag("BasicModule"|…)] attribute. Read it from the
+        // attribute block rather than inferring from the class name: the three
+        // Mining specialty modules are named MiningBasicUpgradeItem /
+        // MiningAdvancedUpgradeItem / MiningModernUpgradeItem but are all tagged
+        // SpecialtyModule, and they are exactly the three modules whose values
+        // differ from the specialty norm. Name-based classification would file
+        // them into the generic slots with the wrong effects.
+        const slot = /\[Tag\("(Basic|Advanced|Modern|Specialty)Module"/.exec(attrs)?.[1]
+        if (slot) it.moduleSlot = slot
+
+        if (/deprecated item/i.test(attrs)) it.isDeprecated = true
+
+        // The 12 tier-ladder `*Lvl1-4` modules carry no slot tag and no recipe;
+        // all of them are deprecated. A module with neither a slot nor a
+        // deprecation marker means a new slot tag we don't know about.
+        if (!it.moduleSlot && !it.isDeprecated) {
+          throw new Error(
+            `[extract] plugin module ${name} has no [Tag("<slot>Module")] and is not marked deprecated`
+          )
+        }
+      } else {
+        // ---- v11–v13 legacy shape -------------------------------------------
+        // Retained (not deleted) because the extractor must still run against a
+        // v11–v13 tree; the bundled eco-v11/v12/v13.json keep this shape and are
+        // normalized at import time.
+        const ctor = /base\(([\s\S]*?)\)\s*\{/.exec(classBody)
+        if (ctor) {
+          const args = ctor[1].split(',').map((s) => s.trim())
+          // arg0: ModuleTypes flags (e.g. ModuleTypes.ResourceEfficiency | ModuleTypes.SpeedEfficiency)
+          // arg1: percent (number expression)
+          // arg2: typeof(SomeSkill)
+          // arg3: skill percent
+          const flags = args[0] ?? ''
+          const typeNames: string[] = []
+          if (/ResourceEfficiency/.test(flags)) typeNames.push('Resource')
+          if (/SpeedEfficiency/.test(flags)) typeNames.push('Speed')
+          if (/SkillEfficiency/.test(flags)) typeNames.push('Skill')
+          if (typeNames.length) it.pluginType = typeNames.join('&')
+          if (args[1]) {
+            const v = parseFloatLit(args[1])
+            if (!Number.isNaN(v)) it.pluginModulePercent = v
+          }
+          const sk = /typeof\((\w+)\)/.exec(args[2] ?? '')?.[1]
+          if (sk) it.pluginModuleSkill = sk
+          if (args[3]) {
+            const v = parseFloatLit(args[3])
+            if (!Number.isNaN(v)) it.pluginModuleSkillPercent = v
+          }
+        }
+      }
+    }
+
+    // ---- SalvageCost (v14) --------------------------------------------------
+    // `[SalvageCost(typeof(Mat), qty, typeof(Mat2), qty2, …)]` — flat pairs.
+    // Materials are resolved to real items after pass 1, once
+    // GarbageMaterials.cs has been read.
+    {
+      const sc = /\[SalvageCost\(([\s\S]*?)\)\]/.exec(attrs)?.[1]
+      if (sc) {
+        const pairs: Array<{ material: string; quantity: number }> = []
+        const pairRe = /typeof\((\w+)\)\s*,\s*([0-9.\-+f]+)/g
+        let pm: RegExpExecArray | null
+        while ((pm = pairRe.exec(sc))) {
+          const qty = parseFloatLit(pm[2])
+          if (Number.isNaN(qty)) {
+            throw new Error(`[extract] item ${name}: unparseable SalvageCost quantity for ${pm[1]}`)
+          }
+          pairs.push({ material: pm[1], quantity: qty })
+        }
+        if (pairs.length) it.salvageCost = pairs
       }
     }
   }
@@ -1126,6 +1356,7 @@ function parseItemAndRecipeFile(src: string) {
 
     const ingredients = parseIngredientsFromBody(body)
     const products = parseProductsFromBody(body)
+    const garbageOutputs = parseGarbageFromBody(body, className)
 
     // Labor
     let labor: DynamicValueJson = { BaseValue: 0, Modifiers: [] }
@@ -1166,7 +1397,7 @@ function parseItemAndRecipeFile(src: string) {
       tableItem.isCraftingTable = true
     }
 
-    recipes.push({
+    const rec: RecipeJson = {
       Name: className,
       LocalizedName: enLocalized(displayName),
       FamilyName: displayName,
@@ -1179,7 +1410,9 @@ function parseItemAndRecipeFile(src: string) {
       CraftingTable: craftingTable,
       Ingredients: ingredients,
       Products: products,
-    })
+    }
+    if (garbageOutputs.length) rec.GarbageOutputs = garbageOutputs
+    recipes.push(rec)
   }
 }
 
@@ -1214,12 +1447,19 @@ function parseRecipeVariantFile(src: string) {
       /displayName:\s*Localizer\.DoStr\("([^"]+)"\)/.exec(body)?.[1] ?? fallbackName
     const ingredients = parseIngredientsFromBody(body)
     const products = parseProductsFromBody(body)
+    // A variant declares its OWN `garbages:` list inside its own this.Init(...),
+    // so it overrides the parent's rather than inheriting it — same as it does
+    // for ingredients and products. Every variant's list is empty in v14.0.1, so
+    // this is currently indistinguishable from inheriting-nothing; parsing it is
+    // the reading that stays correct if one ever declares garbage.
+    const garbageOutputs = parseGarbageFromBody(body, className)
 
     variants.push({
       className,
       displayName,
       ingredients,
       products,
+      garbageOutputs,
       tableType,
       parentClassName,
     })
@@ -1247,7 +1487,7 @@ function emitVariantRecipes() {
       const tableItem = ensureItem(craftingTable)
       tableItem.isCraftingTable = true
     }
-    recipes.push({
+    const rec: RecipeJson = {
       Name: v.className,
       LocalizedName: enLocalized(v.displayName),
       FamilyName: parent.FamilyName,
@@ -1260,7 +1500,9 @@ function emitVariantRecipes() {
       CraftingTable: craftingTable,
       Ingredients: v.ingredients,
       Products: v.products,
-    })
+    }
+    if (v.garbageOutputs.length) rec.GarbageOutputs = v.garbageOutputs
+    recipes.push(rec)
   }
 }
 
@@ -1519,6 +1761,9 @@ async function main() {
     if (file.includes(`${path.sep}Tool${path.sep}`)) parseToolFile(src)
     if (file.includes(`${path.sep}Clothing${path.sep}`)) parseClothingFile(src)
     if (file.includes(`${path.sep}Rubble${path.sep}`)) parseRubbleFile(src)
+    // GarbageMaterial subclasses live in __core__/Items/GarbageMaterials.cs
+    // (handwritten, so reached via the handwrittenDirs walk). v14+ only.
+    if (path.basename(file) === 'GarbageMaterials.cs') parseGarbageMaterialsFile(src)
     parseItemAndRecipeFile(src)
     // Variants are `class <X>Recipe : Recipe` with AddTagProduct(...). They
     // can live in any AutoGen subtree (Recipe/, Block/, Item/, WorldObject/);
@@ -1529,6 +1774,38 @@ async function main() {
   emitVariantRecipes()
   if (variants.length > 0) {
     console.log(`[extract] emitted ${variants.length} recipe variants via AddTagProduct`)
+  }
+
+  // Pass 1b: resolve recipe GarbageOutputs from GarbageMaterial names to the real
+  // items they yield. Item SalvageCost is resolved later, at emit time, but
+  // recipes are already built by now so they get their own pass.
+  //
+  // The map is empty on v11–v13, where no recipe declares garbage either — so an
+  // unresolved name there is impossible rather than merely unlikely. On v14 it
+  // means GarbageMaterials.cs gained an entry we failed to parse, which would
+  // otherwise ship a dangling item reference into the dataset.
+  {
+    let resolved = 0
+    for (const r of recipes) {
+      if (!r.GarbageOutputs) continue
+      for (const g of r.GarbageOutputs) {
+        const item = garbageMaterialToItem.get(g.ItemOrTag)
+        if (!item) {
+          throw new Error(
+            `[extract] recipe ${r.Name}: GarbageOutput references unknown GarbageMaterial '${g.ItemOrTag}' ` +
+              `(GarbageMaterials.cs yielded ${garbageMaterialToItem.size} materials)`
+          )
+        }
+        g.ItemOrTag = item
+        ensureItem(item)
+        resolved++
+      }
+    }
+    if (resolved > 0) {
+      console.log(
+        `[extract] resolved ${resolved} recipe garbage outputs across ${garbageMaterialToItem.size} garbage materials`
+      )
+    }
   }
 
   // Merge growth data onto each plant's harvested item. For food crops that's
@@ -1878,21 +2155,7 @@ async function main() {
     const out: TalentBonusJson[] = []
     for (let idx = 0; idx < bonuses.length; idx++) {
       const b = bonuses[idx]
-      const scope: TalentBonusScopeJson = {}
-      if (b.recipes.length) scope.Recipes = b.recipes
-      if (b.skillTypes.length) scope.SkillTypes = b.skillTypes
-      if (b.craftStationTypes.length) scope.CraftStationTypes = b.craftStationTypes
-      if (b.itemTags.length) scope.ItemTags = b.itemTags
-
-      const json: TalentBonusJson = {
-        Action: b.action,
-        EffectType: b.effectType,
-        Value: b.value,
-        Scope: scope,
-      }
-      if (b.cap !== undefined) json.Cap = b.cap
-      if (b.lowerIsBetter !== undefined) json.LowerIsBetter = b.lowerIsBetter
-      out.push(json)
+      out.push(toBonusJson(b))
 
       // Only price-relevant actions emit synthetic modifiers.
       if (b.action !== 'ResourceCost' && b.action !== 'CraftTime' && b.action !== 'LaborCost') {
@@ -1956,9 +2219,19 @@ async function main() {
   for (const r of recipes) {
     if (r.CraftingTable) referenced.add(r.CraftingTable)
     for (const e of [...r.Ingredients, ...r.Products]) referenced.add(e.ItemOrTag)
+    // Garbage outputs must count as references or the keep-filter below drops
+    // them: several scrap items appear ONLY as garbage, never as an ingredient
+    // or product, and some (TrashItem, CompostablesItem) are exactly the
+    // hidden-category items the display-name guard exists to exclude. Dropping
+    // them would leave the garbage tables pointing at items not in the dataset.
+    for (const g of r.GarbageOutputs ?? []) referenced.add(g.ItemOrTag)
   }
   for (const it of items.values()) {
     for (const m of it.CraftingTablePluginModules ?? []) referenced.add(m)
+    for (const s of it.salvageCost ?? []) {
+      const resolved = garbageMaterialToItem.get(s.material)
+      if (resolved) referenced.add(resolved)
+    }
   }
   const itemJsons: ItemJson[] = []
   for (const it of [...items.values()].sort((a, b) => a.name.localeCompare(b.name))) {
@@ -1983,11 +2256,32 @@ async function main() {
     }
     if (it.isPluginModule) {
       j.IsPluginModule = true
-      if (it.pluginType) j.PluginType = it.pluginType
-      if (it.pluginModulePercent !== undefined) j.PluginModulePercent = it.pluginModulePercent
-      if (it.pluginModuleSkill) j.PluginModuleSkill = it.pluginModuleSkill
-      if (it.pluginModuleSkillPercent !== undefined)
-        j.PluginModuleSkillPercent = it.pluginModuleSkillPercent
+      if (it.moduleBonuses) {
+        // v14 shape. Deliberately exclusive with the legacy fields below — the
+        // import-time normalizer checks ModuleBonuses first and a module carrying
+        // both shapes would be ambiguous.
+        j.ModuleBonuses = it.moduleBonuses.map(toBonusJson)
+        if (it.moduleSlot) j.ModuleSlot = it.moduleSlot as NonNullable<ItemJson['ModuleSlot']>
+        if (it.isDeprecated) j.IsDeprecated = true
+      } else {
+        if (it.pluginType) j.PluginType = it.pluginType
+        if (it.pluginModulePercent !== undefined) j.PluginModulePercent = it.pluginModulePercent
+        if (it.pluginModuleSkill) j.PluginModuleSkill = it.pluginModuleSkill
+        if (it.pluginModuleSkillPercent !== undefined)
+          j.PluginModuleSkillPercent = it.pluginModuleSkillPercent
+      }
+    }
+    if (it.salvageCost?.length) {
+      j.SalvageCost = it.salvageCost.map((s) => {
+        const resolved = garbageMaterialToItem.get(s.material)
+        if (!resolved) {
+          throw new Error(
+            `[extract] item ${it.name}: SalvageCost references unknown GarbageMaterial '${s.material}' ` +
+              `(GarbageMaterials.cs yielded ${garbageMaterialToItem.size} materials)`
+          )
+        }
+        return { ItemOrTag: resolved, Quantity: s.quantity }
+      })
     }
     if (it.isCraftingTable) {
       j.IsCraftingTable = true

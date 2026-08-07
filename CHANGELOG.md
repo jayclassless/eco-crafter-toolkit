@@ -2,8 +2,12 @@
 
 ## 0.7.0 (TBD)
 
+- Added support for v14 of Eco: new upgrade module system, new skills and
+  recipes, garbage generation.
 - Added a calculator for gatherable resources like rocks, logs, animals,
   and excavatables.
+- Fixed the Recipe Calculator resetting the skill level, upgrade modules,
+  talents, and edited ingredient prices as soon as you touched any of them.
 - Another attempt at fixing the calculations in the Crop Tracker.
 
 ## 0.6.0 (2026-07-19)

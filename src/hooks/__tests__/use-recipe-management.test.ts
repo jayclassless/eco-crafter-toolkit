@@ -221,7 +221,7 @@ describe('createRecipeManagement', () => {
       const tables = rowsForBuild(buildStore, 'userCraftingTables')
       expect(tables).toHaveLength(1)
       expect(tables[0].craftingTableId).toBe('ct-workbench')
-      expect(tables[0].pluginModuleId).toBe('')
+      expect(tables[0].specialtyModuleId).toBe('')
       expect(tables[0].costPerMinute).toBe(0)
     })
 
@@ -231,7 +231,7 @@ describe('createRecipeManagement', () => {
         id: 'uct-existing',
         buildId: BUILD_ID,
         craftingTableId: 'ct-workbench',
-        pluginModuleId: 'pm-upgrade',
+        specialtyModuleId: 'pm-upgrade',
         costPerMinute: 1.25,
       })
       mgmt().addRecipe('recipe-iron')
@@ -239,7 +239,7 @@ describe('createRecipeManagement', () => {
       expect(tables).toHaveLength(1)
       // Existing config (module + cost) must be preserved.
       expect(tables[0].id).toBe('uct-existing')
-      expect(tables[0].pluginModuleId).toBe('pm-upgrade')
+      expect(tables[0].specialtyModuleId).toBe('pm-upgrade')
       expect(tables[0].costPerMinute).toBe(1.25)
     })
 
@@ -250,7 +250,7 @@ describe('createRecipeManagement', () => {
         id: 'uct-foreign',
         buildId: 'other-build',
         craftingTableId: 'ct-workbench',
-        pluginModuleId: '',
+        specialtyModuleId: '',
         costPerMinute: 0,
       })
       mgmt().addRecipe('recipe-iron')

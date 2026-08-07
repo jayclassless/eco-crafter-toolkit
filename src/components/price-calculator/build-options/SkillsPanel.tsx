@@ -48,6 +48,23 @@ export function SkillsPanel({ buildId, datasetId }: Props) {
   const { getName } = useLocalizedName(datasetId)
   const skillMgmt = useSkillManagement(buildId, datasetId)
   const starCost = useStarCost(buildId, datasetId)
+  // The total now has up to three sources, so the tooltip breaks it down. Only
+  // non-zero contributors are listed — on a v11-v13 dataset that collapses back
+  // to the plain total, since talents and modules both contribute 0 there.
+  const starTitle = (() => {
+    const headline = t('priceCalculator.config.stars', { count: starCost.total })
+    const parts: string[] = []
+    if (starCost.skillCost > 0) {
+      parts.push(t('priceCalculator.config.starsBreakdownSkills', { count: starCost.skillCost }))
+    }
+    if (starCost.talentCost > 0) {
+      parts.push(t('priceCalculator.config.starsBreakdownTalents', { count: starCost.talentCost }))
+    }
+    if (starCost.moduleCost > 0) {
+      parts.push(t('priceCalculator.config.starsBreakdownModules', { count: starCost.moduleCost }))
+    }
+    return parts.length > 1 ? `${headline}\n${parts.join('\n')}` : headline
+  })()
   const [suggestions, setSuggestions] = useState<SkillGroup[]>([])
   // Only rebuild the view-model when rows are added/removed. Cell edits
   // (level, talent enabled) are handled by `SkillLevelCell` / `TalentChip`
@@ -241,7 +258,7 @@ export function SkillsPanel({ buildId, datasetId }: Props) {
           </span>
           <span
             className="ml-auto mr-2"
-            title={t('priceCalculator.config.stars', { count: starCost.total })}
+            title={starTitle}
             aria-label={t('priceCalculator.config.stars', { count: starCost.total })}
           >
             <i className="pi pi-star-fill mr-1" style={{ color: 'var(--yellow-500)' }} />

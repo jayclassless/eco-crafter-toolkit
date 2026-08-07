@@ -153,8 +153,16 @@ function writeRecipeElementsAndModifiers(
   input: CustomRecipeInput
 ): void {
   // Labor scales with the recipe's skill via a `targetType: 'labor'` modifier.
-  // Without this, custom recipes ignore the user's skill level entirely. (Vanilla
-  // Eco labor is skill-reduced and never module-reduced, so no Module entry here.)
+  // Without this, custom recipes ignore the user's skill level entirely.
+  //
+  // Deliberately no `Module` entry, in BOTH dataset versions — but for different
+  // reasons, so don't "fix" this by adding one:
+  //   - v11-v13: modules never reduced labor at all.
+  //   - v14: modules DO reduce labor, but the effect is applied at the recipe
+  //     level in solver.ts (scoped against the recipe's skill, Rule A) rather
+  //     than through a Module modifier. Vanilla v14 emits no Module modifier on
+  //     a recipe's Labor value either, so custom recipes match vanilla here.
+  // Adding one would double-count the labor discount on v14.
   store.setRow('modifiers', generateId(), {
     datasetId,
     targetType: 'labor',

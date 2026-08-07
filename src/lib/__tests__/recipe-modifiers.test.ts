@@ -262,10 +262,27 @@ describe('resolveRecipeModifiers', () => {
       id: 'pm1',
       datasetId: DS,
       name: 'AdvancedUpgrade',
-      pluginType: 'Resource',
-      percent: 0.9,
-      skillId: 'sk1',
-      skillPercent: 0.8,
+      slot: 'Specialty',
+    })
+    game.setRow('pluginModuleBonuses', 'pm1-b0', {
+      id: 'pm1-b0',
+      datasetId: DS,
+      pluginModuleId: 'pm1',
+      bonusIndex: 0,
+      action: 'ResourceCost',
+      effectType: 'Multiplicative',
+      value: 0.9,
+      skillIds: '[]',
+    })
+    game.setRow('pluginModuleBonuses', 'pm1-b1', {
+      id: 'pm1-b1',
+      datasetId: DS,
+      pluginModuleId: 'pm1',
+      bonusIndex: 1,
+      action: 'ResourceCost',
+      effectType: 'Multiplicative',
+      value: 0.8,
+      skillIds: '["sk1"]',
     })
     game.setRow('recipeElements', 're-i', {
       id: 're-i',
@@ -290,7 +307,7 @@ describe('resolveRecipeModifiers', () => {
       id: 'uct1',
       buildId: BUILD,
       craftingTableId: 'ct1',
-      pluginModuleId: 'pm1',
+      specialtyModuleId: 'pm1',
       costPerMinute: 0.5,
     })
     setUserRecipe()
@@ -316,10 +333,47 @@ describe('resolveRecipeModifiers', () => {
       id: 'pm1',
       datasetId: DS,
       name: 'MiningUpgrade',
-      pluginType: 'Resource&Speed',
-      percent: 0.8,
-      skillId: 'sk1',
-      skillPercent: 0.75,
+      slot: 'Specialty',
+    })
+    game.setRow('pluginModuleBonuses', 'pm1-b0', {
+      id: 'pm1-b0',
+      datasetId: DS,
+      pluginModuleId: 'pm1',
+      bonusIndex: 0,
+      action: 'ResourceCost',
+      effectType: 'Multiplicative',
+      value: 0.8,
+      skillIds: '[]',
+    })
+    game.setRow('pluginModuleBonuses', 'pm1-b1', {
+      id: 'pm1-b1',
+      datasetId: DS,
+      pluginModuleId: 'pm1',
+      bonusIndex: 1,
+      action: 'ResourceCost',
+      effectType: 'Multiplicative',
+      value: 0.75,
+      skillIds: '["sk1"]',
+    })
+    game.setRow('pluginModuleBonuses', 'pm1-b2', {
+      id: 'pm1-b2',
+      datasetId: DS,
+      pluginModuleId: 'pm1',
+      bonusIndex: 2,
+      action: 'CraftTime',
+      effectType: 'Multiplicative',
+      value: 0.8,
+      skillIds: '[]',
+    })
+    game.setRow('pluginModuleBonuses', 'pm1-b3', {
+      id: 'pm1-b3',
+      datasetId: DS,
+      pluginModuleId: 'pm1',
+      bonusIndex: 3,
+      action: 'CraftTime',
+      effectType: 'Multiplicative',
+      value: 0.75,
+      skillIds: '["sk1"]',
     })
     // Modifier references 'Mining' by name → resolves to skillId 'sk1'
     // → matches module.skillId → skillPercent (0.75) applies to craft time.
@@ -335,7 +389,7 @@ describe('resolveRecipeModifiers', () => {
       id: 'uct1',
       buildId: BUILD,
       craftingTableId: 'ct1',
-      pluginModuleId: 'pm1',
+      specialtyModuleId: 'pm1',
       costPerMinute: 0,
     })
     setUserRecipe()
@@ -360,10 +414,27 @@ describe('resolveRecipeModifiers', () => {
       id: 'pm1',
       datasetId: DS,
       name: 'Upg',
-      pluginType: 'Resource',
-      percent: 0.9,
-      skillId: 'sk1',
-      skillPercent: 0.5,
+      slot: 'Specialty',
+    })
+    game.setRow('pluginModuleBonuses', 'pm1-b0', {
+      id: 'pm1-b0',
+      datasetId: DS,
+      pluginModuleId: 'pm1',
+      bonusIndex: 0,
+      action: 'ResourceCost',
+      effectType: 'Multiplicative',
+      value: 0.9,
+      skillIds: '[]',
+    })
+    game.setRow('pluginModuleBonuses', 'pm1-b1', {
+      id: 'pm1-b1',
+      datasetId: DS,
+      pluginModuleId: 'pm1',
+      bonusIndex: 1,
+      action: 'ResourceCost',
+      effectType: 'Multiplicative',
+      value: 0.5,
+      skillIds: '["sk1"]',
     })
     game.setRow('recipeElements', 're-i', {
       id: 're-i',
@@ -386,7 +457,7 @@ describe('resolveRecipeModifiers', () => {
       id: 'uct1',
       buildId: BUILD,
       craftingTableId: 'ct1',
-      pluginModuleId: 'pm1',
+      specialtyModuleId: 'pm1',
       costPerMinute: 0,
     })
     setUserRecipe()
@@ -513,10 +584,17 @@ describe('resolveRecipeModifiers', () => {
       id: 'pm1',
       datasetId: DS,
       name: 'Upg',
-      pluginType: 'Resource',
-      percent: 0.9,
-      skillId: '',
-      skillPercent: 0,
+      slot: 'Specialty',
+    })
+    game.setRow('pluginModuleBonuses', 'pm1-b0', {
+      id: 'pm1-b0',
+      datasetId: DS,
+      pluginModuleId: 'pm1',
+      bonusIndex: 0,
+      action: 'ResourceCost',
+      effectType: 'Multiplicative',
+      value: 0.9,
+      skillIds: '[]',
     })
     game.setRow('talents', 't-a', {
       id: 't-a',
@@ -577,7 +655,7 @@ describe('resolveRecipeModifiers', () => {
       id: 'uct1',
       buildId: BUILD,
       craftingTableId: 'ct1',
-      pluginModuleId: 'pm1',
+      specialtyModuleId: 'pm1',
       costPerMinute: 0,
     })
     setUserRecipe()
@@ -609,10 +687,17 @@ describe('resolveRecipeModifiers', () => {
       id: 'pm1',
       datasetId: DS,
       name: 'ResourceOnly',
-      pluginType: 'Resource',
-      percent: 0.5,
-      skillId: '',
-      skillPercent: 0,
+      slot: 'Specialty',
+    })
+    game.setRow('pluginModuleBonuses', 'pm1-b0', {
+      id: 'pm1-b0',
+      datasetId: DS,
+      pluginModuleId: 'pm1',
+      bonusIndex: 0,
+      action: 'ResourceCost',
+      effectType: 'Multiplicative',
+      value: 0.5,
+      skillIds: '[]',
     })
     // Both craftMinutes and an ingredient have a Module modifier — but the
     // module is Resource-only, so only the ingredient multiplier should change.
@@ -645,7 +730,7 @@ describe('resolveRecipeModifiers', () => {
       id: 'uct1',
       buildId: BUILD,
       craftingTableId: 'ct1',
-      pluginModuleId: 'pm1',
+      specialtyModuleId: 'pm1',
       costPerMinute: 0,
     })
     setUserRecipe()
@@ -669,10 +754,17 @@ describe('resolveRecipeModifiers', () => {
       id: 'pm1',
       datasetId: DS,
       name: 'SpeedOnly',
-      pluginType: 'Speed',
-      percent: 0.5,
-      skillId: '',
-      skillPercent: 0,
+      slot: 'Specialty',
+    })
+    game.setRow('pluginModuleBonuses', 'pm1-b0', {
+      id: 'pm1-b0',
+      datasetId: DS,
+      pluginModuleId: 'pm1',
+      bonusIndex: 0,
+      action: 'CraftTime',
+      effectType: 'Multiplicative',
+      value: 0.5,
+      skillIds: '[]',
     })
     game.setRow('recipeElements', 're-i', {
       id: 're-i',
@@ -703,7 +795,7 @@ describe('resolveRecipeModifiers', () => {
       id: 'uct1',
       buildId: BUILD,
       craftingTableId: 'ct1',
-      pluginModuleId: 'pm1',
+      specialtyModuleId: 'pm1',
       costPerMinute: 0,
     })
     setUserRecipe()

@@ -1,4 +1,4 @@
-import { act, fireEvent, render } from '@testing-library/react'
+import { act, fireEvent, render, waitFor } from '@testing-library/react'
 import type { Store } from 'tinybase'
 import type { IndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
 import { describe, expect, it } from 'vitest'
@@ -176,9 +176,12 @@ describe('SkillsPanel (smoke)', () => {
     fireEvent.click(dropdown)
     // Two professions appear as group headers in the dropdown panel — proves
     // the grouped-by-profession path ran with profession-label resolution.
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(document.body.textContent).toMatch(/Mining/)
-    expect(document.body.textContent).toMatch(/Foodie/)
+    // waitFor (not a bare setTimeout) so the AutoComplete's async state update
+    // lands inside act() — otherwise every run prints an act() warning.
+    await waitFor(() => {
+      expect(document.body.textContent).toMatch(/Mining/)
+      expect(document.body.textContent).toMatch(/Foodie/)
+    })
   })
 
   it('skips userSkills rows from other builds', () => {
@@ -248,5 +251,56 @@ describe('SkillsPanel (smoke)', () => {
     // No throw — the foreign userTalent row was excluded from the lookup.
     const rows = document.body.querySelectorAll('.p-datatable-tbody tr')
     expect(rows.length).toBe(1)
+  })
+})
+
+// The star total now has up to three sources (skills, talents, modules), so the
+// badge tooltip breaks it down. It stays a plain total when only one source
+// contributes — which is every v11-v13 build.
+describe('SkillsPanel star badge', () => {
+  const badge = () =>
+    document.body.querySelector('.pi-star-fill')?.parentElement as HTMLElement | null
+
+  it('shows the plain total when only skills contribute', () => {
+    const stores = makeStores()
+    renderPanel(stores)
+    const el = badge()
+    expect(el).not.toBeNull()
+    expect(el!.textContent).toContain('1')
+    expect(el!.getAttribute('title')).not.toContain('from skills')
+  })
+
+  it('includes installed module stars in the total and breaks them down', () => {
+    const stores = makeStores()
+    stores.buildStore.setRow('userCraftingTables', 'uct1', {
+      id: 'uct1',
+      buildId: BUILD,
+      craftingTableId: 'ct-anvil',
+      basicModuleId: 'pm-basic',
+      modernModuleId: 'pm-mod',
+      costPerMinute: 0,
+    })
+    renderPanel(stores)
+    const el = badge()!
+    // 1 skill (pre-v13 mode) + 2 module stars.
+    expect(el.textContent).toContain('3')
+    const title = el.getAttribute('title') ?? ''
+    expect(title).toContain('from skills')
+    expect(title).toContain('from upgrade modules')
+  })
+
+  it('does not count a free Specialty module', () => {
+    const stores = makeStores()
+    stores.buildStore.setRow('userCraftingTables', 'uct1', {
+      id: 'uct1',
+      buildId: BUILD,
+      craftingTableId: 'ct-anvil',
+      specialtyModuleId: 'pm-spec',
+      costPerMinute: 0,
+    })
+    renderPanel(stores)
+    const el = badge()!
+    expect(el.textContent).toContain('1')
+    expect(el.getAttribute('title') ?? '').not.toContain('from upgrade modules')
   })
 })

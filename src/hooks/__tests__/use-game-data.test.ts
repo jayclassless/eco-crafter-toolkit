@@ -19,7 +19,10 @@ const emptyParsed = (): ParsedDataset => ({
   tagItems: [],
   craftingTables: [],
   pluginModules: [],
+  pluginModuleBonuses: [],
   craftingTablePluginModules: [],
+  itemSalvage: [],
+  recipeGarbage: [],
   recipes: [],
   recipeElements: [],
   modifiers: [],
@@ -81,18 +84,19 @@ describe('createGameDataOps', () => {
       expect(row.laborReducePercent).toBe('[1,0.9]')
     })
 
-    it('imports plugin modules with default skill fields', async () => {
+    it('imports plugin modules with their slot and deprecation flag', async () => {
       const ops = createGameDataOps(store)
       const parsed = emptyParsed()
       parsed.pluginModules.push({
         id: 'pm1',
         name: 'Mod',
-        percent: 0.5,
+        slot: 'Specialty',
+        isDeprecated: false,
       } as ParsedDataset['pluginModules'][number])
       await ops.importDataset(parsed, 'X')
       const row = store.getRow('pluginModules', 'pm1')
-      expect(row.skillId).toBe('')
-      expect(row.skillPercent).toBe(0)
+      expect(row.slot).toBe('Specialty')
+      expect(row.isDeprecated).toBe(false)
     })
 
     it('imports items, tagItems, craftingTables, and recipeElements with the dataset id', async () => {

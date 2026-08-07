@@ -61,7 +61,7 @@ function makeResult(ingredientPrices: Record<string, number>) {
     DS,
     () => '',
     'r1',
-    { skillLevel: 0, pluginModuleId: '', talentStates: {}, ingredientPrices },
+    { skillLevel: 0, moduleIds: [], talentStates: {}, ingredientPrices },
     0,
     20
   )!

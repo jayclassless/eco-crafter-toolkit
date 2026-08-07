@@ -234,11 +234,27 @@ describe('buildSolverSnapshot', () => {
       id: 'pm1',
       datasetId: DS,
       name: 'Upg',
-      craftingTableId: 'ct1',
-      pluginType: 'speed',
-      percent: 0.5,
-      skillId: 'sk1',
-      skillPercent: 0.1,
+      slot: 'Specialty',
+    })
+    game.setRow('pluginModuleBonuses', 'pmb1', {
+      id: 'pmb1',
+      datasetId: DS,
+      pluginModuleId: 'pm1',
+      bonusIndex: 0,
+      action: 'CraftTime',
+      effectType: 'Multiplicative',
+      value: 0.5,
+      skillIds: '[]',
+    })
+    game.setRow('pluginModuleBonuses', 'pmb2', {
+      id: 'pmb2',
+      datasetId: DS,
+      pluginModuleId: 'pm1',
+      bonusIndex: 1,
+      action: 'CraftTime',
+      effectType: 'Multiplicative',
+      value: 0.1,
+      skillIds: '["sk1"]',
     })
     game.setRow('recipes', 'r1', {
       id: 'r1',
@@ -327,7 +343,7 @@ describe('buildSolverSnapshot', () => {
       id: 'uct1',
       buildId: BUILD,
       craftingTableId: 'ct1',
-      pluginModuleId: 'pm1',
+      specialtyModuleId: 'pm1',
       costPerMinute: 0.5,
     })
     build.setRow('userRecipes', 'ur1', {
@@ -350,12 +366,23 @@ describe('buildSolverSnapshot', () => {
     expect(r.skillLevel).toBe(4)
     expect(r.laborReducePercent).toEqual([1, 0.9, 0.8])
     expect(r.activeTalents).toEqual([{ name: 'Sharp', value: 0.1 }])
-    expect(r.pluginModule).toEqual({
-      percent: 0.5,
-      skillId: 'sk1',
-      skillPercent: 0.1,
-      pluginType: 'speed',
-    })
+    // Effects are emitted UNFILTERED — scope resolution happens at apply time.
+    expect(r.moduleEffects).toEqual([
+      {
+        moduleId: 'pm1',
+        action: 'CraftTime',
+        effectType: 'Multiplicative',
+        value: 0.5,
+        skillIds: [],
+      },
+      {
+        moduleId: 'pm1',
+        action: 'CraftTime',
+        effectType: 'Multiplicative',
+        value: 0.1,
+        skillIds: ['sk1'],
+      },
+    ])
     expect(r.costPerMinute).toBe(0.5)
     expect(r.roundFactor).toBe(2)
     expect(r.ingredients).toHaveLength(1)
@@ -495,7 +522,7 @@ describe('buildSolverSnapshot', () => {
     expect(snap.recipes).toHaveLength(0)
   })
 
-  it('ignores talents from unrelated skills and the user CT plugin module without skill fields', () => {
+  it('ignores talents from unrelated skills and emits an unscoped module effect', () => {
     setupSettings()
     game.setRow('skills', 'sk1', {
       id: 'sk1',
@@ -524,16 +551,23 @@ describe('buildSolverSnapshot', () => {
       level: 1,
     })
     game.setRow('craftingTables', 'ct1', { id: 'ct1', datasetId: DS, name: 'Anvil' })
-    // Plugin module with empty skill fields → undefined coalesces both
+    // Unscoped module — its single effect applies wherever craft time is
+    // module-eligible, regardless of the recipe's skill.
     game.setRow('pluginModules', 'pm1', {
       id: 'pm1',
       datasetId: DS,
       name: 'Plain',
-      craftingTableId: 'ct1',
-      pluginType: 'speed',
-      percent: 0.25,
-      skillId: '',
-      skillPercent: 0,
+      slot: 'Specialty',
+    })
+    game.setRow('pluginModuleBonuses', 'pmb1', {
+      id: 'pmb1',
+      datasetId: DS,
+      pluginModuleId: 'pm1',
+      bonusIndex: 0,
+      action: 'CraftTime',
+      effectType: 'Multiplicative',
+      value: 0.25,
+      skillIds: '[]',
     })
     game.setRow('recipes', 'r1', {
       id: 'r1',
@@ -587,14 +621,14 @@ describe('buildSolverSnapshot', () => {
       id: 'uct1',
       buildId: BUILD,
       craftingTableId: 'ct1',
-      pluginModuleId: 'pm1',
+      specialtyModuleId: 'pm1',
       costPerMinute: 0.1,
     })
     build.setRow('userCraftingTables', 'uct-foreign', {
       id: 'uct-foreign',
       buildId: 'other-build',
       craftingTableId: 'ct1',
-      pluginModuleId: 'pm1',
+      specialtyModuleId: 'pm1',
       costPerMinute: 99,
     })
     build.setRow('userRecipes', 'ur1', {
@@ -606,12 +640,15 @@ describe('buildSolverSnapshot', () => {
     const snap = buildSolverSnapshot(game, build, BUILD, DS)!
     const r = snap.recipes[0]
     expect(r.activeTalents.map((t) => t.name)).toEqual(['OK'])
-    expect(r.pluginModule).toEqual({
-      percent: 0.25,
-      skillId: undefined,
-      skillPercent: undefined,
-      pluginType: 'speed',
-    })
+    expect(r.moduleEffects).toEqual([
+      {
+        moduleId: 'pm1',
+        action: 'CraftTime',
+        effectType: 'Multiplicative',
+        value: 0.25,
+        skillIds: [],
+      },
+    ])
     expect(r.skillLevel).toBe(0) // foreign userSkill not associated
     expect(r.costPerMinute).toBe(0.1)
   })
@@ -661,7 +698,7 @@ describe('buildSolverSnapshot', () => {
     expect(r.skillId).toBeUndefined()
     expect(r.skillLevel).toBe(0)
     expect(r.laborReducePercent).toEqual([1.0])
-    expect(r.pluginModule).toBeNull()
+    expect(r.moduleEffects).toEqual([])
     expect(r.costPerMinute).toBe(0)
     expect(r.products).toHaveLength(1)
     expect(r.products[0].share).toBe(1)
@@ -669,7 +706,7 @@ describe('buildSolverSnapshot', () => {
     expect(r.activeTalents).toHaveLength(0)
   })
 
-  it('leaves pluginModule null when the user crafting table has no plugin module', () => {
+  it('leaves moduleEffects empty when the user crafting table has no module', () => {
     setupSettings()
     game.setRow('craftingTables', 'ct1', { id: 'ct1', datasetId: DS, name: 'Anvil' })
     game.setRow('recipes', 'r1', {
@@ -697,7 +734,7 @@ describe('buildSolverSnapshot', () => {
       id: 'uct1',
       buildId: BUILD,
       craftingTableId: 'ct1',
-      pluginModuleId: '',
+      specialtyModuleId: '',
       costPerMinute: 0.25,
     })
     build.setRow('userRecipes', 'ur1', {
@@ -707,7 +744,7 @@ describe('buildSolverSnapshot', () => {
       roundFactor: 0,
     })
     const snap = buildSolverSnapshot(game, build, BUILD, DS)!
-    expect(snap.recipes[0].pluginModule).toBeNull()
+    expect(snap.recipes[0].moduleEffects).toEqual([])
     expect(snap.recipes[0].costPerMinute).toBe(0.25)
   })
 

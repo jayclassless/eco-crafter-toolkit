@@ -22,6 +22,10 @@ export type PurgePersisters = {
   ui: IndexedDbPersister
 }
 
+// Every build-scoped table in build-store.ts must be listed here, or purging a
+// build leaves its rows behind as orphans keyed to a buildId that no longer
+// exists. The last five were missing — a pre-existing leak, fixed alongside the
+// v14 work. Reconcile this list against the schema when adding a table.
 const BUILD_SCOPED_TABLES = [
   'userSkills',
   'userTalents',
@@ -31,9 +35,14 @@ const BUILD_SCOPED_TABLES = [
   'userMargins',
   'userRecipeMargins',
   'userProductMargins',
+  'userProductShares',
+  'userReintegratedProducts',
   'userSettings',
   'computedPrices',
+  'userPlantings',
   'hiddenSkills',
+  'hiddenCraftingTables',
+  'hiddenTags',
 ] as const
 
 const DATASET_SCOPED_TABLES = [
@@ -47,7 +56,10 @@ const DATASET_SCOPED_TABLES = [
   'tagItems',
   'craftingTables',
   'pluginModules',
+  'pluginModuleBonuses',
   'craftingTablePluginModules',
+  'itemSalvage',
+  'recipeGarbage',
   'recipes',
   'recipeElements',
   'modifiers',

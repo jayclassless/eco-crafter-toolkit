@@ -150,7 +150,7 @@ describe('createCraftingTableManagement', () => {
       const row = buildStore.getRow('userCraftingTables', id)
       expect(row.craftingTableId).toBe('ct-pickaxe')
       expect(row.buildId).toBe(BUILD_ID)
-      expect(row.pluginModuleId).toBe('')
+      expect(row.specialtyModuleId).toBe('')
       expect(row.costPerMinute).toBe(0)
     })
 
@@ -357,13 +357,32 @@ describe('createCraftingTableManagement', () => {
     })
   })
 
-  describe('setPluginModule / setCostPerMinute', () => {
+  describe('setSlotModule / setCostPerMinute', () => {
     it('updates the row cells', () => {
       const id = mgmt().addTable('ct-pickaxe')
-      mgmt().setPluginModule(id, 'pm1')
+      mgmt().setSlotModule(id, 'Specialty', 'pm1')
       mgmt().setCostPerMinute(id, 2.5)
-      expect(buildStore.getCell('userCraftingTables', id, 'pluginModuleId')).toBe('pm1')
+      expect(buildStore.getCell('userCraftingTables', id, 'specialtyModuleId')).toBe('pm1')
       expect(buildStore.getCell('userCraftingTables', id, 'costPerMinute')).toBe(2.5)
+    })
+
+    it('writes each slot to its own cell independently', () => {
+      const id = mgmt().addTable('ct-pickaxe')
+      mgmt().setSlotModule(id, 'Basic', 'pm-basic')
+      mgmt().setSlotModule(id, 'Advanced', 'pm-adv')
+      mgmt().setSlotModule(id, 'Modern', 'pm-mod')
+      mgmt().setSlotModule(id, 'Specialty', 'pm-spec')
+      expect(buildStore.getCell('userCraftingTables', id, 'basicModuleId')).toBe('pm-basic')
+      expect(buildStore.getCell('userCraftingTables', id, 'advancedModuleId')).toBe('pm-adv')
+      expect(buildStore.getCell('userCraftingTables', id, 'modernModuleId')).toBe('pm-mod')
+      expect(buildStore.getCell('userCraftingTables', id, 'specialtyModuleId')).toBe('pm-spec')
+    })
+
+    it('clears a slot when passed an empty id', () => {
+      const id = mgmt().addTable('ct-pickaxe')
+      mgmt().setSlotModule(id, 'Specialty', 'pm1')
+      mgmt().setSlotModule(id, 'Specialty', '')
+      expect(buildStore.getCell('userCraftingTables', id, 'specialtyModuleId')).toBe('')
     })
   })
 })

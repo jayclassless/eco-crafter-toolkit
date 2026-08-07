@@ -13,6 +13,12 @@ import { PartLabel } from '@/components/common/PartLabel'
 import { SkillIcon } from '@/components/common/SkillIcon'
 import { TagLabel } from '@/components/common/TagLabel'
 import { AppliedBonuses } from '@/components/price-calculator/products/AppliedBonuses'
+import type { GarbageAmountRow } from '@/components/price-calculator/products/GarbageAmount'
+import {
+  GarbageBreakdownTab,
+  type GarbageBreakdownViewRow,
+} from '@/components/price-calculator/products/GarbageBreakdownTab'
+import { GarbageOutputTable } from '@/components/price-calculator/products/GarbageOutputTable'
 import { IngredientPriceCell } from '@/components/price-calculator/products/IngredientPriceCell'
 import { ProductItemName } from '@/components/price-calculator/products/ProductItemName'
 import { RecipeFavoriteStar } from '@/components/price-calculator/products/RecipeFavoriteStar'
@@ -34,7 +40,9 @@ import {
   useStoreRevision,
   useTableRowIdsRevision,
 } from '@/hooks/use-store-revision'
+import { CRAFT_GARBAGE_RATIO } from '@/lib/game-constants'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
+import { computeRecipeGarbage } from '@/lib/recipe-garbage'
 import { resolveRecipeModifiers } from '@/lib/recipe-modifiers'
 import { buildReintegrationOverrides, computeReintegratedProductIds } from '@/lib/reintegration'
 import { computeAutoShares } from '@/lib/share-defaults'
@@ -548,6 +556,95 @@ export function RecipeDialog({
       reintegrateCellRev,
     ]
   )
+
+  // Which item the build has pinned for each tag. Only this one cell matters
+  // here, so subscribe to it rather than to all of `userPrices`.
+  const primaryItemRev = useCellInTableRevision(buildStore, 'userPrices', 'primaryItemId')
+
+  /**
+   * Garbage this craft produces.
+   *
+   * Deliberately built from the raw recipe elements rather than from
+   * `elementStructure` / `resolvedMods`: garbage uses BASE ingredient
+   * quantities (confirmed in game — installing upgrade modules reduced the
+   * ingredients consumed but not the garbage produced), so it must not depend
+   * on the build's modules, talents or skill levels, and must not re-run when
+   * they change. `gameRev` and the tag-pin signal are the only inputs.
+   *
+   * Null when the recipe produces no garbage, which hides both the Cost
+   * Components section and the Waste tab. That covers all of v11–v13, which
+   * ship no salvage data at all, with no version check.
+   */
+  const garbage = useMemo(() => {
+    if (!recipeId) return null
+    const indexes = getGameDataIndexes(gameDataStore)
+
+    const pinnedTagItems = new Map<string, string>()
+    for (const upId of buildStore.getRowIds('userPrices')) {
+      const up = buildStore.getRow('userPrices', upId)
+      if (up.buildId !== buildId) continue
+      if (up.primaryItemId) {
+        pinnedTagItems.set(up.itemOrTagId as string, up.primaryItemId as string)
+      }
+    }
+
+    const elements = indexes.recipeIndexes.elementsByRecipeId.get(recipeId) ?? []
+    const { totals, breakdown } = computeRecipeGarbage({
+      explicit: indexes.garbageByRecipeId.get(recipeId) ?? [],
+      ingredients: elements
+        .filter(({ row }) => !row.isProduct)
+        .map(({ row }) => ({
+          itemOrTagId: row.itemOrTagId as string,
+          quantity: row.baseQuantity as number,
+        })),
+      salvageByItemId: indexes.salvageByItemId,
+      // The same candidate list the price solver walks for min/max pricing, so
+      // a tag's waste range and its cost describe the same set of items.
+      tagItemIds: (id) => indexes.itemIdsByTagId.get(id),
+      resolveTagItem: (tagId) => pinnedTagItems.get(tagId) ?? null,
+      ratio: CRAFT_GARBAGE_RATIO,
+    })
+    if (totals.length === 0) return null
+
+    const decorate = (q: { itemId: string; min: number; max: number }): GarbageAmountRow => ({
+      ...q,
+      name: getName('item', q.itemId) || getItemRawName(q.itemId),
+      rawName: getItemRawName(q.itemId),
+      isCustom: !!gameDataStore.getRow('items', q.itemId)?.isCustom,
+    })
+
+    const rows: GarbageBreakdownViewRow[] = breakdown.map((r, i) => ({
+      key: r.sourceItemOrTagId ?? `explicit-${i}`,
+      source: r.sourceItemOrTagId
+        ? {
+            // A pinned tag is displayed as the item it resolved to — that is
+            // the thing whose salvage the numbers actually came from.
+            name:
+              getName('item', r.resolvedItemId ?? r.sourceItemOrTagId) ||
+              getItemRawName(r.resolvedItemId ?? r.sourceItemOrTagId),
+            rawName: getItemRawName(r.resolvedItemId ?? r.sourceItemOrTagId),
+            isCustom: !!gameDataStore.getRow('items', r.resolvedItemId ?? r.sourceItemOrTagId)
+              ?.isCustom,
+          }
+        : null,
+      sourceQuantity: r.sourceQuantity,
+      isRange: r.isRange,
+      outputs: r.outputs.map(decorate),
+    }))
+
+    return { totals: totals.map(decorate), rows }
+    // gameRev / primaryItemRev are the invalidation signals for this memo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    recipeId,
+    buildId,
+    gameDataStore,
+    buildStore,
+    getName,
+    getItemRawName,
+    gameRev,
+    primaryItemRev,
+  ])
 
   // Recipes in this build that consume the primary product of the current
   // recipe. The primary product is the first product (by `index`) that isn't
@@ -1118,11 +1215,16 @@ export function RecipeDialog({
                     )}
                   </DataTable>
 
+                  {/* The products total belongs with the rows it sums, not
+                      pinned to the bottom of the pane — Bonuses and Waste sit
+                      below it and describe the craft rather than its price. */}
+                  <div className="pt-3 mb-3">{totalFooter(productsTotal)}</div>
+
                   {resolvedMods && resolvedMods.bonuses.length > 0 && (
                     <AppliedBonuses bonuses={resolvedMods.bonuses} />
                   )}
 
-                  <div className="mt-auto pt-3">{totalFooter(productsTotal)}</div>
+                  {garbage && <GarbageOutputTable totals={garbage.totals} />}
                 </div>
               </div>
             </TabPanel>
@@ -1142,6 +1244,16 @@ export function RecipeDialog({
                 onOpenMaterial={onOpenMaterial}
               />
             </TabPanel>
+            {/* Conditionally present, so the tab COUNT varies by recipe. Safe
+                because the effect above resets `activeTabIndex` to 0 on every
+                recipe change — without that, switching from a recipe that has
+                this tab to one that doesn't would leave the index dangling past
+                the end. */}
+            {garbage && (
+              <TabPanel header={t('priceCalculator.recipe.tabWaste')}>
+                <GarbageBreakdownTab rows={garbage.rows} totals={garbage.totals} />
+              </TabPanel>
+            )}
           </TabView>
         </div>
       </Dialog>

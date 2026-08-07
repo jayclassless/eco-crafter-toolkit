@@ -3,7 +3,6 @@ import { Button } from 'primereact/button'
 import { Column } from 'primereact/column'
 import { DataTable } from 'primereact/datatable'
 import { Dialog } from 'primereact/dialog'
-import { Dropdown, type DropdownChangeEvent } from 'primereact/dropdown'
 import { Panel } from 'primereact/panel'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -14,11 +13,20 @@ import {
   type GroupedAutoCompleteGroup,
 } from '@/components/common/GroupedAutoComplete'
 import { NumericField } from '@/components/common/NumericField'
-import { PluginModuleIcon } from '@/components/common/PluginModuleIcon'
 import { useCraftingTableManagement } from '@/hooks/use-crafting-table-management'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useStoreRevision } from '@/hooks/use-store-revision'
+import { craftingTableModules } from '@/lib/game-data-indexes'
+import {
+  deriveTableModuleSlots,
+  MODULE_SLOT_CELLS,
+  MODULE_SLOT_ORDER,
+  type SlotSelection,
+} from '@/lib/module-slots'
 import { useStores } from '@/stores/providers'
+
+import type { ModuleSlotRow } from './crafting-table-modules-types'
+import { CraftingTableModulesCell } from './CraftingTableModulesCell'
 
 const BUILD_TABLES = ['userCraftingTables'] as const
 
@@ -35,21 +43,15 @@ interface TableOption {
 
 type TableGroup = GroupedAutoCompleteGroup<TableOption>
 
-interface PluginModuleOption {
-  id: string
-  name: string
-  rawName: string
-  isVanilla: boolean
-  percent: number
-}
-
 interface UserTableRow {
   id: string
   craftingTableId: string
   name: string
   rawName: string
-  pluginModuleId: string
-  pluginModules: PluginModuleOption[]
+  /** Slots this table exposes, derived from the modules it accepts. */
+  slots: ModuleSlotRow[]
+  /** Installed module id per slot. */
+  selectedModules: SlotSelection
   costPerMinute: number
 }
 
@@ -73,43 +75,43 @@ export function CraftingTablesPanel({ buildId, datasetId }: Props) {
       const ctRow = gameDataStore.getRow('craftingTables', ctId)
       const name = getName('craftingTable', ctId)
 
-      // Find available plugin modules for this table (via join table)
-      const pluginModules: PluginModuleOption[] = []
-      for (const joinId of gameDataStore.getRowIds('craftingTablePluginModules')) {
-        const join = gameDataStore.getRow('craftingTablePluginModules', joinId)
-        if (join.craftingTableId !== ctId) continue
-        const pmId = join.pluginModuleId as string
-        const pm = gameDataStore.getRow('pluginModules', pmId)
-        if (!pm.name) continue
-        pluginModules.push({
-          id: pmId,
-          name: getName('pluginModule', pmId) || (pm.name as string),
-          rawName: pm.name as string,
-          isVanilla: !(pm.skillId as string),
-          percent: pm.percent as number,
-        })
+      // Slot rows come straight out of the shared index — the table→slot wiring
+      // lives in the game's compiled code, so it is inferred from the modules
+      // the table accepts. A legacy dataset normalizes every module to
+      // Specialty, so a legacy table derives exactly one Specialty row and the
+      // popover shows the single dropdown it always did.
+      const slots = deriveTableModuleSlots(
+        craftingTableModules(gameDataStore, datasetId, ctId).map((m) => ({
+          ...m,
+          name: getName('pluginModule', m.id) || m.name,
+          rawName: m.name,
+        }))
+      ).map((s) => ({
+        ...s,
+        candidates: s.candidates
+          .map(({ id, name, rawName }) => ({ id, name, rawName }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+
+      const selectedModules: SlotSelection = {}
+      for (const slot of MODULE_SLOT_ORDER) {
+        const id = row[MODULE_SLOT_CELLS[slot]] as string
+        if (id) selectedModules[slot] = id
       }
-      // Vanilla upgrades first, ordered by strength (higher percent = weaker tier first),
-      // then specialized upgrades alphabetically.
-      pluginModules.sort((a, b) => {
-        if (a.isVanilla !== b.isVanilla) return a.isVanilla ? -1 : 1
-        if (a.isVanilla) return b.percent - a.percent
-        return a.name.localeCompare(b.name)
-      })
 
       rows.push({
         id: rowId,
         craftingTableId: ctId,
         name,
         rawName: ctRow.name as string,
-        pluginModuleId: row.pluginModuleId as string,
-        pluginModules,
+        slots,
+        selectedModules,
         costPerMinute: row.costPerMinute as number,
       })
     }
     rows.sort((a, b) => a.name.localeCompare(b.name))
     return rows
-  }, [buildId, buildStore, gameDataStore, getName])
+  }, [buildId, buildStore, datasetId, gameDataStore, getName])
 
   const tables = getUserTables()
 
@@ -194,59 +196,14 @@ export function CraftingTablesPanel({ buildId, datasetId }: Props) {
     setSuggestions(groups)
   }
 
-  const moduleItemTemplate = (opt: unknown) => {
-    const o = opt as PluginModuleOption
-    // The synthetic "None" option at the top of the list has no icon.
-    if (!o.id) return <span className="text-color-secondary">{o.name}</span>
-    return (
-      <div className="flex align-items-center gap-2">
-        <PluginModuleIcon module={{ name: o.rawName }} />
-        <span>{o.name}</span>
-      </div>
-    )
-  }
-
-  const moduleValueTemplate = (opt: unknown) => {
-    const o = opt as PluginModuleOption | null
-    // Both branches use the same flex container + min-height so the dropdown
-    // doesn't resize when toggling between "None" and an icon (the icon is
-    // 24px tall; plain text is shorter and caused a visible height shift).
-    // Centering also closes the gap between the icon and the trigger caret
-    // — the label flex-grows to fill this narrow column.
-    return (
-      <div className="flex align-items-center justify-content-center" style={{ minHeight: 24 }}>
-        {!o || !o.id ? (
-          <span>{t('common.none')}</span>
-        ) : (
-          <PluginModuleIcon module={{ name: o.rawName }} />
-        )}
-      </div>
-    )
-  }
-
-  const moduleTemplate = (row: UserTableRow) =>
-    row.pluginModules.length > 0 ? (
-      // `showClear` places an absolutely-positioned X at the right edge of
-      // the dropdown's label area, which overlapped the module icon in this
-      // narrow column. We use a synthetic "None" option at the top of the
-      // list instead so users can explicitly clear a selection.
-      <Dropdown
-        value={row.pluginModuleId || null}
-        options={[
-          { id: '', name: t('common.none'), rawName: '', isVanilla: false, percent: 0 },
-          ...row.pluginModules,
-        ]}
-        optionLabel="name"
-        optionValue="id"
-        onChange={(e: DropdownChangeEvent) => tableMgmt.setPluginModule(row.id, e.value ?? '')}
-        placeholder={t('common.none')}
-        className="w-full"
-        itemTemplate={moduleItemTemplate}
-        valueTemplate={moduleValueTemplate}
-      />
-    ) : (
-      <span className="text-color-secondary text-center block">{t('common.notApplicable')}</span>
-    )
+  const moduleTemplate = (row: UserTableRow) => (
+    <CraftingTableModulesCell
+      slots={row.slots}
+      selected={row.selectedModules}
+      onSelect={(slot, moduleId) => tableMgmt.setSlotModule(row.id, slot, moduleId)}
+      idPrefix={`uct-${row.id}`}
+    />
+  )
 
   const costTemplate = (row: UserTableRow) => (
     <NumericField
@@ -313,7 +270,7 @@ export function CraftingTablesPanel({ buildId, datasetId }: Props) {
           <Column
             header={t('priceCalculator.config.upgrade')}
             body={moduleTemplate}
-            style={{ width: '7rem' }}
+            style={{ width: '9rem' }}
           />
           <Column
             header={t('priceCalculator.config.costPerMinute')}

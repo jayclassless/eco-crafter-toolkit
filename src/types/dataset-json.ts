@@ -78,6 +78,13 @@ export interface TalentJson {
   Bonuses?: TalentBonusJson[]
 }
 
+/** A parsed `new Bonus { … }` from the game's Bonus framework. Shared by talents
+ * (`TalentJson.Bonuses`, v13+) and plugin modules (`ItemJson.ModuleBonuses`,
+ * v14+) — the two declare bonuses with different C# syntax but the same shape.
+ *
+ * `Value` carries the effect magnitude regardless of which field the C# spelled
+ * it with: every type in `__core__/Benefits` uses `Value =`, while v14's
+ * module-only `BonusEffectAdditivePercent` uses `Percent =`. */
 export interface TalentBonusJson {
   Action: string
   EffectType: string
@@ -85,6 +92,14 @@ export interface TalentBonusJson {
   Cap?: number
   LowerIsBetter?: boolean
   Scope: TalentBonusScopeJson
+}
+
+/** A flat item + quantity, used by the v14 garbage system. Unlike `ElementJson`
+ * the quantity is a plain number: garbage carries no modifiers, and per in-game
+ * verification it does not scale with module or talent effects. */
+export interface GarbageQuantityJson {
+  ItemOrTag: string
+  Quantity: number
 }
 
 export interface TalentBonusScopeJson {
@@ -105,10 +120,29 @@ export interface ItemJson {
   IsPart?: boolean
   RequiredParts?: PartRequirementJson[]
   IsPluginModule?: boolean
+  // --- Legacy module shape (v11–v13 only) ---
+  // Read from the `base(ModuleTypes.X, pct, typeof(Skill), skillPct)` ctor.
+  // Normalized into the unified bonus shape at import time; never written
+  // alongside ModuleBonuses (the extractor gates on the `Bonuses` override).
   PluginType?: string
   PluginModulePercent?: number
   PluginModuleSkill?: string
   PluginModuleSkillPercent?: number
+  // --- v14 module shape ---
+  /** Which of a crafting table's four core slots this module occupies. Read from
+   * the `[Tag("<slot>Module")]` attribute, never inferred from the class name —
+   * the Mining specialty modules are named *Basic/Advanced/Modern* but are all
+   * tagged SpecialtyModule. Absent only on deprecated tier-ladder modules. */
+  ModuleSlot?: 'Basic' | 'Advanced' | 'Modern' | 'Specialty'
+  ModuleBonuses?: TalentBonusJson[]
+  /** `[LocDescription("This is a deprecated item…")]`. Deprecated modules stay in
+   * the dataset (existing builds may reference them) but are hidden from pickers
+   * and exempt from the slot-tag requirement. */
+  IsDeprecated?: boolean
+  /** `[SalvageCost(typeof(Mat), qty, …)]`, with each garbage material already
+   * resolved to the real item it yields. Multiplied by `CRAFT_GARBAGE_RATIO`
+   * when computing a recipe's garbage; not part of pricing. New in v14. */
+  SalvageCost?: GarbageQuantityJson[]
   IsCraftingTable?: boolean
   CraftingTablePluginModules?: string[]
   // Crop growth data, merged onto the harvested crop item during extraction
@@ -162,6 +196,12 @@ export interface RecipeJson {
   CraftingTable: string
   Ingredients: ElementJson[]
   Products: ElementJson[]
+  /** Waste this recipe emits outright, from the `garbages:` argument of
+   * `recipe.Init(...)`. These are LITERAL quantities — unlike the salvage-derived
+   * half of a recipe's garbage they are not scaled by `CRAFT_GARBAGE_RATIO`.
+   * Confirmed to have zero overlap with `Products`, so no double-counting.
+   * New in v14; omitted when empty. */
+  GarbageOutputs?: GarbageQuantityJson[]
 }
 
 export interface DynamicValueJson {

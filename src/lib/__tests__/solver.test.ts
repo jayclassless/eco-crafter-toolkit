@@ -11,8 +11,7 @@ function makeRecipe(overrides: Partial<SolverRecipe> = {}): SolverRecipe {
     skillLevel: 3,
     laborReducePercent: [1.0, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5],
     activeTalents: [],
-    pluginModule: null,
-    speedPluginModule: null,
+    moduleEffects: [],
     baseCraftTime: 1.0,
     baseLaborCost: 100,
     costPerMinute: 0,
@@ -435,7 +434,15 @@ describe('solve', () => {
         baseLaborCost: 0,
         baseCraftTime: 0,
         laborModifiers: [],
-        pluginModule: { percent: 0.5 },
+        moduleEffects: [
+          {
+            moduleId: 'm1',
+            action: 'ResourceCost',
+            effectType: 'Multiplicative',
+            value: 0.5,
+            skillIds: [],
+          },
+        ],
         ingredients: [
           {
             itemOrTagId: 'wood',
@@ -458,7 +465,15 @@ describe('solve', () => {
         baseCraftTime: 0,
         laborModifiers: [],
         roundFactor: 1,
-        pluginModule: { percent: 0.7 },
+        moduleEffects: [
+          {
+            moduleId: 'm1',
+            action: 'ResourceCost',
+            effectType: 'Multiplicative',
+            value: 0.7,
+            skillIds: [],
+          },
+        ],
         ingredients: [
           {
             itemOrTagId: 'wood',
@@ -669,25 +684,6 @@ describe('solve', () => {
       )
       // 1000 * 1.0 * 0.5 * 100 / 1000 = 50
       expect(result.prices['item'].costPrice).toBeCloseTo(50)
-    })
-
-    it('uses speedPluginModule for craft time but not labor', () => {
-      const recipe = makeRecipe({
-        baseLaborCost: 0,
-        baseCraftTime: 10,
-        costPerMinute: 1,
-        pluginModule: { percent: 0.5 },
-        speedPluginModule: { percent: 0.25 },
-        laborModifiers: [],
-        craftMinutesModifiers: [{ dynamicType: 'Module', refName: 'mod' }],
-        ingredients: [],
-        products: [
-          { itemOrTagId: 'item', baseQuantity: 1, share: 1, isReintegrated: false, modifiers: [] },
-        ],
-      })
-      const result = solve(makeInput({ recipes: [recipe] }))
-      // craft = 10 * 0.25 * 1 = 2.5 (uses speedPluginModule, not pluginModule)
-      expect(result.prices['item'].costPrice).toBeCloseTo(2.5)
     })
 
     it('overrides take precedence over solver computation', () => {
@@ -1756,13 +1752,12 @@ describe('solve — additional scenarios', () => {
     // labor is Skill-reduced (never module), craft time carries a Module modifier,
     // a "module-reduced" ingredient carries a Module modifier and a static one does
     // not. A single installed module fills both module slots; pluginType gates it.
-    const makeCustomRecipe = (module: { percent: number; pluginType: string } | null) =>
+    const makeCustomRecipe = (effects: SolverRecipe['moduleEffects']) =>
       makeRecipe({
         baseLaborCost: 0,
         baseCraftTime: 10,
         costPerMinute: 2,
-        pluginModule: module,
-        speedPluginModule: module,
+        moduleEffects: effects,
         laborModifiers: [{ dynamicType: 'Skill', refName: 'skill-1' }],
         craftMinutesModifiers: [{ dynamicType: 'Module', refName: 'skill-1' }],
         ingredients: [
@@ -1780,28 +1775,51 @@ describe('solve — additional scenarios', () => {
         ],
       })
 
-    const costOf = (module: { percent: number; pluginType: string } | null) =>
-      solve(makeInput({ recipes: [makeCustomRecipe(module)], prices: { wood: 1, nail: 1 } }))
+    // The old `pluginType` gate is gone: which targets a module affects now
+    // falls out of WHICH ACTIONS it carries effects for. A "Resource-only"
+    // module is simply one with a ResourceCost effect and no CraftTime effect.
+    // The expected costs are unchanged from the pre-v14 behaviour.
+    const eff = (
+      action: 'ResourceCost' | 'CraftTime',
+      value: number
+    ): SolverRecipe['moduleEffects'][number] => ({
+      moduleId: 'm1',
+      action,
+      effectType: 'Multiplicative',
+      value,
+      skillIds: [],
+    })
+
+    const costOf = (effects: SolverRecipe['moduleEffects']) =>
+      solve(makeInput({ recipes: [makeCustomRecipe(effects)], prices: { wood: 1, nail: 1 } }))
         .prices['out'].costPrice
 
     it('applies no module reduction when none is installed', () => {
       // ingredients 10+10=20, craft 10*2=20 → 40
-      expect(costOf(null)).toBeCloseTo(40)
+      expect(costOf([])).toBeCloseTo(40)
     })
 
-    it('a Resource module reduces the toggled-on ingredient but not craft time', () => {
-      // wood 10*0.5=5, nail 10 (static), craft 20 (speed-gated off) → 35
-      expect(costOf({ percent: 0.5, pluginType: 'Resource' })).toBeCloseTo(35)
+    it('a resource-only module reduces the toggled-on ingredient but not craft time', () => {
+      // wood 10*0.5=5, nail 10 (static — no Module modifier), craft 20 → 35
+      expect(costOf([eff('ResourceCost', 0.5)])).toBeCloseTo(35)
     })
 
-    it('a Speed module reduces craft time but not ingredients', () => {
-      // ingredients 20 (resource-gated off), craft 20*0.5=10 → 30
-      expect(costOf({ percent: 0.5, pluginType: 'Speed' })).toBeCloseTo(30)
+    it('a speed-only module reduces craft time but not ingredients', () => {
+      // ingredients 20, craft 20*0.5=10 → 30
+      expect(costOf([eff('CraftTime', 0.5)])).toBeCloseTo(30)
     })
 
-    it('a combined Resource&Speed module reduces both', () => {
+    it('a module carrying both effects reduces both', () => {
       // wood 5 + nail 10 = 15, craft 10 → 25
-      expect(costOf({ percent: 0.5, pluginType: 'Resource&Speed' })).toBeCloseTo(25)
+      expect(costOf([eff('ResourceCost', 0.5), eff('CraftTime', 0.5)])).toBeCloseTo(25)
+    })
+
+    it('never discounts a static ingredient — confirmed in-game for v14', () => {
+      // `nail` carries no Module modifier, so it stays at 10 under every module.
+      // Test 1 against a live v14 server confirmed static ingredients are not
+      // discounted, which is exactly what the Module-modifier gate encodes.
+      expect(costOf([eff('ResourceCost', 0.5)])).toBeCloseTo(35)
+      expect(costOf([eff('ResourceCost', 0.1)])).toBeCloseTo(31)
     })
   })
 

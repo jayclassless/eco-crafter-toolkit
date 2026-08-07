@@ -8,7 +8,10 @@ import type {
   TagItem,
   CraftingTable,
   PluginModule,
+  PluginModuleBonus,
   CraftingTablePluginModule,
+  ItemSalvage,
+  RecipeGarbage,
   Recipe,
   RecipeElement,
   Modifier,
@@ -19,6 +22,7 @@ import type {
 } from '@/types/game-data'
 
 import { generateId } from './ids'
+import { normalizeModuleBonuses } from './normalize-module-bonuses'
 
 // For a CappedMultiplicative bonus, returns the first level at which applying
 // another factor of `value` reaches `cap`. v12-style fixed talents (value=0
@@ -85,6 +89,71 @@ export function validateDatasetJson(data: unknown): ValidationResult {
         errors.push(`Recipe "${recipe.Name}" references non-existent item/tag "${elem.ItemOrTag}"`)
       }
     }
+    // v14 garbage. Absent on v11–v13, which have no garbage system.
+    for (const g of recipe.GarbageOutputs ?? []) {
+      if (!itemNames.has(g.ItemOrTag)) {
+        errors.push(
+          `Recipe "${recipe.Name}" garbage output references non-existent item "${g.ItemOrTag}"`
+        )
+      }
+      if (!Number.isFinite(g.Quantity)) {
+        errors.push(
+          `Recipe "${recipe.Name}" garbage output "${g.ItemOrTag}" has non-numeric quantity`
+        )
+      }
+    }
+  }
+
+  // ---- Plugin modules -------------------------------------------------------
+  //
+  // The validator previously checked NOTHING about modules, which is how the v14
+  // rewrite shipped a silently no-op module set past it: every module parsed to
+  // `{IsPluginModule: true, PluginModulePercent: 1}` — a 0% discount — and
+  // validation passed. These checks are the structural backstop.
+  for (const item of typed.Items) {
+    if (!item.IsPluginModule) continue
+
+    const isV14Shape = item.ModuleBonuses != null
+    if (isV14Shape) {
+      if (item.ModuleBonuses!.length === 0) {
+        errors.push(`Plugin module "${item.Name}" has an empty ModuleBonuses list`)
+      }
+      for (const b of item.ModuleBonuses!) {
+        if (!Number.isFinite(b.Value)) {
+          errors.push(
+            `Plugin module "${item.Name}" bonus (${b.Action}/${b.EffectType}) has non-numeric Value`
+          )
+        }
+        for (const s of b.Scope.SkillTypes ?? []) {
+          if (!skillNames.has(s)) {
+            errors.push(`Plugin module "${item.Name}" bonus references non-existent skill "${s}"`)
+          }
+        }
+      }
+      // Deprecated tier-ladder modules legitimately carry no slot tag; anything
+      // else without one means a slot kind we don't know how to render.
+      if (!item.ModuleSlot && !item.IsDeprecated) {
+        errors.push(`Plugin module "${item.Name}" has no ModuleSlot and is not deprecated`)
+      }
+    } else if (item.PluginModulePercent == null) {
+      // Legacy shape must at least carry a percent, or it resolves to no effect.
+      errors.push(
+        `Plugin module "${item.Name}" has neither ModuleBonuses (v14) nor PluginModulePercent (v11–v13)`
+      )
+    }
+  }
+
+  for (const item of typed.Items) {
+    for (const s of item.SalvageCost ?? []) {
+      if (!itemNames.has(s.ItemOrTag)) {
+        errors.push(
+          `Item "${item.Name}" salvage cost references non-existent item "${s.ItemOrTag}"`
+        )
+      }
+      if (!Number.isFinite(s.Quantity)) {
+        errors.push(`Item "${item.Name}" salvage cost "${s.ItemOrTag}" has non-numeric quantity`)
+      }
+    }
   }
 
   // Gathering sections are optional (datasets extracted before gathering
@@ -120,7 +189,10 @@ export interface ParsedDataset {
   tagItems: TagItem[]
   craftingTables: CraftingTable[]
   pluginModules: PluginModule[]
+  pluginModuleBonuses: PluginModuleBonus[]
   craftingTablePluginModules: CraftingTablePluginModule[]
+  itemSalvage: ItemSalvage[]
+  recipeGarbage: RecipeGarbage[]
   recipes: Recipe[]
   recipeElements: RecipeElement[]
   modifiers: Modifier[]
@@ -139,7 +211,10 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
   const tagItems: TagItem[] = []
   const craftingTables: CraftingTable[] = []
   const pluginModules: PluginModule[] = []
+  const pluginModuleBonuses: PluginModuleBonus[] = []
   const craftingTablePluginModules: CraftingTablePluginModule[] = []
+  const itemSalvage: ItemSalvage[] = []
+  const recipeGarbage: RecipeGarbage[] = []
   const recipes: Recipe[] = []
   const recipeElements: RecipeElement[] = []
   const modifiers: Modifier[] = []
@@ -161,6 +236,10 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
   // Part requirements reference other items; stash them and resolve after the
   // full items list is in itemIdByName (parts are items, not tags).
   const pendingItemParts: { itemId: string; partName: string; quantity: number }[] = []
+
+  // `SalvageCost` names the garbage item an item breaks down into; that item may
+  // appear later in data.Items, so resolve after the loop. Empty on v11–v13.
+  const pendingSalvage: { itemId: string; garbageName: string; quantity: number }[] = []
 
   // A crop's SeedItem references another item by name; resolve after the full
   // items list is in itemIdByName. Holds the crop Item object so we can set
@@ -282,6 +361,12 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
       }
     }
 
+    // Salvage names other items (the scrap an item breaks into), which may not
+    // be in itemIdByName yet — resolve after the item loop, like parts.
+    for (const s of i.SalvageCost ?? []) {
+      pendingSalvage.push({ itemId, garbageName: s.ItemOrTag, quantity: s.Quantity })
+    }
+
     if (i.IsCraftingTable) {
       const ctId = generateId()
       craftingTableIdByName.set(i.Name, ctId)
@@ -289,16 +374,37 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
       addLocalizedNames(localizedNames, 'craftingTable', ctId, i.LocalizedName)
     }
 
-    if (i.IsPluginModule && i.PluginType && i.PluginModulePercent != null) {
+    // Both dataset module shapes are resolved here, once, into the unified
+    // bonus rows. Nothing downstream of this line knows which version it came
+    // from. The gate is `IsPluginModule` alone — normalizeModuleBonuses decides
+    // which shape it is looking at.
+    if (i.IsPluginModule) {
+      const normalized = normalizeModuleBonuses(i)
       const pmId = generateId()
       pluginModules.push({
         id: pmId,
         datasetId,
         name: i.Name,
-        pluginType: i.PluginType as PluginModule['pluginType'],
-        percent: i.PluginModulePercent,
-        skillId: i.PluginModuleSkill ? skillIdByName.get(i.PluginModuleSkill) : undefined,
-        skillPercent: i.PluginModuleSkillPercent,
+        slot: normalized.slot,
+        isDeprecated: i.IsDeprecated === true,
+      })
+      normalized.bonuses.forEach((b, idx) => {
+        pluginModuleBonuses.push({
+          id: generateId(),
+          datasetId,
+          pluginModuleId: pmId,
+          bonusIndex: idx,
+          action: b.action,
+          effectType: b.effectType,
+          value: b.value,
+          // Skill *names* → ids. A name that doesn't resolve is dropped rather
+          // than kept as a dangling id: an unresolvable scope would otherwise
+          // match nothing and silently turn a scoped effect into a no-op that
+          // still suppresses the unscoped fallback in `moduleFactor`.
+          skillIds: b.skillTypes
+            .map((n) => skillIdByName.get(n))
+            .filter((id): id is string => id != null),
+        })
       })
       addLocalizedNames(localizedNames, 'pluginModule', pmId, i.LocalizedName)
     }
@@ -343,6 +449,23 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
     if (seedItemId) pending.crop.seedItemId = seedItemId
   }
 
+  // Resolve salvage costs now that all item ids are known. validateDatasetJson
+  // already rejects unresolvable names, so a miss here means a custom/partial
+  // dataset; dropping the row is right — garbage is display-only and a dangling
+  // id would render as a blank row.
+  for (const pending of pendingSalvage) {
+    const garbageItemId = itemIdByName.get(pending.garbageName)
+    if (garbageItemId) {
+      itemSalvage.push({
+        id: generateId(),
+        datasetId,
+        itemId: pending.itemId,
+        garbageItemId,
+        quantity: pending.quantity,
+      })
+    }
+  }
+
   // Parse tags
   for (const t of data.Tags) {
     const tagId = generateId()
@@ -380,6 +503,20 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
       baseLaborCost: r.Labor.BaseValue,
     })
     addLocalizedNames(localizedNames, 'recipe', recipeId, r.LocalizedName)
+
+    // Explicit garbage. Items are fully parsed by now, so this resolves inline.
+    for (const g of r.GarbageOutputs ?? []) {
+      const garbageItemId = itemIdByName.get(g.ItemOrTag)
+      if (garbageItemId) {
+        recipeGarbage.push({
+          id: generateId(),
+          datasetId,
+          recipeId,
+          garbageItemId,
+          quantity: g.Quantity,
+        })
+      }
+    }
 
     for (const mod of r.CraftMinutes.Modifiers) {
       modifiers.push({
@@ -520,7 +657,10 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
     tagItems,
     craftingTables,
     pluginModules,
+    pluginModuleBonuses,
     craftingTablePluginModules,
+    itemSalvage,
+    recipeGarbage,
     recipes,
     recipeElements,
     modifiers,

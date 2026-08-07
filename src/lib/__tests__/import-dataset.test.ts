@@ -149,6 +149,137 @@ describe('validateDatasetJson', () => {
   })
 })
 
+// The validator previously checked nothing whatsoever about plugin modules,
+// which is how the v14 rewrite shipped a silently no-op module set past it —
+// every module parsed to `{IsPluginModule: true, PluginModulePercent: 1}` (a 0%
+// discount) and validation passed. These cover the structural backstop.
+describe('validateDatasetJson — plugin modules', () => {
+  /** Swap the fixture's legacy module for a v14-shaped one. */
+  function withV14Module(data: DatasetJson): DatasetJson {
+    const idx = data.Items.findIndex((i) => i.Name === 'BasicUpgradeItem')
+    data.Items[idx] = {
+      Name: 'BasicUpgradeItem',
+      LocalizedName: { 'en-US': 'Basic Upgrade' },
+      IsPluginModule: true,
+      ModuleSlot: 'Basic',
+      ModuleBonuses: [
+        { Action: 'ResourceCost', EffectType: 'AdditivePercent', Value: -0.1, Scope: {} },
+        { Action: 'CraftTime', EffectType: 'Multiplicative', Value: 0.75, Scope: {} },
+      ],
+    }
+    return data
+  }
+
+  it('accepts a v14-shaped module', () => {
+    const result = validateDatasetJson(withV14Module(makeMinimalDataset()))
+    expect(result.valid).toBe(true)
+    expect(result.errors).toHaveLength(0)
+  })
+
+  it('accepts the legacy v11-v13 module shape unchanged', () => {
+    // The fixture's BasicUpgradeItem is legacy-shaped; guards against the v14
+    // rules rejecting datasets we still ship.
+    const result = validateDatasetJson(makeMinimalDataset())
+    expect(result.valid).toBe(true)
+  })
+
+  it('rejects a module with neither shape', () => {
+    const data = makeMinimalDataset()
+    const item = data.Items.find((i) => i.Name === 'BasicUpgradeItem')!
+    delete item.PluginModulePercent
+    const result = validateDatasetJson(data)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((e) => e.includes('neither ModuleBonuses'))).toBe(true)
+  })
+
+  it('rejects a v14 module with an empty bonus list', () => {
+    const data = withV14Module(makeMinimalDataset())
+    data.Items.find((i) => i.Name === 'BasicUpgradeItem')!.ModuleBonuses = []
+    const result = validateDatasetJson(data)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((e) => e.includes('empty ModuleBonuses'))).toBe(true)
+  })
+
+  it('rejects a bonus whose value failed to parse', () => {
+    const data = withV14Module(makeMinimalDataset())
+    data.Items.find((i) => i.Name === 'BasicUpgradeItem')!.ModuleBonuses![0].Value = NaN
+    const result = validateDatasetJson(data)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((e) => e.includes('non-numeric Value'))).toBe(true)
+  })
+
+  it('rejects a bonus scoped to a non-existent skill', () => {
+    const data = withV14Module(makeMinimalDataset())
+    data.Items.find((i) => i.Name === 'BasicUpgradeItem')!.ModuleBonuses![0].Scope = {
+      SkillTypes: ['NoSuchSkill'],
+    }
+    const result = validateDatasetJson(data)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((e) => e.includes('NoSuchSkill'))).toBe(true)
+  })
+
+  it('rejects a non-deprecated v14 module with no slot', () => {
+    const data = withV14Module(makeMinimalDataset())
+    delete data.Items.find((i) => i.Name === 'BasicUpgradeItem')!.ModuleSlot
+    const result = validateDatasetJson(data)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((e) => e.includes('no ModuleSlot'))).toBe(true)
+  })
+
+  it('allows a deprecated module to have no slot', () => {
+    // The 12 tier-ladder `*Lvl1-4` modules carry no slot tag and no recipe.
+    const data = withV14Module(makeMinimalDataset())
+    const item = data.Items.find((i) => i.Name === 'BasicUpgradeItem')!
+    delete item.ModuleSlot
+    item.IsDeprecated = true
+    const result = validateDatasetJson(data)
+    expect(result.valid).toBe(true)
+  })
+})
+
+describe('validateDatasetJson — v14 garbage', () => {
+  it('accepts resolved salvage costs and garbage outputs', () => {
+    const data = makeMinimalDataset()
+    data.Items.push({ Name: 'WoodScrapItem', LocalizedName: { 'en-US': 'Wood Scrap' } })
+    data.Items[0].SalvageCost = [{ ItemOrTag: 'WoodScrapItem', Quantity: 0.3 }]
+    data.Recipes[0].GarbageOutputs = [{ ItemOrTag: 'WoodScrapItem', Quantity: 0.2 }]
+    const result = validateDatasetJson(data)
+    expect(result.valid).toBe(true)
+  })
+
+  it('rejects a garbage output naming an unknown item', () => {
+    // Catches an unresolved GarbageMaterial leaking through as a raw material
+    // name (e.g. `Trash` instead of `GarbageItem`).
+    const data = makeMinimalDataset()
+    data.Recipes[0].GarbageOutputs = [{ ItemOrTag: 'Trash', Quantity: 0.2 }]
+    const result = validateDatasetJson(data)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((e) => e.includes('Trash'))).toBe(true)
+  })
+
+  it('rejects a salvage cost naming an unknown item', () => {
+    const data = makeMinimalDataset()
+    data.Items[0].SalvageCost = [{ ItemOrTag: 'StoneRubble', Quantity: 2 }]
+    const result = validateDatasetJson(data)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((e) => e.includes('StoneRubble'))).toBe(true)
+  })
+
+  it('rejects a non-numeric garbage quantity', () => {
+    const data = makeMinimalDataset()
+    data.Items.push({ Name: 'WoodScrapItem', LocalizedName: { 'en-US': 'Wood Scrap' } })
+    data.Recipes[0].GarbageOutputs = [{ ItemOrTag: 'WoodScrapItem', Quantity: NaN }]
+    const result = validateDatasetJson(data)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((e) => e.includes('non-numeric quantity'))).toBe(true)
+  })
+
+  it('accepts a legacy dataset with no garbage data at all', () => {
+    const result = validateDatasetJson(makeMinimalDataset())
+    expect(result.valid).toBe(true)
+  })
+})
+
 describe('parseDataset', () => {
   it('parses a valid dataset into normalized entities', () => {
     const result = parseDataset(makeMinimalDataset(), 'test-dataset')
@@ -168,9 +299,20 @@ describe('parseDataset', () => {
     expect(result.craftingTables).toHaveLength(1)
     expect(result.craftingTables[0].name).toBe('WorkbenchItem')
 
+    // The fixture module is legacy-shaped (PluginType 'Resource', percent 0.9,
+    // own-skill 0.8). It normalizes to the Specialty slot and two ResourceCost
+    // bonuses — an unscoped one and a skill-scoped one — with no CraftTime
+    // bonus, because the fixture's PluginType has no 'Speed' flag.
     expect(result.pluginModules).toHaveLength(1)
-    expect(result.pluginModules[0].percent).toBe(0.9)
-    expect(result.pluginModules[0].pluginType).toBe('Resource')
+    expect(result.pluginModules[0].slot).toBe('Specialty')
+    expect(result.pluginModules[0].isDeprecated).toBe(false)
+    expect(result.pluginModuleBonuses).toHaveLength(2)
+    expect(result.pluginModuleBonuses.map((b) => [b.action, b.effectType, b.value])).toEqual([
+      ['ResourceCost', 'Multiplicative', 0.9],
+      ['ResourceCost', 'Multiplicative', 0.8],
+    ])
+    expect(result.pluginModuleBonuses[0].skillIds).toEqual([])
+    expect(result.pluginModuleBonuses[1].skillIds).toEqual([result.skills[0].id])
 
     expect(result.recipes).toHaveLength(1)
     expect(result.recipes[0].baseLaborCost).toBe(100)

@@ -12,6 +12,17 @@ import {
   type RecipeIndexes,
   type TalentIndexEntry,
 } from '@/hooks/use-solver-snapshot'
+import type { ModuleSlot } from '@/types/game-data'
+
+/** A module a crafting table accepts, in the shape the module UI needs. Names
+ * are raw (non-localized) game names — callers localize via `useLocalizedName`. */
+export interface CraftingTableModule {
+  id: string
+  datasetId: string
+  name: string
+  slot: ModuleSlot
+  isDeprecated: boolean
+}
 
 interface TalentDetails {
   id: string
@@ -61,6 +72,22 @@ interface GameDataIndexes {
    * action for an O(1) "does this row have a gathering estimate?" test, with
    * no per-row store reads. Dataset-immutable, so it rides this cache. */
   gatherableItemIds: Set<string>
+  /** Modules each crafting table accepts, via the `craftingTablePluginModules`
+   * join. Prefer `craftingTableModules()` over reading this directly — it
+   * applies the dataset filter. */
+  modulesByCraftingTableId: Map<string, CraftingTableModule[]>
+  /** What one unit of an item breaks down into (`itemSalvage`). Scaled by
+   * `CRAFT_GARBAGE_RATIO` when a recipe consumes it. Empty on v11–v13. */
+  salvageByItemId: Map<string, GarbageQuantityRow[]>
+  /** A recipe's explicit `GarbageOutputs` — literal quantities, NOT ratio
+   * scaled. Empty on v11–v13. */
+  garbageByRecipeId: Map<string, GarbageQuantityRow[]>
+}
+
+/** An `(item, quantity)` pair from either garbage table. */
+interface GarbageQuantityRow {
+  itemId: string
+  quantity: number
 }
 
 const cache = new WeakMap<Store, GameDataIndexes>()
@@ -191,6 +218,82 @@ function buildGatherableItemIds(store: Store): Set<string> {
   return out
 }
 
+/**
+ * Bucket the `craftingTablePluginModules` join by crafting table.
+ *
+ * Replaces two hand-rolled copies of this scan (`CraftingTablesPanel` and
+ * `AdHocRecipeInputs`), each of which walked every join row in the store for
+ * every table it rendered — and, since v14, would have walked every
+ * `pluginModuleBonuses` row per module on top of that. Doing it once per
+ * dataset import instead makes the cost independent of how many tables the
+ * build has.
+ */
+function buildModulesByCraftingTableId(store: Store): Map<string, CraftingTableModule[]> {
+  const map = new Map<string, CraftingTableModule[]>()
+  for (const joinId of store.getRowIds('craftingTablePluginModules')) {
+    const join = store.getRow('craftingTablePluginModules', joinId)
+    const moduleId = join.pluginModuleId as string
+    const module = store.getRow('pluginModules', moduleId)
+    // A join row pointing at a module that no longer exists (or was imported
+    // without a name) would otherwise render as a blank, unselectable option.
+    if (!module?.name) continue
+    const ctId = join.craftingTableId as string
+    let list = map.get(ctId)
+    if (!list) {
+      list = []
+      map.set(ctId, list)
+    }
+    list.push({
+      id: moduleId,
+      datasetId: module.datasetId as string,
+      name: module.name as string,
+      slot: (module.slot as ModuleSlot) ?? 'Specialty',
+      isDeprecated: module.isDeprecated === true,
+    })
+  }
+  return map
+}
+
+/**
+ * Modules the given crafting table accepts, filtered to one dataset.
+ *
+ * The dataset filter is what the two open-coded scans this replaces were
+ * missing. Row ids are UUIDs, so in practice a table id can only ever match its
+ * own dataset's join rows — but the app keeps several datasets installed side by
+ * side, and "correct because ids happen not to collide" is not a property worth
+ * relying on when the filter costs one comparison per candidate.
+ */
+export function craftingTableModules(
+  store: Store,
+  datasetId: string,
+  craftingTableId: string
+): CraftingTableModule[] {
+  const all = getGameDataIndexes(store).modulesByCraftingTableId.get(craftingTableId)
+  if (!all) return []
+  return all.filter((m) => m.datasetId === datasetId)
+}
+
+/** Bucket `itemSalvage` / `recipeGarbage` by their owning row. Both tables are
+ * empty on v11–v13, so this costs nothing there. */
+function buildGarbageIndex(
+  store: Store,
+  table: 'itemSalvage' | 'recipeGarbage',
+  ownerCell: 'itemId' | 'recipeId'
+): Map<string, GarbageQuantityRow[]> {
+  const map = new Map<string, GarbageQuantityRow[]>()
+  for (const rowId of store.getRowIds(table)) {
+    const row = store.getRow(table, rowId)
+    const ownerId = row[ownerCell] as string
+    let list = map.get(ownerId)
+    if (!list) {
+      list = []
+      map.set(ownerId, list)
+    }
+    list.push({ itemId: row.garbageItemId as string, quantity: row.quantity as number })
+  }
+  return map
+}
+
 function build(store: Store): GameDataIndexes {
   const recipeIndexes = buildRecipeIndexes(store)
   const productItemIdsByRecipeId = buildRecipeProductItemIds(store)
@@ -215,6 +318,9 @@ function build(store: Store): GameDataIndexes {
     bonusesByTalentId: recipeIndexes.bonusesByTalentId,
     talentDetailsBySkillId: buildTalentDetailsBySkillId(store),
     gatherableItemIds: buildGatherableItemIds(store),
+    modulesByCraftingTableId: buildModulesByCraftingTableId(store),
+    salvageByItemId: buildGarbageIndex(store, 'itemSalvage', 'itemId'),
+    garbageByRecipeId: buildGarbageIndex(store, 'recipeGarbage', 'recipeId'),
   }
 }
 

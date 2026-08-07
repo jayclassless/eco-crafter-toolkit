@@ -74,6 +74,25 @@ function selectTalent(talentId: string, enabled: boolean, talentLevel: number) {
   return id
 }
 
+/** Install modules on a build's crafting table. Omitted slots stay empty. */
+function seedTable(
+  rowId: string,
+  slots: Partial<{
+    basicModuleId: string
+    advancedModuleId: string
+    modernModuleId: string
+    specialtyModuleId: string
+  }>
+) {
+  stores.buildStore.setRow('userCraftingTables', rowId, {
+    id: rowId,
+    buildId: BUILD,
+    craftingTableId: `ct-${rowId}`,
+    costPerMinute: 0,
+    ...slots,
+  })
+}
+
 describe('useStarCost', () => {
   it('returns zeros with v13-mode detection on empty build', () => {
     seedSkills([
@@ -85,6 +104,7 @@ describe('useStarCost', () => {
       total: 0,
       skillCost: 0,
       talentCost: 0,
+      moduleCost: 0,
       skillCount: 0,
       talentCount: 0,
       isV13: true,
@@ -194,9 +214,97 @@ describe('useStarCost', () => {
       total: 0,
       skillCost: 0,
       talentCost: 0,
+      moduleCost: 0,
       skillCount: 0,
       talentCount: 0,
       isV13: false,
     })
+  })
+})
+
+// Module star costs come from Balance.eco.template: Basic 1, Advanced 1,
+// Modern 1, Specialty 0 — charged per module installed, not per table.
+describe('useStarCost — upgrade modules', () => {
+  it('charges 1 star each for Basic, Advanced and Modern', () => {
+    seedSkills([{ id: 's-a', name: 'Mining', specialtyCost: 2 }])
+    seedTable('uct1', {
+      basicModuleId: 'pm-basic',
+      advancedModuleId: 'pm-adv',
+      modernModuleId: 'pm-mod',
+    })
+    const { result } = renderHook(() => useStarCost(BUILD, DATASET), { wrapper })
+    expect(result.current.moduleCost).toBe(3)
+    expect(result.current.total).toBe(3)
+  })
+
+  it('charges nothing for a Specialty module', () => {
+    seedSkills([{ id: 's-a', name: 'Mining', specialtyCost: 2 }])
+    seedTable('uct1', { specialtyModuleId: 'pm-spec' })
+    const { result } = renderHook(() => useStarCost(BUILD, DATASET), { wrapper })
+    expect(result.current.moduleCost).toBe(0)
+  })
+
+  it('charges per module installed, not per table', () => {
+    seedSkills([{ id: 's-a', name: 'Mining', specialtyCost: 2 }])
+    seedTable('uct1', { basicModuleId: 'pm-basic', specialtyModuleId: 'pm-s1' })
+    seedTable('uct2', { basicModuleId: 'pm-basic', modernModuleId: 'pm-mod' })
+    const { result } = renderHook(() => useStarCost(BUILD, DATASET), { wrapper })
+    // uct1 -> 1 (Basic) + 0 (Specialty); uct2 -> 1 (Basic) + 1 (Modern).
+    expect(result.current.moduleCost).toBe(3)
+  })
+
+  it('adds module cost on top of skill and talent cost', () => {
+    seedSkills([
+      { id: 's-a', name: 'Mining', specialtyCost: 2 },
+      { id: 's-b', name: 'Smelting', specialtyCost: 3 },
+    ])
+    selectSkills(['s-a', 's-b'])
+    seedTable('uct1', { advancedModuleId: 'pm-adv' })
+    const { result } = renderHook(() => useStarCost(BUILD, DATASET), { wrapper })
+    // skills: (2+3) + (2*1)/2 = 6; modules: 1
+    expect(result.current.skillCost).toBe(6)
+    expect(result.current.moduleCost).toBe(1)
+    expect(result.current.total).toBe(7)
+  })
+
+  it('ignores crafting tables belonging to another build', () => {
+    seedSkills([{ id: 's-a', name: 'Mining', specialtyCost: 2 }])
+    stores.buildStore.setRow('userCraftingTables', 'uct-other', {
+      id: 'uct-other',
+      buildId: 'other-build',
+      craftingTableId: 'ct1',
+      basicModuleId: 'pm-basic',
+      costPerMinute: 0,
+    })
+    const { result } = renderHook(() => useStarCost(BUILD, DATASET), { wrapper })
+    expect(result.current.moduleCost).toBe(0)
+  })
+
+  it('refreshes when a module is installed', () => {
+    // `userCraftingTables` must be in the watched-tables array or the badge
+    // silently keeps the old number after a module change.
+    seedSkills([{ id: 's-a', name: 'Mining', specialtyCost: 2 }])
+    seedTable('uct1', {})
+    const { result } = renderHook(() => useStarCost(BUILD, DATASET), { wrapper })
+    expect(result.current.moduleCost).toBe(0)
+    act(() => {
+      stores.buildStore.setCell('userCraftingTables', 'uct1', 'modernModuleId', 'pm-mod')
+    })
+    expect(result.current.moduleCost).toBe(1)
+  })
+
+  it('legacy (pre-v13) dataset: modules contribute 0 with no version check', () => {
+    // Every v11-v13 module normalizes to the Specialty slot, which is free — so
+    // a legacy build's star total is unchanged by the v14 work.
+    seedSkills([
+      { id: 's-a', name: 'Mining', specialtyCost: 1 },
+      { id: 's-b', name: 'Smelting', specialtyCost: 1 },
+    ])
+    selectSkills(['s-a', 's-b'])
+    seedTable('uct1', { specialtyModuleId: 'pm-legacy' })
+    const { result } = renderHook(() => useStarCost(BUILD, DATASET), { wrapper })
+    expect(result.current.isV13).toBe(false)
+    expect(result.current.moduleCost).toBe(0)
+    expect(result.current.total).toBe(2) // non-SI skill count only
   })
 })

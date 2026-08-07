@@ -42,7 +42,10 @@ export function createGameDataOps(gameDataStore: Store) {
           'tagItems',
           'craftingTables',
           'pluginModules',
+          'pluginModuleBonuses',
           'craftingTablePluginModules',
+          'itemSalvage',
+          'recipeGarbage',
           'recipes',
           'recipeElements',
           'modifiers',
@@ -98,15 +101,23 @@ export function createGameDataOps(gameDataStore: Store) {
         gameDataStore.setRow('craftingTables', ct.id, { ...ct, datasetId })
       }
       for (const pm of parsed.pluginModules) {
-        gameDataStore.setRow('pluginModules', pm.id, {
-          ...pm,
+        gameDataStore.setRow('pluginModules', pm.id, { ...pm, datasetId })
+      }
+      for (const bonus of parsed.pluginModuleBonuses) {
+        gameDataStore.setRow('pluginModuleBonuses', bonus.id, {
+          ...bonus,
           datasetId,
-          skillId: pm.skillId ?? '',
-          skillPercent: pm.skillPercent ?? 0,
+          skillIds: JSON.stringify(bonus.skillIds),
         })
       }
       for (const ctpm of parsed.craftingTablePluginModules) {
         gameDataStore.setRow('craftingTablePluginModules', ctpm.id, { ...ctpm, datasetId })
+      }
+      for (const s of parsed.itemSalvage) {
+        gameDataStore.setRow('itemSalvage', s.id, { ...s, datasetId })
+      }
+      for (const g of parsed.recipeGarbage) {
+        gameDataStore.setRow('recipeGarbage', g.id, { ...g, datasetId })
       }
       for (const recipe of parsed.recipes) {
         gameDataStore.setRow('recipes', recipe.id, {
@@ -155,7 +166,10 @@ export function createGameDataOps(gameDataStore: Store) {
       'tagItems',
       'craftingTables',
       'pluginModules',
+      'pluginModuleBonuses',
       'craftingTablePluginModules',
+      'itemSalvage',
+      'recipeGarbage',
       'recipes',
       'recipeElements',
       'modifiers',

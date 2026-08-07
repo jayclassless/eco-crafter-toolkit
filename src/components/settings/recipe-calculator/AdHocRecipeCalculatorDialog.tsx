@@ -8,7 +8,9 @@ import { RecipeOptionItem } from '@/components/common/RecipeOptionItem'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import type { PriceSignal } from '@/hooks/use-prices-signal'
 import { buildRecipeProductItemIds, getRecipePrimaryProductRawName } from '@/hooks/use-products'
+import type { SlotSelection } from '@/lib/module-slots'
 import { useStores } from '@/stores/providers'
+import type { ModuleSlot } from '@/types/game-data'
 
 import {
   type AdHocTalentStates,
@@ -44,7 +46,9 @@ export function AdHocRecipeCalculatorDialog({
   const [selectedRecipeId, setSelectedRecipeId] = useState('')
   const [suggestions, setSuggestions] = useState<RecipeOption[]>([])
   const [skillLevel, setSkillLevel] = useState(0)
-  const [pluginModuleId, setPluginModuleId] = useState('')
+  // Installed module per slot. A legacy dataset only ever exposes Specialty, so
+  // this holds at most one entry there.
+  const [moduleIdsBySlot, setModuleIdsBySlot] = useState<SlotSelection>({})
   const [talentStates, setTalentStates] = useState<AdHocTalentStates>({})
   const [ingredientPrices, setIngredientPrices] = useState<Record<string, number>>({})
 
@@ -55,7 +59,7 @@ export function AdHocRecipeCalculatorDialog({
     setSelectedRecipeId('')
     setSuggestions([])
     setSkillLevel(0)
-    setPluginModuleId('')
+    setModuleIdsBySlot({})
     setTalentStates({})
     setIngredientPrices({})
   }, [visible])
@@ -102,9 +106,18 @@ export function AdHocRecipeCalculatorDialog({
 
   const handleSelect = (option: RecipeOption) => {
     setSelectedOption(option)
+    // Re-selecting the recipe that is already loaded must NOT reset the
+    // controls below. PrimeReact's AutoComplete re-fires onChange with the
+    // current option whenever the input loses focus (its forceSelection blur
+    // path), and anything the user clicks next — a module slot, a talent, an
+    // ingredient price — steals that focus. Without this guard the click that
+    // installs a module immediately wipes the module, the skill level, the
+    // talents and every edited price, and the calculator silently snaps back
+    // to its defaults.
+    if (option.id === selectedRecipeId) return
     setSelectedRecipeId(option.id)
     setSkillLevel(0)
-    setPluginModuleId('')
+    setModuleIdsBySlot({})
     setTalentStates({})
     setIngredientPrices(
       seedIngredientPrices(gameDataStore, buildStore, priceSignal, buildId, option.id)
@@ -113,6 +126,10 @@ export function AdHocRecipeCalculatorDialog({
 
   const onPriceChange = useCallback((itemOrTagId: string, value: number | null) => {
     setIngredientPrices((prev) => ({ ...prev, [itemOrTagId]: value ?? 0 }))
+  }, [])
+
+  const onModuleChange = useCallback((slot: ModuleSlot, pluginModuleId: string) => {
+    setModuleIdsBySlot((prev) => ({ ...prev, [slot]: pluginModuleId }))
   }, [])
 
   const onTalentChange = useCallback(
@@ -133,7 +150,12 @@ export function AdHocRecipeCalculatorDialog({
       datasetId,
       getName,
       selectedRecipeId,
-      { skillLevel, pluginModuleId, talentStates, ingredientPrices },
+      {
+        skillLevel,
+        moduleIds: Object.values(moduleIdsBySlot).filter(Boolean),
+        talentStates,
+        ingredientPrices,
+      },
       calorieCost,
       defaultShareForSecondaryItems
     )
@@ -143,7 +165,7 @@ export function AdHocRecipeCalculatorDialog({
     getName,
     selectedRecipeId,
     skillLevel,
-    pluginModuleId,
+    moduleIdsBySlot,
     talentStates,
     ingredientPrices,
     calorieCost,
@@ -187,13 +209,14 @@ export function AdHocRecipeCalculatorDialog({
         {selectedRecipeId && (
           <AdHocRecipeInputs
             gameDataStore={gameDataStore}
+            datasetId={datasetId}
             skillId={skillId}
             craftingTableId={craftingTableId}
             getName={getName}
             skillLevel={skillLevel}
             onSkillLevel={setSkillLevel}
-            pluginModuleId={pluginModuleId}
-            onPluginModule={setPluginModuleId}
+            moduleIdsBySlot={moduleIdsBySlot}
+            onModuleChange={onModuleChange}
             talentStates={talentStates}
             onTalentChange={onTalentChange}
           />

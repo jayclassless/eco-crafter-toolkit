@@ -262,7 +262,7 @@ describe('createSkillManagement', () => {
       // Both recipes use ct1 — exactly one user crafting table row.
       expect(tables).toHaveLength(1)
       expect(tables[0].craftingTableId).toBe('ct1')
-      expect(tables[0].pluginModuleId).toBe('')
+      expect(tables[0].specialtyModuleId).toBe('')
       expect(tables[0].costPerMinute).toBe(0)
     })
 
@@ -280,14 +280,14 @@ describe('createSkillManagement', () => {
         id: 'uct-existing',
         buildId: BUILD_ID,
         craftingTableId: 'ct1',
-        pluginModuleId: 'pm-upgrade',
+        specialtyModuleId: 'pm-upgrade',
         costPerMinute: 2.5,
       })
       mgmt().addSkill('skill-mining')
       const tables = rowsForBuild(buildStore, 'userCraftingTables')
       expect(tables).toHaveLength(1)
       expect(tables[0].id).toBe('uct-existing')
-      expect(tables[0].pluginModuleId).toBe('pm-upgrade')
+      expect(tables[0].specialtyModuleId).toBe('pm-upgrade')
       expect(tables[0].costPerMinute).toBe(2.5)
     })
 
@@ -296,7 +296,7 @@ describe('createSkillManagement', () => {
         id: 'uct-foreign',
         buildId: 'other-build',
         craftingTableId: 'ct1',
-        pluginModuleId: '',
+        specialtyModuleId: '',
         costPerMinute: 0,
       })
       mgmt().addSkill('skill-mining')

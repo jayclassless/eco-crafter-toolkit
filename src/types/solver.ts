@@ -26,8 +26,10 @@ export interface SolverRecipe {
   skillLevel: number
   laborReducePercent: number[]
   activeTalents: SolverTalent[]
-  pluginModule: SolverPluginModule | null
-  speedPluginModule: SolverPluginModule | null
+  /** Every effect from every module installed on this recipe's crafting table,
+   * UNFILTERED. Scope is resolved at apply time (see `moduleFactor`), so
+   * `skillIds` must survive into the solver rather than being pre-filtered. */
+  moduleEffects: SolverModuleEffect[]
   baseCraftTime: number
   baseLaborCost: number
   costPerMinute: number
@@ -43,15 +45,18 @@ export interface SolverTalent {
   value: number
 }
 
-export interface SolverPluginModule {
-  percent: number
-  skillPercent?: number
-  skillId?: string
-  /** 'Resource' | 'Speed' | 'Resource&Speed' (possibly with '&Skill').
-   * Used to filter which target kinds the module affects — a Resource-only
-   * module must not reduce craft time, and a Speed-only module must not
-   * reduce ingredient quantity. */
-  pluginType?: string
+/** One module effect, already normalized out of whichever dataset version it
+ * came from. Both v11-v13 and v14 modules land in this shape. */
+export interface SolverModuleEffect {
+  /** Which module this came from. Effects are grouped by module inside
+   * `moduleFactor`, because the scoped-supersedes-unscoped precedence rule
+   * applies WITHIN a module, not across the whole installed set. */
+  moduleId: string
+  action: 'ResourceCost' | 'LaborCost' | 'CraftTime'
+  effectType: 'AdditivePercent' | 'Multiplicative'
+  value: number
+  /** Skill ids this effect is scoped to; empty means unscoped. */
+  skillIds: string[]
 }
 
 interface SolverElement {

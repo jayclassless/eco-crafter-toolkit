@@ -12,7 +12,9 @@ export type AdHocTalentStates = Record<string, { enabled: boolean; level: number
 
 export interface AdHocControls {
   skillLevel: number
-  pluginModuleId: string
+  /** Modules installed on the table, one per filled slot. A legacy dataset only
+   * ever offers Specialty, so this is a single-element list there. */
+  moduleIds: string[]
   talentStates: AdHocTalentStates
   /** Editable unit prices, keyed by ingredient item-or-tag id. */
   ingredientPrices: Record<string, number>
@@ -53,7 +55,7 @@ export function computeAdHocRecipe(
     userSkillsBySkillId: skillId ? new Map([[skillId, { level: controls.skillLevel }]]) : new Map(),
     userTalentsByTalentId: new Map(Object.entries(controls.talentStates)),
     userCraftingTablesByCTId: new Map([
-      [craftingTableId, { pluginModuleId: controls.pluginModuleId, costPerMinute: 0 }],
+      [craftingTableId, { moduleIds: controls.moduleIds, costPerMinute: 0 }],
     ]),
     userProductSharesByUserRecipeId: new Map(),
     userReintegratedProductsByUserRecipeId: new Map(),

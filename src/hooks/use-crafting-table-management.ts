@@ -2,13 +2,17 @@ import { useMemo } from 'react'
 import type { Store } from 'tinybase'
 
 import { generateId } from '@/lib/ids'
+import { MODULE_SLOT_CELLS } from '@/lib/module-slots'
 import { useStores } from '@/stores/providers'
+import type { ModuleSlot } from '@/types/game-data'
 
 interface UseCraftingTableManagement {
   addTable: (craftingTableId: string) => string
   getRecipesUsingTable: (userTableId: string) => string[]
   removeTableWithRecipes: (userTableId: string) => void
-  setPluginModule: (userTableId: string, pluginModuleId: string) => void
+  /** Install (or clear, with '') a module in one of the table's four slots.
+   * Legacy datasets only ever use 'Specialty'. */
+  setSlotModule: (userTableId: string, slot: ModuleSlot, pluginModuleId: string) => void
   setCostPerMinute: (userTableId: string, cost: number) => void
 }
 
@@ -36,7 +40,6 @@ export function ensureUserCraftingTable(
     id,
     buildId,
     craftingTableId,
-    pluginModuleId: '',
     costPerMinute: 0,
   })
   return id
@@ -63,7 +66,6 @@ export function createCraftingTableManagement(
         id,
         buildId,
         craftingTableId,
-        pluginModuleId: '',
         costPerMinute: 0,
       })
 
@@ -167,8 +169,8 @@ export function createCraftingTableManagement(
     addTable,
     getRecipesUsingTable,
     removeTableWithRecipes,
-    setPluginModule: (userTableId: string, pluginModuleId: string) => {
-      buildStore.setCell('userCraftingTables', userTableId, 'pluginModuleId', pluginModuleId)
+    setSlotModule: (userTableId: string, slot: ModuleSlot, pluginModuleId: string) => {
+      buildStore.setCell('userCraftingTables', userTableId, MODULE_SLOT_CELLS[slot], pluginModuleId)
     },
     setCostPerMinute: (userTableId: string, cost: number) => {
       buildStore.setCell('userCraftingTables', userTableId, 'costPerMinute', cost)

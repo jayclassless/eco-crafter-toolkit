@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { createGameDataStore } from '@/stores/game-data-store'
 
-import { clearGameDataIndexesCache, getGameDataIndexes } from '../game-data-indexes'
+import {
+  clearGameDataIndexesCache,
+  craftingTableModules,
+  getGameDataIndexes,
+} from '../game-data-indexes'
 
 let store: ReturnType<typeof createGameDataStore>
 
@@ -214,5 +218,113 @@ describe('productItemIdsByRecipeId & ingredientItemIdsByRecipeId', () => {
     // Ingredients are a Set so membership checks stay O(1) — the Materials
     // view-model relies on this for the reintegration filter.
     expect(ingredientItemIdsByRecipeId.get('r1')).toBeInstanceOf(Set)
+  })
+})
+
+describe('craftingTableModules', () => {
+  function seed() {
+    store.setRow('pluginModules', 'pm-basic', {
+      id: 'pm-basic',
+      datasetId: 'ds1',
+      name: 'BasicUpgradeItem',
+      slot: 'Basic',
+      isDeprecated: false,
+    })
+    store.setRow('pluginModules', 'pm-spec', {
+      id: 'pm-spec',
+      datasetId: 'ds1',
+      name: 'CarpentryBasicUpgradeItem',
+      slot: 'Specialty',
+      isDeprecated: false,
+    })
+    store.setRow('craftingTablePluginModules', 'j1', {
+      id: 'j1',
+      datasetId: 'ds1',
+      craftingTableId: 'ct1',
+      pluginModuleId: 'pm-basic',
+    })
+    store.setRow('craftingTablePluginModules', 'j2', {
+      id: 'j2',
+      datasetId: 'ds1',
+      craftingTableId: 'ct1',
+      pluginModuleId: 'pm-spec',
+    })
+    clearGameDataIndexesCache(store)
+  }
+
+  it('returns the modules a table accepts, with slot and deprecation', () => {
+    seed()
+    expect(craftingTableModules(store, 'ds1', 'ct1')).toEqual([
+      {
+        id: 'pm-basic',
+        datasetId: 'ds1',
+        name: 'BasicUpgradeItem',
+        slot: 'Basic',
+        isDeprecated: false,
+      },
+      {
+        id: 'pm-spec',
+        datasetId: 'ds1',
+        name: 'CarpentryBasicUpgradeItem',
+        slot: 'Specialty',
+        isDeprecated: false,
+      },
+    ])
+  })
+
+  it('filters by dataset', () => {
+    // The two open-coded scans this replaces matched on craftingTableId alone.
+    // Several datasets stay installed side by side, so the filter is what makes
+    // the result correct rather than merely unlikely to collide.
+    seed()
+    expect(craftingTableModules(store, 'ds2', 'ct1')).toEqual([])
+  })
+
+  it('returns an empty list for a table that accepts no modules', () => {
+    seed()
+    expect(craftingTableModules(store, 'ds1', 'ct-none')).toEqual([])
+  })
+
+  it('skips join rows whose module is missing or unnamed', () => {
+    // A dangling join would otherwise render a blank, unselectable option and,
+    // on a generic slot, turn the single-candidate checkbox into a dropdown.
+    seed()
+    store.setRow('pluginModules', 'pm-nameless', {
+      id: 'pm-nameless',
+      datasetId: 'ds1',
+      name: '',
+      slot: 'Basic',
+    })
+    store.setRow('craftingTablePluginModules', 'j3', {
+      id: 'j3',
+      datasetId: 'ds1',
+      craftingTableId: 'ct1',
+      pluginModuleId: 'pm-nameless',
+    })
+    store.setRow('craftingTablePluginModules', 'j4', {
+      id: 'j4',
+      datasetId: 'ds1',
+      craftingTableId: 'ct1',
+      pluginModuleId: 'pm-gone',
+    })
+    clearGameDataIndexesCache(store)
+    expect(craftingTableModules(store, 'ds1', 'ct1').map((m) => m.id)).toEqual([
+      'pm-basic',
+      'pm-spec',
+    ])
+  })
+
+  it('defaults a module with no stored slot to Specialty', () => {
+    // Specialty is the zero-star slot every legacy module normalizes to, so an
+    // unslotted row lands somewhere harmless rather than vanishing.
+    store.setRow('pluginModules', 'pm-old', { id: 'pm-old', datasetId: 'ds1', name: 'OldUpgrade' })
+    store.setRow('craftingTablePluginModules', 'j9', {
+      id: 'j9',
+      datasetId: 'ds1',
+      craftingTableId: 'ct9',
+      pluginModuleId: 'pm-old',
+    })
+    clearGameDataIndexesCache(store)
+    expect(craftingTableModules(store, 'ds1', 'ct9')[0].slot).toBe('Specialty')
   })
 })

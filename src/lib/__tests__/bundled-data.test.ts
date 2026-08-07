@@ -6,8 +6,10 @@ import { describe, it, expect } from 'vitest'
 import type { DatasetJson } from '@/types/dataset-json'
 
 import { validateDatasetJson } from '../import-dataset'
+import { deriveTableModuleSlots } from '../module-slots'
+import { normalizeModuleBonuses } from '../normalize-module-bonuses'
 
-const BUNDLED = ['eco-v11', 'eco-v12', 'eco-v13'] as const
+const BUNDLED = ['eco-v11', 'eco-v12', 'eco-v13', 'eco-v14'] as const
 
 function load(id: string): DatasetJson {
   return JSON.parse(
@@ -141,6 +143,107 @@ describe.each(BUNDLED)('bundled %s gathering data', (id) => {
   })
 })
 
+// The crafting-table → module-slot wiring lives in the game's compiled
+// `ModuleSlotRegistry`, with no AutoGen source to read, so the module UI infers
+// a table's slots from the modules it accepts. That inference is only safe if
+// the shipped data actually supports it — hence these assertions rather than an
+// assumption in the component.
+describe.each(BUNDLED)('bundled %s crafting-table module slots', (id) => {
+  const data = load(id)
+  const modulesByName = new Map(
+    data.Items.filter((i) => i.IsPluginModule).map((i) => [
+      i.Name,
+      { ...normalizeModuleBonuses(i), isDeprecated: i.IsDeprecated === true },
+    ])
+  )
+  const tablesWithModules = data.Items.filter(
+    (i) => (i.CraftingTablePluginModules?.length ?? 0) > 0
+  )
+
+  it('never derives an empty slot set for a table that lists modules', () => {
+    // An empty set would render a module popover with no rows at all — a dead
+    // control the user can click but not use.
+    expect(tablesWithModules.length).toBeGreaterThan(0)
+    for (const table of tablesWithModules) {
+      const candidates = (table.CraftingTablePluginModules ?? []).map((n) => modulesByName.get(n)!)
+      expect(
+        candidates.every(Boolean),
+        `${table.Name} lists a module that isn't in the dataset`
+      ).toBe(true)
+      expect(deriveTableModuleSlots(candidates).length, table.Name).toBeGreaterThan(0)
+    }
+  })
+})
+
+describe('crafting-table module slots differ across versions', () => {
+  it('derives one Specialty slot per legacy table and the four-slot set in v14', () => {
+    const slotSets = (id: string) => {
+      const data = load(id)
+      const byName = new Map(
+        data.Items.filter((i) => i.IsPluginModule).map((i) => [
+          i.Name,
+          { ...normalizeModuleBonuses(i), isDeprecated: i.IsDeprecated === true },
+        ])
+      )
+      const counts = new Map<string, number>()
+      for (const table of data.Items) {
+        const names = table.CraftingTablePluginModules ?? []
+        if (names.length === 0) continue
+        const key = deriveTableModuleSlots(names.map((n) => byName.get(n)!))
+          .map((s) => s.slot)
+          .join('+')
+        counts.set(key, (counts.get(key) ?? 0) + 1)
+      }
+      return Object.fromEntries([...counts].sort((a, b) => b[1] - a[1]))
+    }
+
+    // Every v11–v13 module normalizes to Specialty, so a legacy table derives
+    // exactly one slot and the popover renders the single dropdown v13 always
+    // had — no version branch in the UI.
+    expect(slotSets('eco-v13')).toEqual({ Specialty: 60 })
+
+    // v14.0.2, re-derived from the extractor output rather than transcribed.
+    // 57 of 68 tables accept modules; the four non-uniform sets are what make
+    // the "derive the slots, don't assume four" design necessary.
+    //
+    // 14.0.1 had a fifth set — the Anvil derived `Basic+Advanced+Modern` with
+    // no Specialty, because the only Specialty module it offered was the
+    // DEPRECATED `SmeltingBasicUpgradeItem`, which this derivation correctly
+    // drops. 14.0.2 fixed the Anvil, Blast Furnace and Bloomery to offer the
+    // live `SmeltingUpgradeItem` instead, so no table references a deprecated
+    // module any more and the Anvil joins the all-four group.
+    expect(slotSets('eco-v14')).toEqual({
+      'Basic+Advanced+Modern+Specialty': 53,
+      'Modern+Specialty': 2,
+      'Basic+Specialty': 1,
+      'Advanced+Specialty': 1,
+    })
+  })
+
+  it('offers exactly one candidate for every v14 generic slot', () => {
+    // The popover renders a checkbox instead of a dropdown when a slot has a
+    // single candidate. That is keyed off the COUNT, so this assertion is what
+    // says the checkbox path is the one v14 actually takes — and a future
+    // dataset with two Basic modules degrades to a dropdown rather than
+    // silently hiding one.
+    const data = load('eco-v14')
+    const byName = new Map(
+      data.Items.filter((i) => i.IsPluginModule).map((i) => [
+        i.Name,
+        { ...normalizeModuleBonuses(i), isDeprecated: i.IsDeprecated === true },
+      ])
+    )
+    for (const table of data.Items) {
+      const names = table.CraftingTablePluginModules ?? []
+      if (names.length === 0) continue
+      for (const slot of deriveTableModuleSlots(names.map((n) => byName.get(n)!))) {
+        if (slot.slot === 'Specialty') continue
+        expect(slot.candidates.length, `${table.Name} / ${slot.slot}`).toBe(1)
+      }
+    }
+  })
+})
+
 // The whole reason gathering data is extracted per dataset rather than
 // hardcoded: the same entity genuinely differs between game versions.
 describe('gathering data differs across versions', () => {
@@ -166,12 +269,29 @@ describe('gathering data differs across versions', () => {
     expect(new Set(redwoods.map((s) => s.TreeHealth)).size).toBe(2)
   })
 
-  it('models the Work Backpack as a second calorie-reducing slot', () => {
-    // Boots and the backpack occupy different slots, so their rates stack —
-    // which is why the clothing control has to be multi-select.
-    for (const id of BUNDLED) {
+  it('models a second calorie-reducing slot alongside boots', () => {
+    // Boots and one non-boot garment occupy different slots, so their rates
+    // stack — which is why the clothing control has to be multi-select.
+    //
+    // WHICH garment that is changed in v14: the Work Backpack lost its
+    // CalorieRate (it now grants CarriedSlots and more carry weight instead),
+    // and the new Cloth Cape took over the role at -0.2. Verified against
+    // eco-game-files/v14.0.1/.../WorkBackpack.cs — a real game change, not an
+    // extraction gap.
+    for (const id of ['eco-v11', 'eco-v12', 'eco-v13'] as const) {
       const rate = load(id).Items.find((i) => i.Name === 'WorkBackpackItem')?.ClothingCalorieRate
       expect(rate, id).toBe(-0.1)
+    }
+    const v14 = load('eco-v14').Items
+    expect(v14.find((i) => i.Name === 'WorkBackpackItem')?.ClothingCalorieRate).toBeUndefined()
+    expect(v14.find((i) => i.Name === 'ClothCapeItem')?.ClothingCalorieRate).toBe(-0.2)
+  })
+
+  it('keeps the same number of calorie-reducing garments in v14', () => {
+    // 13 in every version — the backpack dropped out and the cape came in.
+    for (const id of BUNDLED) {
+      const n = load(id).Items.filter((i) => i.ClothingCalorieRate != null).length
+      expect(n, id).toBe(13)
     }
   })
 })

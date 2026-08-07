@@ -6,10 +6,17 @@ import {
   ZERO_SHARE_SECONDARY_ITEM_NAMES,
 } from '@/lib/game-constants'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
+import { MODULE_SLOT_CELL_LIST } from '@/lib/module-slots'
 import { buildReintegrationOverrides, computeReintegratedProductIds } from '@/lib/reintegration'
 import { computeAutoShares } from '@/lib/share-defaults'
 import { useStores } from '@/stores/providers'
-import type { PriceMode, SolverInput, SolverRecipe, SolverModifier } from '@/types/solver'
+import type {
+  PriceMode,
+  SolverInput,
+  SolverRecipe,
+  SolverModifier,
+  SolverModuleEffect,
+} from '@/types/solver'
 
 export interface TalentIndexEntry {
   id: string
@@ -33,6 +40,9 @@ export interface RecipeIndexes {
   getSkill: (skillId: string) => { laborReducePercent: number[] } | null
   getModifiers: (targetType: string, targetId: string) => SolverModifier[]
   computeEffectiveValue: (b: BonusEntry, level: number) => number
+  /** Every module's normalized effects, keyed by pluginModuleId. Both dataset
+   * versions land here in the same shape. */
+  moduleBonusesByModuleId: Map<string, SolverModuleEffect[]>
   /** Item IDs whose raw name is in `ZERO_SHARE_SECONDARY_ITEM_NAMES`
    * (Slag/Tailings/WetTailings). Consumed by `computeAutoShares` so these
    * waste byproducts stay at 0% even when the build's
@@ -48,7 +58,7 @@ export interface RecipeBuildState {
   userRecipesById: Map<string, { recipeId: string; roundFactor: number }>
   userSkillsBySkillId: Map<string, { level: number }>
   userTalentsByTalentId: Map<string, { enabled: boolean; level: number }>
-  userCraftingTablesByCTId: Map<string, { pluginModuleId: string; costPerMinute: number }>
+  userCraftingTablesByCTId: Map<string, { moduleIds: string[]; costPerMinute: number }>
   userProductSharesByUserRecipeId: Map<string, Map<string, number>>
   /** Explicit per-product reintegration overrides, keyed by userRecipeId then
    * productItemOrTagId. Absence of an item key means "use the default rule"
@@ -182,6 +192,27 @@ export function buildRecipeIndexes(gameDataStore: Store): RecipeIndexes {
     return cached
   }
 
+  // Module bonuses, bucketed by module. Built once per dataset rather than
+  // re-scanned per recipe: a recipe's table can hold up to four modules and a
+  // build can have hundreds of recipes.
+  const moduleBonusesByModuleId = new Map<string, SolverModuleEffect[]>()
+  for (const bId of gameDataStore.getRowIds('pluginModuleBonuses')) {
+    const b = gameDataStore.getRow('pluginModuleBonuses', bId)
+    const moduleId = b.pluginModuleId as string
+    let list = moduleBonusesByModuleId.get(moduleId)
+    if (!list) {
+      list = []
+      moduleBonusesByModuleId.set(moduleId, list)
+    }
+    list.push({
+      moduleId,
+      action: b.action as SolverModuleEffect['action'],
+      effectType: b.effectType as SolverModuleEffect['effectType'],
+      value: b.value as number,
+      skillIds: JSON.parse((b.skillIds as string) || '[]') as string[],
+    })
+  }
+
   const zeroShareSecondaryItemIds = new Set<string>()
   const autoReintegrateSecondaryItemIds = new Set<string>()
   for (const itemId of gameDataStore.getRowIds('items')) {
@@ -199,6 +230,7 @@ export function buildRecipeIndexes(gameDataStore: Store): RecipeIndexes {
     getSkill,
     getModifiers,
     computeEffectiveValue,
+    moduleBonusesByModuleId,
     zeroShareSecondaryItemIds,
     autoReintegrateSecondaryItemIds,
   }
@@ -233,15 +265,19 @@ export function buildRecipeBuildState(buildStore: Store, buildId: string): Recip
     })
   }
 
-  const userCraftingTablesByCTId = new Map<
-    string,
-    { pluginModuleId: string; costPerMinute: number }
-  >()
+  const userCraftingTablesByCTId = new Map<string, { moduleIds: string[]; costPerMinute: number }>()
   for (const rowId of buildStore.getRowIds('userCraftingTables')) {
     const row = buildStore.getRow('userCraftingTables', rowId)
     if (row.buildId !== buildId) continue
+    // Up to four slots. A legacy build only ever fills Specialty, so this
+    // collapses to the single-module behaviour it had before v14.
+    const moduleIds: string[] = []
+    for (const cell of MODULE_SLOT_CELL_LIST) {
+      const id = row[cell] as string
+      if (id) moduleIds.push(id)
+    }
     userCraftingTablesByCTId.set(row.craftingTableId as string, {
-      pluginModuleId: row.pluginModuleId as string,
+      moduleIds,
       costPerMinute: row.costPerMinute as number,
     })
   }
@@ -331,16 +367,13 @@ export function assembleSolverRecipe(
 
   const ctId = recipe.craftingTableId as string
   const userCT = buildState.userCraftingTablesByCTId.get(ctId)
-  let pluginModule: SolverRecipe['pluginModule'] = null
-  if (userCT?.pluginModuleId) {
-    const pm = gameDataStore.getRow('pluginModules', userCT.pluginModuleId)
-    if (pm) {
-      pluginModule = {
-        percent: pm.percent as number,
-        skillId: (pm.skillId as string) || undefined,
-        skillPercent: (pm.skillPercent as number) || undefined,
-        pluginType: (pm.pluginType as string) || undefined,
-      }
+  // Every effect from every module installed on this recipe's table, emitted
+  // UNFILTERED. Scope is resolved at apply time by `moduleFactor`, so the skill
+  // ids must survive into the solver rather than being pre-filtered away here.
+  const moduleEffects: SolverRecipe['moduleEffects'] = []
+  for (const moduleId of userCT?.moduleIds ?? []) {
+    for (const bonus of indexes.moduleBonusesByModuleId.get(moduleId) ?? []) {
+      moduleEffects.push(bonus)
     }
   }
 
@@ -431,8 +464,7 @@ export function assembleSolverRecipe(
     skillLevel: userSkill?.level ?? 0,
     laborReducePercent,
     activeTalents,
-    pluginModule,
-    speedPluginModule: null,
+    moduleEffects,
     baseCraftTime: recipe.baseCraftTime as number,
     baseLaborCost: recipe.baseLaborCost as number,
     costPerMinute: userCT?.costPerMinute ?? 0,

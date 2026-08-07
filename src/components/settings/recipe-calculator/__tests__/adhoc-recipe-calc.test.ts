@@ -78,7 +78,7 @@ describe('computeAdHocRecipe', () => {
 
     const controls = {
       skillLevel: 0,
-      pluginModuleId: '',
+      moduleIds: [],
       talentStates: {},
       ingredientPrices: { iron: 5 },
     }
@@ -110,11 +110,17 @@ describe('computeAdHocRecipe', () => {
       id: 'pm1',
       datasetId: DS,
       name: 'Upg',
-      craftingTableId: 'ct1',
-      pluginType: 'Resource',
-      percent: 0.5,
-      skillId: '',
-      skillPercent: 0,
+      slot: 'Specialty',
+    })
+    game.setRow('pluginModuleBonuses', 'pmb1', {
+      id: 'pmb1',
+      datasetId: DS,
+      pluginModuleId: 'pm1',
+      bonusIndex: 0,
+      action: 'ResourceCost',
+      effectType: 'Multiplicative',
+      value: 0.5,
+      skillIds: '[]',
     })
     game.setRow('recipeElements', 're-i', {
       id: 're-i',
@@ -149,15 +155,7 @@ describe('computeAdHocRecipe', () => {
       ingredientPrices: { iron: 5 },
     }
     // No module: 4 iron × 5 = 20.
-    const noMod = computeAdHocRecipe(
-      game,
-      DS,
-      getName,
-      'r1',
-      { ...base, pluginModuleId: '' },
-      0,
-      20
-    )!
+    const noMod = computeAdHocRecipe(game, DS, getName, 'r1', { ...base, moduleIds: [] }, 0, 20)!
     expect(noMod.output.prices['bar'].costPrice).toBeCloseTo(20)
     // Resource module 0.5: 2 iron × 5 = 10.
     const withMod = computeAdHocRecipe(
@@ -165,7 +163,7 @@ describe('computeAdHocRecipe', () => {
       DS,
       getName,
       'r1',
-      { ...base, pluginModuleId: 'pm1' },
+      { ...base, moduleIds: ['pm1'] },
       0,
       20
     )!
@@ -216,7 +214,7 @@ describe('computeAdHocRecipe', () => {
 
     const base = {
       skillLevel: 1,
-      pluginModuleId: '',
+      moduleIds: [],
       ingredientPrices: { iron: 5 },
     }
     const off = computeAdHocRecipe(game, DS, getName, 'r1', { ...base, talentStates: {} }, 0, 20)!
@@ -260,7 +258,7 @@ describe('computeAdHocRecipe', () => {
       DS,
       getName,
       'r1',
-      { skillLevel: 0, pluginModuleId: '', talentStates: {}, ingredientPrices: { 'wood-tag': 2 } },
+      { skillLevel: 0, moduleIds: [], talentStates: {}, ingredientPrices: { 'wood-tag': 2 } },
       0,
       20
     )!
@@ -305,7 +303,7 @@ describe('computeAdHocRecipe', () => {
       DS,
       getName,
       'r1',
-      { skillLevel: 0, pluginModuleId: '', talentStates: {}, ingredientPrices: { iron: 1 } },
+      { skillLevel: 0, moduleIds: [], talentStates: {}, ingredientPrices: { iron: 1 } },
       0,
       20
     )!

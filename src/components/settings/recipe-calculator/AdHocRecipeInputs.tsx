@@ -1,51 +1,48 @@
-import { Dropdown, type DropdownChangeEvent } from 'primereact/dropdown'
 import { InputNumber, type InputNumberChangeEvent } from 'primereact/inputnumber'
 import { useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
 import type { Store } from 'tinybase'
 
 import { CraftingTableIcon } from '@/components/common/CraftingTableIcon'
-import { PluginModuleIcon } from '@/components/common/PluginModuleIcon'
 import { SkillIcon } from '@/components/common/SkillIcon'
-import { getGameDataIndexes } from '@/lib/game-data-indexes'
+import type { ModuleSlotRow } from '@/components/price-calculator/build-options/crafting-table-modules-types'
+import { CraftingTableModulesCell } from '@/components/price-calculator/build-options/CraftingTableModulesCell'
+import { craftingTableModules, getGameDataIndexes } from '@/lib/game-data-indexes'
+import { deriveTableModuleSlots, type SlotSelection } from '@/lib/module-slots'
 import type { GetNameFn } from '@/lib/recipe-modifiers'
+import type { ModuleSlot } from '@/types/game-data'
 
 import type { AdHocTalentStates } from './adhoc-recipe-calc'
 import { AdHocTalentsCell } from './AdHocTalentsCell'
 
-interface ModuleOption {
-  id: string
-  name: string
-  rawName: string
-}
-
 interface Props {
   gameDataStore: Store
+  datasetId: string
   skillId: string
   craftingTableId: string
   getName: GetNameFn
   skillLevel: number
   onSkillLevel: (level: number) => void
-  pluginModuleId: string
-  onPluginModule: (id: string) => void
+  /** Installed module per slot — the same shape the build's crafting-table rows
+   * use, so this dialog and the Crafting Tables panel share one picker. */
+  moduleIdsBySlot: SlotSelection
+  onModuleChange: (slot: ModuleSlot, pluginModuleId: string) => void
   talentStates: AdHocTalentStates
   onTalentChange: (talentId: string, state: { enabled: boolean; level: number }) => void
 }
 
 export function AdHocRecipeInputs({
   gameDataStore,
+  datasetId,
   skillId,
   craftingTableId,
   getName,
   skillLevel,
   onSkillLevel,
-  pluginModuleId,
-  onPluginModule,
+  moduleIdsBySlot,
+  onModuleChange,
   talentStates,
   onTalentChange,
 }: Props) {
-  const { t } = useTranslation()
-
   const skillRawName = skillId
     ? ((gameDataStore.getRow('skills', skillId)?.name as string) ?? '')
     : ''
@@ -62,35 +59,25 @@ export function AdHocRecipeInputs({
     return Math.max(0, len - 1)
   }, [gameDataStore, skillId])
 
-  const moduleOptions = useMemo<ModuleOption[]>(() => {
-    const out: ModuleOption[] = []
-    for (const joinId of gameDataStore.getRowIds('craftingTablePluginModules')) {
-      const join = gameDataStore.getRow('craftingTablePluginModules', joinId)
-      if (join.craftingTableId !== craftingTableId) continue
-      const pmId = join.pluginModuleId as string
-      const pm = gameDataStore.getRow('pluginModules', pmId)
-      if (!pm?.name) continue
-      out.push({
-        id: pmId,
-        name: getName('pluginModule', pmId) || (pm.name as string),
-        rawName: pm.name as string,
-      })
-    }
-    out.sort((a, b) => a.name.localeCompare(b.name))
-    return out
-  }, [gameDataStore, craftingTableId, getName])
-
-  const moduleItemTemplate = (opt: ModuleOption) =>
-    opt.id ? (
-      <div className="flex align-items-center gap-2">
-        <PluginModuleIcon module={{ name: opt.rawName }} />
-        <span>{opt.name}</span>
-      </div>
-    ) : (
-      <span className="text-color-secondary">{opt.name}</span>
-    )
-
-  const noneOption: ModuleOption = { id: '', name: t('common.none'), rawName: '' }
+  // Same derivation as the Crafting Tables panel, off the same shared index —
+  // the two pickers must offer identical slots or a recipe would price
+  // differently here than in the build.
+  const slots = useMemo<ModuleSlotRow[]>(
+    () =>
+      deriveTableModuleSlots(
+        craftingTableModules(gameDataStore, datasetId, craftingTableId).map((m) => ({
+          ...m,
+          name: getName('pluginModule', m.id) || m.name,
+          rawName: m.name,
+        }))
+      ).map((s) => ({
+        ...s,
+        candidates: s.candidates
+          .map(({ id, name, rawName }) => ({ id, name, rawName }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      })),
+    [gameDataStore, datasetId, craftingTableId, getName]
+  )
 
   return (
     <div className="flex flex-column gap-3">
@@ -122,18 +109,15 @@ export function AdHocRecipeInputs({
         )}
       </div>
 
-      {moduleOptions.length > 0 && (
+      {slots.length > 0 && (
         <div className="flex align-items-center gap-2">
           <CraftingTableIcon table={{ name: tableRawName }} />
           <span className="font-medium">{tableName}</span>
-          <Dropdown
-            value={pluginModuleId || ''}
-            options={[noneOption, ...moduleOptions]}
-            optionLabel="name"
-            optionValue="id"
-            onChange={(e: DropdownChangeEvent) => onPluginModule(e.value ?? '')}
-            itemTemplate={moduleItemTemplate}
-            style={{ minWidth: '14rem' }}
+          <CraftingTableModulesCell
+            slots={slots}
+            selected={moduleIdsBySlot}
+            onSelect={onModuleChange}
+            idPrefix="adhoc"
           />
         </div>
       )}

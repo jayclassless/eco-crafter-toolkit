@@ -8,7 +8,7 @@ import type {
   SolverError,
 } from '@/types/solver'
 
-import { resolveModifiers, type ModifierContext } from './dynamic-values'
+import { moduleFactor, resolveModifiers, type ModifierContext } from './dynamic-values'
 import { applyMargin } from './margins'
 import { getEffectiveRecipeQuantities } from './recipe-quantities'
 
@@ -304,18 +304,21 @@ function prepareRecipe(recipe: SolverRecipe, calorieCost: number): PreparedRecip
     skillLevel: recipe.skillLevel,
     laborReducePercent: recipe.laborReducePercent,
     activeTalents: recipe.activeTalents,
-    pluginModule: recipe.pluginModule,
-    speedPluginModule: recipe.speedPluginModule,
+    moduleEffects: recipe.moduleEffects,
   }
-  // Mirror solver.ts:71-74 — speedPluginModule overrides pluginModule for craft
-  // time resolution, falling back to pluginModule when null.
-  const craftCtx: ModifierContext =
-    recipe.speedPluginModule !== ctx.pluginModule
-      ? { ...ctx, pluginModule: recipe.speedPluginModule ?? ctx.pluginModule }
-      : ctx
 
-  const laborMultiplier = resolveModifiers(recipe.laborModifiers, ctx, 'labor')
-  const craftMultiplier = resolveModifiers(recipe.craftMinutesModifiers, craftCtx, 'speed')
+  // Labor is the one action that does NOT hang off a `Module` modifier: neither
+  // v13 nor v14 emits one on a recipe's Labor dynamic value (verified — Labor
+  // modifiers are only ever Skill/Talent). So the module factor is applied at
+  // the recipe level here, scoped against the RECIPE's skill (Rule A) rather
+  // than an ingredient's (Rule B, used for resource and craft time).
+  //
+  // The two rules never collide: legacy modules produce no LaborCost effects at
+  // all, so this multiplies by exactly 1 on every v11-v13 build.
+  const laborMultiplier =
+    resolveModifiers(recipe.laborModifiers, ctx, 'labor') *
+    moduleFactor(recipe.moduleEffects, 'labor', recipe.skillId)
+  const craftMultiplier = resolveModifiers(recipe.craftMinutesModifiers, ctx, 'speed')
   const craftTime = recipe.baseCraftTime * craftMultiplier
   const laborAmount = recipe.baseLaborCost * laborMultiplier
   const craftTimeCost = craftTime * recipe.costPerMinute

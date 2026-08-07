@@ -182,7 +182,7 @@ describe('applyDatasetUpdate', () => {
       id: 'uct1',
       buildId: 'b1',
       craftingTableId: oldCtId,
-      pluginModuleId: oldPmId,
+      specialtyModuleId: oldPmId,
       costPerMinute: 0.1,
     })
     stores.build.setRow('userRecipes', 'ur1', {
@@ -225,7 +225,7 @@ describe('applyDatasetUpdate', () => {
     expect(stores.build.getCell('userSkills', 'us1', 'skillId')).toBe(newSkillId)
     expect(stores.build.getCell('userTalents', 'ut1', 'talentId')).toBe(newTalentId)
     expect(stores.build.getCell('userCraftingTables', 'uct1', 'craftingTableId')).toBe(newCtId)
-    expect(stores.build.getCell('userCraftingTables', 'uct1', 'pluginModuleId')).toBe(newPmId)
+    expect(stores.build.getCell('userCraftingTables', 'uct1', 'specialtyModuleId')).toBe(newPmId)
     expect(stores.build.getCell('userRecipes', 'ur1', 'recipeId')).toBe(newRecipeId)
     expect(stores.build.getCell('userPrices', 'up1', 'itemOrTagId')).toBe(newWoodId)
 
@@ -258,7 +258,7 @@ describe('applyDatasetUpdate', () => {
       ['userSkills', 'skillId', { skillId: oldSkillId, level: 5 }],
       ['userTalents', 'talentId', { talentId: oldTalentId, enabled: true }],
       ['userCraftingTables', 'craftingTableId', { craftingTableId: oldCtId }],
-      ['userCraftingTables', 'pluginModuleId', { pluginModuleId: oldPmId }],
+      ['userCraftingTables', 'specialtyModuleId', { specialtyModuleId: oldPmId }],
       ['userRecipes', 'recipeId', { recipeId: oldRecipeId }],
       ['userPrices', 'itemOrTagId', { itemOrTagId: oldWoodId }],
       ['userPrices', 'primaryItemId', { primaryItemId: oldPlankId }],

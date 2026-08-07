@@ -26,8 +26,7 @@ function recipeModifierContext(recipe: SolverRecipe): ModifierContext {
     skillLevel: recipe.skillLevel,
     laborReducePercent: recipe.laborReducePercent,
     activeTalents: recipe.activeTalents,
-    pluginModule: recipe.pluginModule,
-    speedPluginModule: recipe.speedPluginModule,
+    moduleEffects: recipe.moduleEffects,
   }
 }
 

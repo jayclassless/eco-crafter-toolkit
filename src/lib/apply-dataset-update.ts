@@ -3,6 +3,7 @@ import type { Store } from 'tinybase'
 import { createGameDataOps } from '@/hooks/use-game-data'
 import { findInstalledDatasetsByBundledId } from '@/lib/dataset-utils'
 import { importDatasetFromManifestEntry } from '@/lib/import-dataset-from-manifest'
+import { MODULE_SLOT_CELL_LIST } from '@/lib/module-slots'
 import { readLocalizedNamesForEntity, upsertLocalizedNames } from '@/stores/localized-name-store'
 import type { ManifestEntry } from '@/types/dataset-manifest'
 
@@ -153,7 +154,11 @@ function sweepBuildStore(
     remapField('userSkills', 'skillId', remap.skills)
     remapField('userTalents', 'talentId', remap.talents)
     remapField('userCraftingTables', 'craftingTableId', remap.craftingTables)
-    remapField('userCraftingTables', 'pluginModuleId', remap.pluginModules)
+    // All four module slots, or a dataset update silently drops whichever
+    // upgrades the user had installed in the unlisted ones.
+    for (const cell of MODULE_SLOT_CELL_LIST) {
+      remapField('userCraftingTables', cell, remap.pluginModules)
+    }
     remapField('userRecipes', 'recipeId', remap.recipes)
     remapField('userPrices', 'itemOrTagId', remap.items)
     remapField('userPrices', 'primaryItemId', remap.items)

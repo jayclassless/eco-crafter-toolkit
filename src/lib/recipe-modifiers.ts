@@ -7,6 +7,7 @@ import {
 } from '@/hooks/use-solver-snapshot'
 import {
   applyRoundFactor,
+  moduleFactor,
   resolveModifiers,
   type ModifierContext,
   type ModifierTargetKind,
@@ -95,8 +96,7 @@ export function resolveRecipeModifiers(
     skillLevel: solverRecipe.skillLevel,
     laborReducePercent: solverRecipe.laborReducePercent,
     activeTalents: solverRecipe.activeTalents,
-    pluginModule: solverRecipe.pluginModule,
-    speedPluginModule: solverRecipe.speedPluginModule,
+    moduleEffects: solverRecipe.moduleEffects,
   }
 
   const elementMultipliers = new Map<string, number>()
@@ -111,12 +111,19 @@ export function resolveRecipeModifiers(
   }
 
   const craftMultiplier = resolveModifiers(solverRecipe.craftMinutesModifiers, context, 'speed')
-  const laborMultiplier = resolveModifiers(solverRecipe.laborModifiers, context, 'labor')
+  // Labor mirrors solver.ts: the module factor is applied at the RECIPE level
+  // (Rule A, scoped against the recipe's skill), because no dataset version
+  // emits a `Module` modifier on a recipe's Labor value.
+  const laborMultiplier =
+    resolveModifiers(solverRecipe.laborModifiers, context, 'labor') *
+    moduleFactor(solverRecipe.moduleEffects, 'labor', solverRecipe.skillId)
 
   const skillId = solverRecipe.skillId
   const recipeRow = gameDataStore.getRow('recipes', recipeId)
   const ctId = recipeRow?.craftingTableId as string | undefined
-  const pluginModuleId = ctId ? buildState.userCraftingTablesByCTId.get(ctId)?.pluginModuleId : ''
+  const installedModuleIds = ctId
+    ? (buildState.userCraftingTablesByCTId.get(ctId)?.moduleIds ?? [])
+    : []
 
   const groups = new Map<string, SourceGroup>()
 
@@ -142,23 +149,11 @@ export function resolveRecipeModifiers(
         return existing
       }
       case 'Module': {
-        if (!pluginModuleId) return null
-        const pmRow = gameDataStore.getRow('pluginModules', pluginModuleId)
-        if (!pmRow) return null
-        const key = 'module'
-        let existing = groups.get(key)
-        if (!existing) {
-          const rawName = (pmRow.name as string) || ''
-          const localizedName = getName('pluginModule', pluginModuleId)
-          existing = {
-            source: 'module',
-            displayName: localizedName || rawName,
-            icon: { kind: 'module', rawName },
-            modsByMetric: new Map(),
-          }
-          groups.set(key, existing)
-        }
-        return existing
+        // Module groups are built separately, from `moduleEffects` — a table can
+        // hold up to four modules, so one modifier no longer maps to one group.
+        // The `Module` modifier now only marks a value as module-ELIGIBLE (and
+        // carries the skill that eligibility is scoped under); see moduleFactor.
+        return null
       }
       case 'Talent': {
         if (!skillId) return null
@@ -242,6 +237,64 @@ export function resolveRecipeModifiers(
       effects,
     })
   }
+  // ---- Module groups -------------------------------------------------------
+  //
+  // Built from `moduleEffects` rather than from modifiers, one group per
+  // installed module. Crucially this calls the SAME `moduleFactor` the solver
+  // calls — these are separate code paths and nothing else forces them to agree,
+  // so a reimplementation here would drift silently (the display would show one
+  // discount while prices used another). A cross-path test pins that.
+  //
+  // Scope mirrors the solver exactly: ingredients/products/craftTime use the
+  // skill on that metric's `Module` modifier (Rule B); labor uses the recipe's
+  // skill (Rule A). A metric with no `Module` modifier is not module-eligible at
+  // all and is skipped — that is what keeps static ingredients undiscounted.
+  const moduleScope = (mods: SolverModifier[]): { eligible: boolean; skillId?: string } => {
+    for (const m of mods) {
+      if (m.dynamicType === 'Module') return { eligible: true, skillId: m.skillId }
+    }
+    return { eligible: false }
+  }
+  const ingredientMods: SolverModifier[] = []
+  const productMods: SolverModifier[] = []
+  for (const { id: reId, row: re } of elems) {
+    const target = (re.isProduct as boolean) ? productMods : ingredientMods
+    target.push(...indexes.getModifiers('elementQuantity', reId))
+  }
+  const scopeByMetric: Record<MetricKind, { eligible: boolean; skillId?: string }> = {
+    ingredients: moduleScope(ingredientMods),
+    products: moduleScope(productMods),
+    craftTime: moduleScope(solverRecipe.craftMinutesModifiers),
+    // Labor is always eligible and never carries a Module modifier.
+    labor: { eligible: true, skillId: solverRecipe.skillId },
+  }
+
+  for (const moduleId of installedModuleIds) {
+    const pmRow = gameDataStore.getRow('pluginModules', moduleId)
+    if (!pmRow?.name) continue
+    const own = solverRecipe.moduleEffects.filter((e) => e.moduleId === moduleId)
+    if (own.length === 0) continue
+
+    const effects: AppliedEffect[] = []
+    for (const metric of EFFECT_ORDER) {
+      const scope = scopeByMetric[metric]
+      if (!scope.eligible) continue
+      const factor = moduleFactor(own, metricToTargetKind(metric), scope.skillId)
+      const signedPercent = toSignedPercent(factor)
+      if (signedPercent === 0) continue
+      effects.push({ metric, signedPercent })
+    }
+    if (effects.length === 0) continue
+
+    const rawName = (pmRow.name as string) || ''
+    bonuses.push({
+      source: 'module',
+      icon: { kind: 'module', rawName },
+      displayName: getName('pluginModule', moduleId) || rawName,
+      effects,
+    })
+  }
+
   bonuses.sort((a, b) => {
     const orderDiff = BONUS_ORDER.indexOf(a.source) - BONUS_ORDER.indexOf(b.source)
     if (orderDiff !== 0) return orderDiff

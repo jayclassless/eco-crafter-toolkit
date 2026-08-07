@@ -28,7 +28,14 @@ export function createBuildStore() {
       id: { type: 'string' },
       buildId: { type: 'string' },
       craftingTableId: { type: 'string' },
-      pluginModuleId: { type: 'string', default: '' },
+      // v14 gives tables up to four module slots. Flat cells rather than a join
+      // table so the row shape (and every existing read/write path) is intact.
+      // Legacy datasets normalize every module to Specialty, so a v11-v13 build
+      // uses specialtyModuleId alone and behaves exactly as before.
+      basicModuleId: { type: 'string', default: '' },
+      advancedModuleId: { type: 'string', default: '' },
+      modernModuleId: { type: 'string', default: '' },
+      specialtyModuleId: { type: 'string', default: '' },
       costPerMinute: { type: 'number', default: 0 },
     },
     userRecipes: {
@@ -137,7 +144,53 @@ export function createBuildStore() {
   return store
 }
 
+/**
+ * Read each build's pre-v14 `userCraftingTables.pluginModuleId` from IndexedDB.
+ *
+ * 🛑 This MUST use a bare `createStore()` with no schema, and it MUST run before
+ * the real store loads. TinyBase enforces a table schema destructively — the
+ * docs say applying one "may result in a change to data in the Store, as
+ * defaults are applied or as invalid Table, Row, or Cell objects are removed" —
+ * and `createBuildStore()` calls `setTablesSchema` at construction, i.e. before
+ * `persister.load()`. Verified empirically: loading a legacy row into the new
+ * schema yields
+ *
+ *   {"id":"r1","buildId":"b1","craftingTableId":"ct1","specialtyModuleId":""}
+ *
+ * — `pluginModuleId` is gone and `specialtyModuleId` has been defaulted to ''.
+ * So a migration that runs *after* load() finds nothing, reports success, and
+ * silently drops every user's installed upgrade module. Reusing the schema'd
+ * store here would look like an obvious simplification and would reintroduce
+ * exactly that. See `build-store.test.ts` for the executable guard.
+ *
+ * Returns an empty map on any failure, and on already-migrated stores (the cell
+ * is stripped on the first save after migrating, so this is self-disarming and
+ * therefore idempotent).
+ */
+async function readLegacyPluginModuleIds(): Promise<Map<string, string>> {
+  if (typeof indexedDB === 'undefined') return new Map()
+  const out = new Map<string, string>()
+  const probe = createStore()
+  const probePersister = createIndexedDbPersister(probe, 'eco-crafter-builds')
+  try {
+    await probePersister.load()
+    for (const rowId of probe.getRowIds('userCraftingTables')) {
+      const legacy = probe.getCell('userCraftingTables', rowId, 'pluginModuleId')
+      if (typeof legacy === 'string' && legacy !== '') out.set(rowId, legacy)
+    }
+  } catch {
+    // A missing or unreadable DB is a first launch, not an error.
+    return new Map()
+  } finally {
+    await probePersister.destroy()
+  }
+  return out
+}
+
 export async function createPersistedBuildStore() {
+  // Must happen before the schema'd store below is constructed and loaded.
+  const legacyModuleIds = await readLegacyPluginModuleIds()
+
   const store = createBuildStore()
   const persister = createIndexedDbPersister(store, 'eco-crafter-builds')
   // load() pulls persisted state once. We intentionally skip startAutoLoad()
@@ -146,6 +199,21 @@ export async function createPersistedBuildStore() {
   // saturated the main thread and caused noticeable UI lag. This app is the
   // only writer to its DB, so event-driven save + one-time load is enough.
   await persister.load()
+
+  // v13 -> v14 module migration: a legacy module always normalizes to the
+  // Specialty slot, so this is a pure cell rename with no id remapping. Applied
+  // before startAutoSave so the rewritten rows are part of the first save.
+  if (legacyModuleIds.size > 0) {
+    store.transaction(() => {
+      for (const [rowId, moduleId] of legacyModuleIds) {
+        // Don't clobber a slot the user has already set on this row.
+        if (store.getCell('userCraftingTables', rowId, 'specialtyModuleId')) continue
+        if (!store.hasRow('userCraftingTables', rowId)) continue
+        store.setCell('userCraftingTables', rowId, 'specialtyModuleId', moduleId)
+      }
+    })
+  }
+
   await persister.startAutoSave()
   return { store, persister }
 }

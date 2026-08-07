@@ -35,8 +35,7 @@ function makeStores(opts: { withModules?: boolean } = {}) {
       id: 'pm-basic',
       datasetId: DS,
       name: 'BasicUpgrade',
-      pluginType: 'Resource',
-      percent: 0.9,
+      slot: 'Specialty',
     })
     gameDataStore.setRow('craftingTablePluginModules', 'ctpm1', {
       id: 'ctpm1',
@@ -56,11 +55,21 @@ function makeStores(opts: { withModules?: boolean } = {}) {
     id: 'uct-anvil',
     buildId: BUILD,
     craftingTableId: 'ct-anvil',
-    pluginModuleId: '',
+    specialtyModuleId: '',
     costPerMinute: 0.05,
   })
 
   return { gameDataStore, buildStore, uiStore }
+}
+
+/** The Upgrade cell's button, which opens the module popover. It's the only
+ * button in the table body that isn't the row's delete action. */
+function moduleTrigger(): HTMLButtonElement {
+  const btn = Array.from(document.body.querySelectorAll('tbody button')).find(
+    (b) => !b.querySelector('.pi-trash')
+  )
+  expect(btn, 'no module popover trigger rendered').toBeTruthy()
+  return btn as HTMLButtonElement
 }
 
 function renderPanel(stores: { gameDataStore: Store; buildStore: Store; uiStore: Store }) {
@@ -166,25 +175,117 @@ describe('CraftingTablesPanel (smoke)', () => {
     expect(stores.buildStore.hasRow('userRecipes', 'ur1')).toBe(false)
   })
 
-  it('renders the plugin module dropdown when modules are available', () => {
+  it('renders a module popover trigger instead of N/A when modules are available', () => {
     const stores = makeStores({ withModules: true })
     renderPanel(stores)
-    // The dropdown is rendered with `.p-dropdown` class. It replaces the N/A span.
-    expect(document.body.querySelector('.p-dropdown')).toBeInTheDocument()
+    expect(moduleTrigger()).toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(/N\/A/i)
   })
 
-  it('changes the selected plugin module via the dropdown', async () => {
+  it('shows the installed modules as icons in the cell', () => {
+    const stores = makeStores({ withModules: true })
+    stores.buildStore.setCell('userCraftingTables', 'uct-anvil', 'specialtyModuleId', 'pm-basic')
+    renderPanel(stores)
+    const icons = Array.from(document.body.querySelectorAll('tbody img')).map((i) =>
+      i.getAttribute('alt')
+    )
+    expect(icons).toContain('BasicUpgrade')
+  })
+
+  it('scopes the module list to the row dataset', () => {
+    // The join-table scan this replaced matched on craftingTableId alone. Row
+    // ids are UUIDs so a collision is unlikely, but several datasets stay
+    // installed side by side and the filter is what makes it correct.
+    const stores = makeStores({ withModules: true })
+    stores.gameDataStore.setCell('pluginModules', 'pm-basic', 'datasetId', 'other-ds')
+    renderPanel(stores)
+    expect(document.body.textContent).toMatch(/N\/A/i)
+  })
+
+  it('installs a module via the popover checkbox and clears it again', async () => {
+    // The table's one Specialty candidate makes this a single-candidate slot,
+    // so the popover renders a checkbox rather than a dropdown. Installation is
+    // permanent in game, but the planner's controls are deliberately reversible
+    // — comparing configurations before spending stars is the whole point.
     const stores = makeStores({ withModules: true })
     renderPanel(stores)
-    const dropdown = document.body.querySelector('.p-dropdown') as HTMLElement
-    fireEvent.click(dropdown)
-    // Wait for the dropdown panel to open and click an option labeled "Basic Upgrade".
-    const moduleOpt = await waitFor(() => screen.getByText(/BasicUpgrade/i))
-    fireEvent.click(moduleOpt)
-    expect(stores.buildStore.getCell('userCraftingTables', 'uct-anvil', 'pluginModuleId')).toBe(
+    fireEvent.click(moduleTrigger())
+    const label = await waitFor(() => screen.getByText(/BasicUpgrade/i))
+    fireEvent.click(label)
+    expect(stores.buildStore.getCell('userCraftingTables', 'uct-anvil', 'specialtyModuleId')).toBe(
       'pm-basic'
     )
+
+    fireEvent.click(screen.getByText(/BasicUpgrade/i))
+    expect(stores.buildStore.getCell('userCraftingTables', 'uct-anvil', 'specialtyModuleId')).toBe(
+      ''
+    )
+  })
+
+  it('renders one popover row per slot the table exposes, with star costs', async () => {
+    const stores = makeStores({ withModules: true })
+    // A v14-shaped table: a Basic module alongside the Specialty one. The slot
+    // set is DERIVED from the modules the table accepts, because the game's
+    // table->slot wiring lives in compiled code with no dataset representation.
+    stores.gameDataStore.setRow('pluginModules', 'pm-generic', {
+      id: 'pm-generic',
+      datasetId: DS,
+      name: 'BasicUpgradeItem',
+      slot: 'Basic',
+    })
+    stores.gameDataStore.setRow('craftingTablePluginModules', 'ctpm-generic', {
+      id: 'ctpm-generic',
+      datasetId: DS,
+      craftingTableId: 'ct-anvil',
+      pluginModuleId: 'pm-generic',
+    })
+    renderPanel(stores)
+    fireEvent.click(moduleTrigger())
+    const panel = await waitFor(() => {
+      const el = document.body.querySelector('.p-overlaypanel')
+      expect(el).not.toBeNull()
+      return el as HTMLElement
+    })
+    // Basic before Specialty, matching the game's core-slot order.
+    expect(panel.textContent).toMatch(/Basic[\s\S]*Specialty/)
+    // Basic costs 1 star; Specialty is free and shows no star chip.
+    expect(panel.querySelectorAll('.pi-star-fill')).toHaveLength(1)
+
+    fireEvent.click(within(panel).getByText('BasicUpgradeItem'))
+    expect(stores.buildStore.getCell('userCraftingTables', 'uct-anvil', 'basicModuleId')).toBe(
+      'pm-generic'
+    )
+    // The Specialty slot is untouched — slots are independent.
+    expect(stores.buildStore.getCell('userCraftingTables', 'uct-anvil', 'specialtyModuleId')).toBe(
+      ''
+    )
+  })
+
+  it('hides deprecated modules, and the slot they were the only candidate for', async () => {
+    const stores = makeStores({ withModules: true })
+    stores.gameDataStore.setRow('pluginModules', 'pm-dead', {
+      id: 'pm-dead',
+      datasetId: DS,
+      name: 'DeprecatedUpgradeItem',
+      slot: 'Modern',
+      isDeprecated: true,
+    })
+    stores.gameDataStore.setRow('craftingTablePluginModules', 'ctpm-dead', {
+      id: 'ctpm-dead',
+      datasetId: DS,
+      craftingTableId: 'ct-anvil',
+      pluginModuleId: 'pm-dead',
+    })
+    renderPanel(stores)
+    fireEvent.click(moduleTrigger())
+    const panel = await waitFor(() => {
+      const el = document.body.querySelector('.p-overlaypanel')
+      expect(el).not.toBeNull()
+      return el as HTMLElement
+    })
+    expect(panel.textContent).not.toMatch(/DeprecatedUpgradeItem/)
+    // No player can obtain it, so it must not conjure a Modern slot either.
+    expect(panel.textContent).not.toMatch(/Modern/)
   })
 
   it('searchTables is exercised when typing into the autocomplete', () => {
@@ -256,24 +357,42 @@ describe('CraftingTablesPanel (smoke)', () => {
     })
   })
 
-  it('renders the plugin-module dropdown with two sorted modules and picks the vanilla one first', async () => {
+  it('renders a dropdown, not a checkbox, when a slot has more than one candidate', async () => {
     const stores = makeStores()
     // Two plugin modules: one vanilla (no skill), one specialized.
     stores.gameDataStore.setRow('pluginModules', 'pm-vanilla', {
       id: 'pm-vanilla',
       datasetId: DS,
       name: 'VanillaUpgrade',
-      pluginType: 'Resource',
-      percent: 0.9,
-      skillId: '',
+      slot: 'Specialty',
+    })
+    // Unscoped bonus -> "vanilla" (general purpose), sorted first.
+    stores.gameDataStore.setRow('pluginModuleBonuses', 'pmb-v', {
+      id: 'pmb-v',
+      datasetId: DS,
+      pluginModuleId: 'pm-vanilla',
+      bonusIndex: 0,
+      action: 'ResourceCost',
+      effectType: 'Multiplicative',
+      value: 0.9,
+      skillIds: '[]',
     })
     stores.gameDataStore.setRow('pluginModules', 'pm-special', {
       id: 'pm-special',
       datasetId: DS,
       name: 'SpecialUpgrade',
-      pluginType: 'Resource',
-      percent: 0.5,
-      skillId: 'sk-smith',
+      slot: 'Specialty',
+    })
+    // Skill-scoped bonus -> specialized, sorted after the vanilla ones.
+    stores.gameDataStore.setRow('pluginModuleBonuses', 'pmb-s', {
+      id: 'pmb-s',
+      datasetId: DS,
+      pluginModuleId: 'pm-special',
+      bonusIndex: 0,
+      action: 'ResourceCost',
+      effectType: 'Multiplicative',
+      value: 0.5,
+      skillIds: '["sk-smith"]',
     })
     stores.gameDataStore.setRow('craftingTablePluginModules', 'ctpm-v', {
       id: 'ctpm-v',
@@ -288,12 +407,21 @@ describe('CraftingTablesPanel (smoke)', () => {
       pluginModuleId: 'pm-special',
     })
     renderPanel(stores)
-    const dropdown = document.body.querySelector('.p-dropdown') as HTMLElement
+    fireEvent.click(moduleTrigger())
+    const dropdown = await waitFor(() => {
+      const el = document.body.querySelector('.p-overlaypanel .p-dropdown')
+      expect(el).not.toBeNull()
+      return el as HTMLElement
+    })
     fireEvent.click(dropdown)
     await waitFor(() => {
       expect(screen.getByText(/VanillaUpgrade/)).toBeInTheDocument()
       expect(screen.getByText(/SpecialUpgrade/)).toBeInTheDocument()
     })
+    fireEvent.click(screen.getByText(/SpecialUpgrade/))
+    expect(stores.buildStore.getCell('userCraftingTables', 'uct-anvil', 'specialtyModuleId')).toBe(
+      'pm-special'
+    )
   })
 
   it('skips userCraftingTables rows belonging to other builds', () => {
@@ -303,7 +431,7 @@ describe('CraftingTablesPanel (smoke)', () => {
       id: 'uct-other',
       buildId: 'other-build',
       craftingTableId: 'ct-anvil',
-      pluginModuleId: '',
+      specialtyModuleId: '',
       costPerMinute: 0.99,
     })
     renderPanel(stores)
@@ -319,8 +447,7 @@ describe('CraftingTablesPanel (smoke)', () => {
       id: 'pm-nameless',
       datasetId: DS,
       name: '',
-      pluginType: 'Resource',
-      percent: 0.9,
+      slot: 'Specialty',
     })
     stores.gameDataStore.setRow('craftingTablePluginModules', 'ctpm-x', {
       id: 'ctpm-x',

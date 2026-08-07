@@ -676,3 +676,184 @@ describe('RecipeDialog', () => {
     })
   })
 })
+
+describe('RecipeDialog garbage output', () => {
+  let stores: ReturnType<typeof makeStores>
+
+  /** Give `stone` a salvage cost and the recipe an explicit garbage output. */
+  function seedGarbage() {
+    stores.gameDataStore.setRow('items', 'ash', { id: 'ash', datasetId: DS, name: 'Ash' })
+    stores.gameDataStore.setRow('items', 'rubble', { id: 'rubble', datasetId: DS, name: 'Rubble' })
+    stores.gameDataStore.setRow('itemSalvage', 'sv1', {
+      id: 'sv1',
+      datasetId: DS,
+      itemId: 'stone',
+      garbageItemId: 'rubble',
+      quantity: 0.5,
+    })
+    stores.gameDataStore.setRow('recipeGarbage', 'rg1', {
+      id: 'rg1',
+      datasetId: DS,
+      recipeId: RECIPE_ID,
+      garbageItemId: 'ash',
+      quantity: 0.25,
+    })
+  }
+
+  /** Replace the `stone` ingredient with a Rock tag whose two items salvage
+   * into different amounts of rubble. */
+  function seedRockTag() {
+    stores.gameDataStore.setRow('items', 'tag-rock', {
+      id: 'tag-rock',
+      datasetId: DS,
+      name: 'Rock',
+      isTag: true,
+    })
+    stores.gameDataStore.setRow('items', 'granite', {
+      id: 'granite',
+      datasetId: DS,
+      name: 'Granite',
+    })
+    for (const [id, itemId] of [
+      ['ti1', 'stone'],
+      ['ti2', 'granite'],
+    ]) {
+      stores.gameDataStore.setRow('tagItems', id, { id, datasetId: DS, tagId: 'tag-rock', itemId })
+    }
+    stores.gameDataStore.setRow('itemSalvage', 'sv2', {
+      id: 'sv2',
+      datasetId: DS,
+      itemId: 'granite',
+      garbageItemId: 'rubble',
+      quantity: 1,
+    })
+    stores.gameDataStore.setCell('recipeElements', 're-stone', 'itemOrTagId', 'tag-rock')
+  }
+
+  beforeEach(async () => {
+    await __resetLocalizedNameStore()
+    await deleteLocalizedNameDb()
+    await seedNames()
+    await saveLocalizedNames(DS, [
+      { id: '10', entityType: 'item', entityId: 'ash', locale: 'en-US', name: 'Ash' },
+      { id: '11', entityType: 'item', entityId: 'rubble', locale: 'en-US', name: 'Rubble' },
+    ])
+    stores = makeStores()
+  })
+
+  it('hides the Waste tab and section when the recipe produces no garbage', async () => {
+    // This is also the v11-v13 path: those datasets ship no salvage data at
+    // all, so every recipe lands here with no version check anywhere.
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getAllByRole('row').length).toBeGreaterThan(0))
+    expect(screen.queryByText('Waste')).toBeNull()
+    expect(screen.queryByText('Waste Produced')).toBeNull()
+  })
+
+  it('shows the Waste tab and the Cost Components summary when it does', async () => {
+    seedGarbage()
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getAllByRole('row').length).toBeGreaterThan(0))
+    // Section heading in the Cost Components tab, plus the tab itself.
+    expect(screen.getByText('Waste')).toBeInTheDocument()
+    expect(screen.getAllByText('Waste Produced').length).toBeGreaterThanOrEqual(1)
+    // 10 stone x 0.5 x 0.08 = 0.4 rubble; explicit ash is literal 0.25.
+    await waitFor(() => {
+      expect(screen.getByText('Rubble')).toBeInTheDocument()
+    })
+    expect(screen.getByText('0.4')).toBeInTheDocument()
+    expect(screen.getByText('0.25')).toBeInTheDocument()
+  })
+
+  it('does not scale garbage by module effects (base quantities only)', async () => {
+    // The plan's one reversal, from a live-server test: modules reduce the
+    // ingredients consumed but NOT the garbage produced. Feeding the garbage
+    // path `elementModifiedQuantities` is a one-line change that would look
+    // like a tidy-up and silently under-report every upgraded table, so this
+    // asserts the number is identical with a -50% resource module installed.
+    seedGarbage()
+    stores.gameDataStore.setRow('modifiers', 'mod-stone', {
+      id: 'mod-stone',
+      datasetId: DS,
+      targetType: 'elementQuantity',
+      targetId: 're-stone',
+      dynamicType: 'Module',
+      refName: 'Smelting',
+    })
+    stores.gameDataStore.setRow('pluginModules', 'pm1', {
+      id: 'pm1',
+      datasetId: DS,
+      name: 'BigUpgrade',
+      slot: 'Basic',
+    })
+    stores.gameDataStore.setRow('pluginModuleBonuses', 'pmb1', {
+      id: 'pmb1',
+      datasetId: DS,
+      pluginModuleId: 'pm1',
+      bonusIndex: 0,
+      action: 'ResourceCost',
+      effectType: 'Multiplicative',
+      value: 0.5,
+      skillIds: '[]',
+    })
+    stores.buildStore.setRow('userCraftingTables', 'uct1', {
+      id: 'uct1',
+      buildId: BUILD_ID,
+      craftingTableId: 'ct1',
+      basicModuleId: 'pm1',
+      costPerMinute: 0,
+    })
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getByText('Rubble')).toBeInTheDocument())
+    // The ingredient row itself IS reduced: 10 -> 5.
+    expect(screen.getByText('5')).toBeInTheDocument()
+    // Garbage is not: still 10 x 0.5 x 0.08, not 5 x 0.5 x 0.08 = 0.2.
+    expect(screen.getByText('0.4')).toBeInTheDocument()
+    expect(screen.queryByText('0.2')).toBeNull()
+  })
+
+  it('breaks garbage down by source in the Waste tab', async () => {
+    seedGarbage()
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getAllByRole('row').length).toBeGreaterThan(0))
+    fireEvent.click(screen.getByText('Waste'))
+    await waitFor(() => expect(screen.getByText('Source')).toBeInTheDocument())
+    // One row for the recipe's own explicit output, one for the ingredient it
+    // derives from. The explicit row has no source quantity.
+    expect(screen.getByText('Recipe waste')).toBeInTheDocument()
+    expect(screen.getAllByText('Stone').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('shows a range for an unpinned tag ingredient', async () => {
+    // A tag whose items carry different salvage cannot be reduced to one
+    // number honestly, and 324 of v14's 1487 recipes have such a tag. Printing
+    // a single figure there would look authoritative while usually being wrong.
+    seedGarbage()
+    seedRockTag()
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getByText('Rubble')).toBeInTheDocument())
+    // stone 10 x 0.5 x 0.08 = 0.4 .. granite 10 x 1 x 0.08 = 0.8
+    expect(screen.getAllByText(/0\.4\s*–\s*0\.8/).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(/varies by item/).length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('collapses the tag to an exact figure once the build pins an item', async () => {
+    seedGarbage()
+    seedRockTag()
+    // The build's existing primary-item choice, so the Waste figure agrees
+    // with whichever item the Cost Components tab already prices the tag at.
+    stores.buildStore.setRow('userPrices', 'up-tag', {
+      id: 'up-tag',
+      buildId: BUILD_ID,
+      itemOrTagId: 'tag-rock',
+      price: 0,
+      priceMode: 'mirror',
+      primaryItemId: 'granite',
+      isOverride: false,
+    })
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getByText('Rubble')).toBeInTheDocument())
+    expect(screen.getAllByText('0.8').length).toBeGreaterThanOrEqual(1)
+    expect(screen.queryByText(/varies by item/)).toBeNull()
+  })
+})

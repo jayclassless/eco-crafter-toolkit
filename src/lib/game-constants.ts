@@ -2,10 +2,57 @@
 // from star-cost accounting. Identified by its raw (non-localized) game name.
 export const SELF_IMPROVEMENT_SKILL_NAME = 'SelfImprovementSkill'
 
+/**
+ * `Balance.{Basic,Advanced,Modern,Specialty}ModuleStarCost` from
+ * `Eco_Data/Server/Configs/Balance.eco.template` (verified against v14.0.1).
+ * Charged per module installed, not per table.
+ *
+ * `Specialty: 0` is what makes legacy datasets contribute zero module star cost
+ * with no version check — every v11–v13 module normalizes to the Specialty slot.
+ *
+ * ⚠️ This is one of only two game values the app hardcodes; everything else
+ * comes from the extracted dataset and refreshes on re-extraction. Nothing reads
+ * `Balance.eco.template`, so a future v14.x that rebalances a slot cost would
+ * leave the star badge silently wrong. If the badge is ever reported as off,
+ * check here first. (The other hardcoded value, `CRAFT_GARBAGE_RATIO`, arrives
+ * with the garbage UI and is display-only.)
+ */
+export const MODULE_SLOT_STAR_COSTS = {
+  Basic: 1,
+  Advanced: 1,
+  Modern: 1,
+  Specialty: 0,
+} as const
+
+/**
+ * `Balance.CraftGarbageRatio` from `Eco_Data/Server/Configs/Balance.eco.template`
+ * (verified against v14.0.1 and unchanged in v14.0.2). Every craft emits this
+ * fraction of each consumed ingredient's `SalvageCost` as garbage.
+ *
+ * It scales ONLY the salvage-derived half. A recipe's explicit `GarbageOutputs`
+ * are literal quantities and must not be multiplied by it — confirmed against
+ * the game UI for `AdvancedCircuitRecipe`, whose 0.1 Chemical Waste appears
+ * unscaled alongside ratio-scaled scrap.
+ *
+ * The second of the two hardcoded game values (see `MODULE_SLOT_STAR_COSTS`),
+ * but the harmless one: garbage is display-only — it stays out of `SolverOutput`
+ * and out of the price signal — so a wrong ratio cannot move a price. It is also
+ * inert on v11–v13, which ship no `SalvageCost` data at all.
+ */
+export const CRAFT_GARBAGE_RATIO = 0.08
+
 // Secondary products that are pure waste — never participate in the default
 // "split some cost off to secondaries" allocation. Identified by raw
 // (non-localized) game name. They always receive 0% share by default; users
 // can still override per-recipe.
+//
+// Version note: in v14 `TailingsItem` / `WetTailingsItem` stopped being recipe
+// Products and moved into the garbage system (v13 ships them as products of 2
+// and 6 recipes respectively; v14 ships them as products of none). This list
+// deliberately stays flat rather than becoming dataset-aware, because it is only
+// ever matched against a recipe's *product* list (see `computeAutoShares`) — so
+// on a v14 dataset the two entries simply never match, and on v11–v13 they are
+// still required. `SlagItem` is a real product in both.
 export const ZERO_SHARE_SECONDARY_ITEM_NAMES = new Set([
   'SlagItem',
   'TailingsItem',

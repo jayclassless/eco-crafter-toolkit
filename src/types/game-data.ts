@@ -1,3 +1,7 @@
+import type { ModuleAction, ModuleEffectType, ModuleSlot } from '@/lib/normalize-module-bonuses'
+
+export type { ModuleSlot }
+
 export interface Skill {
   id: string
   datasetId: string
@@ -116,10 +120,22 @@ export interface PluginModule {
   id: string
   datasetId: string
   name: string
-  pluginType: 'Resource' | 'Speed' | 'Resource&Speed'
-  percent: number
-  skillId?: string
-  skillPercent?: number
+  slot: ModuleSlot
+  isDeprecated: boolean
+}
+
+/** One module effect, in the unified shape both dataset versions normalize to.
+ * Mirrors `TalentBonus`, plus the skill scope modules can carry. */
+export interface PluginModuleBonus {
+  id: string
+  datasetId: string
+  pluginModuleId: string
+  bonusIndex: number
+  action: ModuleAction
+  effectType: ModuleEffectType
+  value: number
+  /** Skill ids; empty means unscoped (applies wherever the action applies). */
+  skillIds: string[]
 }
 
 export interface CraftingTablePluginModule {
@@ -127,6 +143,25 @@ export interface CraftingTablePluginModule {
   datasetId: string
   craftingTableId: string
   pluginModuleId: string
+}
+
+/** What one unit of an item breaks down into. Scaled by `CRAFT_GARBAGE_RATIO`
+ * when computing a recipe's garbage. Empty on v11–v13. */
+export interface ItemSalvage {
+  id: string
+  datasetId: string
+  itemId: string
+  garbageItemId: string
+  quantity: number
+}
+
+/** Garbage a recipe emits outright. Literal quantities — not ratio-scaled. */
+export interface RecipeGarbage {
+  id: string
+  datasetId: string
+  recipeId: string
+  garbageItemId: string
+  quantity: number
 }
 
 export interface Recipe {
