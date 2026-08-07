@@ -244,6 +244,33 @@ describe('crafting-table module slots differ across versions', () => {
   })
 })
 
+// `moduleFactor` resolves a module's skill scope against the INGREDIENT's own
+// skill (Rule B, `dynamic-values.ts`), not the recipe's required skill (Rule A).
+// That choice is only safe while the two rules can't disagree in a way that
+// matters, which is a property of the shipped data rather than of the code.
+describe.each(BUNDLED)('bundled %s module scope resolution (Rule B)', (id) => {
+  it('never has a skilled recipe whose ingredient names a different real skill', () => {
+    // The load-bearing invariant. Where the rules diverge at all, it is always
+    // on a SKILL-LESS recipe (v14.0.2: 2770 skill-form elements, 138 diverge,
+    // only 4 name a real skill — all on the two Kite recipes, which require no
+    // skill). There, Rule B applies the module and Rule A would not, and test 2
+    // confirmed in game that the module DOES apply. So Rule B is right on every
+    // case that exists, and this asserts no counter-example has appeared.
+    const data = load(id)
+    const realSkills = new Set(data.Skills.map((s) => s.Name))
+    const offenders: string[] = []
+    for (const recipe of data.Recipes) {
+      if (!recipe.RequiredSkill) continue
+      for (const ing of recipe.Ingredients ?? []) {
+        const scope = (ing.Quantity.Modifiers ?? []).find((m) => m.DynamicType === 'Module')?.Item
+        if (!scope || scope === recipe.RequiredSkill) continue
+        if (realSkills.has(scope)) offenders.push(`${recipe.Name}/${ing.ItemOrTag} → ${scope}`)
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+})
+
 // The whole reason gathering data is extracted per dataset rather than
 // hardcoded: the same entity genuinely differs between game versions.
 describe('gathering data differs across versions', () => {
