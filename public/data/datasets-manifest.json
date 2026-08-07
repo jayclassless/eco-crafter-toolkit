@@ -5,15 +5,15 @@
       "name": "Eco v14.0.2",
       "file": "eco-v14.json",
       "revision": 2,
-      "updatedAt": "2026-08-07"
+      "updatedAt": "2026-08-07",
+      "default": true
     },
     {
       "id": "eco-v13",
       "name": "Eco v13.0.4",
       "file": "eco-v13.json",
       "revision": 7,
-      "updatedAt": "2026-07-30",
-      "default": true
+      "updatedAt": "2026-07-30"
     },
     {
       "id": "eco-v12",
