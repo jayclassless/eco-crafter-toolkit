@@ -27,9 +27,11 @@
  *      The Linux PrimaryContent export is incomplete (often missing >60%
  *      of sprites), so we pull metadata entirely through the API.
  *   6. For every sprite (skipping *_FG — the app doesn't use foreground
- *      variants) look at m_Rect + m_RD.m_Texture.m_PathID, map to a
- *      tileset, flip Y, and crop via sharp into one of four sub-dirs
- *      matching the existing public/eco-icons/ layout:
+ *      variants) look at m_Rect + m_RD.m_Texture.m_PathID (specifically the
+ *      reference inside m_RD — sprites also carry an empty m_AtlasRD block
+ *      whose m_Texture is pathID 0 and serializes first), map to a tileset,
+ *      flip Y, and crop via sharp into one of four sub-dirs matching the
+ *      existing public/eco-icons/ layout:
  *
  *        *Item.png          -> items/
  *        *Skill.png         -> skills/
@@ -209,6 +211,23 @@ function extractFirstPathID(raw: string, fieldName: string): string | undefined 
   return re.exec(raw)?.[1]
 }
 
+/**
+ * Pull the sprite's texture pathID from inside its `m_RD` render-data object.
+ * Sprites serialize an `m_AtlasRD` block too (alphabetically before `m_RD`),
+ * whose `m_Texture` is an empty `{m_FileID: 0, m_PathID: 0}` reference for
+ * non-atlas-packed sprites — so matching the first `m_Texture` in the whole
+ * blob returns 0 for every sprite and breaks the tileset mapping. Returns
+ * undefined for a missing or null (0) reference.
+ */
+function extractRenderDataTexturePathID(raw: string): string | undefined {
+  const rdIdx = raw.indexOf('"m_RD"')
+  if (rdIdx < 0) return undefined
+  const re = /"m_Texture"\s*:\s*\{[^}]*"m_PathID"\s*:\s*(-?\d+)/g
+  re.lastIndex = rdIdx
+  const pathID = re.exec(raw)?.[1]
+  return pathID === undefined || pathID === '0' ? undefined : pathID
+}
+
 async function walkBundleForSpriteStorages(serverUrl: string, root: string): Promise<string[]> {
   // BFS walk of the bundle tree, visiting each node once. We only descend
   // into paths that are strict extensions of `root` so the "Parent" link
@@ -304,9 +323,6 @@ async function fetchTilesets(serverUrl: string, cacheDir: string): Promise<Tiles
       console.log(`  ${safeName}: ${img.width}x${img.height} (pathID ${texturePathID})`)
     }
   }
-  // Prefer the biggest tilesets first so fit-checks resolve there before
-  // tiny UI textures that also happen to contain matching coordinates.
-  tilesets.sort((a, b) => b.width * b.height - a.width * a.height)
   return tilesets
 }
 
@@ -324,8 +340,6 @@ interface SpriteInfo {
   name: string
   rect: SpriteRect
   texturePathID: string | undefined
-  /** Raw JSON text (for pathID extraction via regex) */
-  raw: string
 }
 
 /**
@@ -396,8 +410,8 @@ async function fetchSpriteMetadata(serverUrl: string): Promise<SpriteInfo[]> {
         const data = JSON.parse(raw) as { m_Rect?: SpriteRect }
         const rect = data.m_Rect
         if (!rect || rect.m_Width === 0 || rect.m_Height === 0) continue
-        const texturePathID = extractFirstPathID(raw, 'm_Texture')
-        sprites.push({ name, rect, texturePathID, raw })
+        const texturePathID = extractRenderDataTexturePathID(raw)
+        sprites.push({ name, rect, texturePathID })
       } catch {
         // Skip non-sprite assets (materials, shaders, etc.)
       }
@@ -417,21 +431,14 @@ async function fetchSpriteMetadata(serverUrl: string): Promise<SpriteInfo[]> {
 
 function pickTileset(
   texturePathID: string | undefined,
-  rect: SpriteRect,
-  byPathID: Map<string, Tileset>,
-  tilesets: Tileset[]
+  byPathID: Map<string, Tileset>
 ): Tileset | undefined {
-  if (texturePathID) {
-    const hit = byPathID.get(texturePathID)
-    if (hit) return hit
-  }
-  // Fallback: first tileset whose dims contain the rect.
-  const right = rect.m_X + rect.m_Width
-  const top = rect.m_Y + rect.m_Height
-  for (const t of tilesets) {
-    if (right <= t.width && top <= t.height) return t
-  }
-  return undefined
+  // Strictly resolve via the sprite's m_RD texture reference. No dimension-fit
+  // fallback: a rect fits multiple atlases (everything fits the 8192px one),
+  // so guessing produces a plausible-looking crop of the wrong texture — far
+  // worse than reporting the sprite as failed.
+  if (!texturePathID) return undefined
+  return byPathID.get(texturePathID)
 }
 
 async function extractSprites(
@@ -455,9 +462,12 @@ async function extractSprites(
       if (i >= sprites.length) return
       const sprite = sprites[i]
       try {
-        const tileset = pickTileset(sprite.texturePathID, sprite.rect, byPathID, tilesets)
+        const tileset = pickTileset(sprite.texturePathID, byPathID)
         if (!tileset) {
-          throw new Error(`no tileset fits rect ${JSON.stringify(sprite.rect)}`)
+          throw new Error(
+            `no tileset for texture pathID ${sprite.texturePathID ?? '(none)'} ` +
+              `(rect ${JSON.stringify(sprite.rect)})`
+          )
         }
         const left = Math.round(sprite.rect.m_X)
         const width = Math.round(sprite.rect.m_Width)
