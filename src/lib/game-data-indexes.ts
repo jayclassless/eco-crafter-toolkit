@@ -43,6 +43,9 @@ interface GameDataIndexes {
    * items. Precomputed here so the per-rebuild scan over ~1300 `tagItems`
    * rows is a one-time cost per dataset. */
   itemIdsByTagId: Map<string, string[]>
+  /** `SolverInput.tagItems`, keyed by datasetId. Handed to the solver as-is on
+   * every snapshot, so it is SHARED — callers must treat it as read-only. */
+  solverTagItemsByDatasetId: Map<string, Record<string, string[]>>
   /** Recipes where this item is the primary product — first product NOT also
    * an ingredient (matches the "primary product" semantics used by
    * `buildProducts` and MaterialDialog). Used by the dependency graph to
@@ -198,6 +201,36 @@ function buildItemIdsByTagId(store: Store): Map<string, string[]> {
   return map
 }
 
+/**
+ * The solver's `tagItems` payload, pre-built per dataset.
+ *
+ * Same data as `itemIdsByTagId`, but split by dataset and shaped as the plain
+ * `Record` that crosses the worker `postMessage` boundary. It cannot just reuse
+ * the unfiltered map: `solve()` walks `for (const tagId in tagItems)` to emit
+ * tag prices, so another dataset's tags would leak into `SolverOutput`.
+ *
+ * Precomputed because `buildSolverSnapshot` used to rebuild it on EVERY
+ * debounced recalculation — 6,665 rows for v14 alone, ~26k with all four
+ * datasets installed — even though it is dataset-immutable.
+ */
+function buildSolverTagItems(store: Store): Map<string, Record<string, string[]>> {
+  const byDataset = new Map<string, Record<string, string[]>>()
+  for (const tiId of store.getRowIds('tagItems')) {
+    const row = store.getRow('tagItems', tiId)
+    const datasetId = row.datasetId as string
+    let tags = byDataset.get(datasetId)
+    if (!tags) {
+      tags = {}
+      byDataset.set(datasetId, tags)
+    }
+    const tagId = row.tagId as string
+    const list = tags[tagId]
+    if (list) list.push(row.itemId as string)
+    else tags[tagId] = [row.itemId as string]
+  }
+  return byDataset
+}
+
 /** Items with any gathering data, plus every log item a tree species yields.
  * Mirrors the classification in `gathering-data.ts`; a rock whose block has no
  * rubble is excluded there and here, since it can't be priced. */
@@ -304,6 +337,7 @@ function build(store: Store): GameDataIndexes {
     unlockingTalentsByRecipeId: buildRecipeUnlockingTalents(store),
     tagIdsByItemId: buildTagIdsByItemId(store),
     itemIdsByTagId: buildItemIdsByTagId(store),
+    solverTagItemsByDatasetId: buildSolverTagItems(store),
     primaryRecipeIdsByItemId: buildPrimaryRecipeIdsByItemId(
       productItemIdsByRecipeId,
       ingredientItemIdsByRecipeId

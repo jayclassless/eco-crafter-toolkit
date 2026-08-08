@@ -29,7 +29,10 @@ export interface SolverRecipe {
   /** Every effect from every module installed on this recipe's crafting table,
    * UNFILTERED. Scope is resolved at apply time (see `moduleFactor`), so
    * `skillIds` must survive into the solver rather than being pre-filtered. */
-  moduleEffects: SolverModuleEffect[]
+  /** `readonly` because the snapshot builder ALIASES one array across every
+   * recipe sharing a crafting table (see `assembleSolverRecipe`). Mutating it
+   * would silently alter every other recipe on that table. */
+  moduleEffects: readonly SolverModuleEffect[]
   baseCraftTime: number
   baseLaborCost: number
   costPerMinute: number

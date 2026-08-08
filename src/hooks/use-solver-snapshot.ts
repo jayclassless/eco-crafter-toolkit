@@ -325,7 +325,8 @@ export function assembleSolverRecipe(
   roundFactor: number,
   datasetId: string,
   indexes: RecipeIndexes,
-  buildState: RecipeBuildState
+  buildState: RecipeBuildState,
+  effectsByCTId?: Map<string, readonly SolverModuleEffect[]>
 ): SolverRecipe | null {
   const recipe = gameDataStore.getRow('recipes', recipeId)
   if (!recipe || recipe.datasetId !== datasetId) return null
@@ -370,11 +371,27 @@ export function assembleSolverRecipe(
   // Every effect from every module installed on this recipe's table, emitted
   // UNFILTERED. Scope is resolved at apply time by `moduleFactor`, so the skill
   // ids must survive into the solver rather than being pre-filtered away here.
-  const moduleEffects: SolverRecipe['moduleEffects'] = []
-  for (const moduleId of userCT?.moduleIds ?? []) {
-    for (const bonus of indexes.moduleBonusesByModuleId.get(moduleId) ?? []) {
-      moduleEffects.push(bonus)
+  //
+  // The array is shared by every recipe on the same crafting table when the
+  // caller supplies a cache (`buildSolverSnapshot` does; the single-recipe
+  // display callers have nothing to share and don't). It is therefore ALIASED —
+  // hence `readonly SolverModuleEffect[]` on SolverRecipe. Sharing matters
+  // because the snapshot is structured-cloned to the solver worker on every
+  // recalculation, and the clone algorithm memoizes objects: one shared array
+  // costs a single back-reference per recipe instead of ~11 fresh slots.
+  let moduleEffects = effectsByCTId?.get(ctId)
+  if (!moduleEffects) {
+    // Order is load-bearing: `moduleFactor` buckets by first appearance of a
+    // module id, and its `additive +=` / `multiplicative *=` accumulation is not
+    // associative. Reordering perturbs prices at the ulp level.
+    const collected: SolverModuleEffect[] = []
+    for (const moduleId of userCT?.moduleIds ?? []) {
+      for (const bonus of indexes.moduleBonusesByModuleId.get(moduleId) ?? []) {
+        collected.push(bonus)
+      }
     }
+    moduleEffects = collected
+    effectsByCTId?.set(ctId, collected)
   }
 
   // Elements. We also collect ingredient item/tag IDs and the products in
@@ -562,19 +579,15 @@ export function buildSolverSnapshot(
     productMargins[upm.itemOrTagId as string] = upm.userMarginId as string
   }
 
-  // tagItems (game-data side — filter by datasetId once)
-  const tagItems: Record<string, string[]> = {}
-  for (const rowId of gameDataStore.getRowIds('tagItems')) {
-    const row = gameDataStore.getRow('tagItems', rowId)
-    if (row.datasetId !== datasetId) continue
-    const tagId = row.tagId as string
-    let list = tagItems[tagId]
-    if (!list) {
-      list = []
-      tagItems[tagId] = list
-    }
-    list.push(row.itemId as string)
-  }
+  // tagItems (game-data side, dataset-filtered). Dataset-immutable, so it rides
+  // the game-data index cache rather than being rescanned per snapshot — v14
+  // alone has 6,665 rows, and this runs on every debounced recalculation.
+  // Shared and cached: treat as read-only (the solver only reads it).
+  const tagItems = getGameDataIndexes(gameDataStore).solverTagItemsByDatasetId.get(datasetId) ?? {}
+
+  // One flat module-effects array per crafting table, shared by every recipe on
+  // it. Lifetime is exactly this snapshot.
+  const effectsByCTId = new Map<string, readonly SolverModuleEffect[]>()
 
   const recipes: SolverRecipe[] = []
   for (const [urId, ur] of buildState.userRecipesById) {
@@ -585,7 +598,8 @@ export function buildSolverSnapshot(
       ur.roundFactor,
       datasetId,
       indexes,
-      buildState
+      buildState,
+      effectsByCTId
     )
     if (!solverRecipe) continue
     if (excludedItems.size > 0) {

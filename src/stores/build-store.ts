@@ -1,6 +1,8 @@
 import { createStore } from 'tinybase'
 import { createIndexedDbPersister } from 'tinybase/persisters/persister-indexed-db'
 
+import { peekPersistedTable } from './peek-persisted-table'
+
 export function createBuildStore() {
   const store = createStore()
 
@@ -147,42 +149,32 @@ export function createBuildStore() {
 /**
  * Read each build's pre-v14 `userCraftingTables.pluginModuleId` from IndexedDB.
  *
- * 🛑 This MUST use a bare `createStore()` with no schema, and it MUST run before
- * the real store loads. TinyBase enforces a table schema destructively — the
- * docs say applying one "may result in a change to data in the Store, as
- * defaults are applied or as invalid Table, Row, or Cell objects are removed" —
- * and `createBuildStore()` calls `setTablesSchema` at construction, i.e. before
- * `persister.load()`. Verified empirically: loading a legacy row into the new
- * schema yields
+ * 🛑 This MUST bypass TinyBase (it reads the raw persisted table), and it MUST
+ * run before the real store loads. TinyBase enforces a table schema
+ * destructively — the docs say applying one "may result in a change to data in
+ * the Store, as defaults are applied or as invalid Table, Row, or Cell objects
+ * are removed" — and `createBuildStore()` calls `setTablesSchema` at
+ * construction, i.e. before `persister.load()`. Verified empirically: loading a
+ * legacy row into the new schema yields
  *
  *   {"id":"r1","buildId":"b1","craftingTableId":"ct1","specialtyModuleId":""}
  *
  * — `pluginModuleId` is gone and `specialtyModuleId` has been defaulted to ''.
  * So a migration that runs *after* load() finds nothing, reports success, and
- * silently drops every user's installed upgrade module. Reusing the schema'd
- * store here would look like an obvious simplification and would reintroduce
- * exactly that. See `build-store.test.ts` for the executable guard.
+ * silently drops every user's installed upgrade module. Reading through the
+ * schema'd store here would look like an obvious simplification and would
+ * reintroduce exactly that. See `build-store.test.ts` for the executable guard.
  *
  * Returns an empty map on any failure, and on already-migrated stores (the cell
  * is stripped on the first save after migrating, so this is self-disarming and
  * therefore idempotent).
  */
 async function readLegacyPluginModuleIds(): Promise<Map<string, string>> {
-  if (typeof indexedDB === 'undefined') return new Map()
   const out = new Map<string, string>()
-  const probe = createStore()
-  const probePersister = createIndexedDbPersister(probe, 'eco-crafter-builds')
-  try {
-    await probePersister.load()
-    for (const rowId of probe.getRowIds('userCraftingTables')) {
-      const legacy = probe.getCell('userCraftingTables', rowId, 'pluginModuleId')
-      if (typeof legacy === 'string' && legacy !== '') out.set(rowId, legacy)
-    }
-  } catch {
-    // A missing or unreadable DB is a first launch, not an error.
-    return new Map()
-  } finally {
-    await probePersister.destroy()
+  const table = await peekPersistedTable('eco-crafter-builds', 'userCraftingTables')
+  for (const [rowId, row] of Object.entries(table)) {
+    const legacy = row.pluginModuleId
+    if (typeof legacy === 'string' && legacy !== '') out.set(rowId, legacy)
   }
   return out
 }

@@ -748,6 +748,83 @@ describe('buildSolverSnapshot', () => {
     expect(snap.recipes[0].costPerMinute).toBe(0.25)
   })
 
+  it('shares one moduleEffects array across recipes on the same crafting table', () => {
+    // Identity, not equality. The snapshot is structured-cloned to the solver
+    // worker on every recalculation, and the clone algorithm memoizes objects —
+    // so a shared array costs one back-reference per recipe instead of a fresh
+    // slot per effect. Recipes on DIFFERENT tables must not share.
+    setupSettings()
+    game.setRow('pluginModules', 'pm1', { id: 'pm1', datasetId: DS, name: 'M', slot: 'Specialty' })
+    game.setRow('pluginModuleBonuses', 'pmb1', {
+      id: 'pmb1',
+      datasetId: DS,
+      pluginModuleId: 'pm1',
+      bonusIndex: 0,
+      action: 'CraftTime',
+      effectType: 'Multiplicative',
+      value: 0.5,
+      skillIds: '[]',
+    })
+    for (const ct of ['ct1', 'ct2']) {
+      game.setRow('craftingTables', ct, { id: ct, datasetId: DS, name: ct })
+    }
+    // r1 and r2 share ct1; r3 sits on ct2, which has no module installed.
+    for (const [recipeId, ct] of [
+      ['r1', 'ct1'],
+      ['r2', 'ct1'],
+      ['r3', 'ct2'],
+    ]) {
+      game.setRow('recipes', recipeId, {
+        id: recipeId,
+        datasetId: DS,
+        name: recipeId,
+        familyName: 'F',
+        requiredSkillLevel: 0,
+        isBlueprint: false,
+        isDefault: true,
+        craftingTableId: ct,
+        baseCraftTime: 1,
+        baseLaborCost: 1,
+      })
+      game.setRow('recipeElements', `re-${recipeId}`, {
+        id: `re-${recipeId}`,
+        datasetId: DS,
+        recipeId,
+        itemOrTagId: 'rock',
+        baseQuantity: 1,
+        isProduct: true,
+        index: 0,
+      })
+      build.setRow('userRecipes', `ur-${recipeId}`, {
+        id: `ur-${recipeId}`,
+        buildId: BUILD,
+        recipeId,
+        roundFactor: 0,
+      })
+    }
+    build.setRow('userCraftingTables', 'uct1', {
+      id: 'uct1',
+      buildId: BUILD,
+      craftingTableId: 'ct1',
+      specialtyModuleId: 'pm1',
+      costPerMinute: 0,
+    })
+    build.setRow('userCraftingTables', 'uct2', {
+      id: 'uct2',
+      buildId: BUILD,
+      craftingTableId: 'ct2',
+      specialtyModuleId: '',
+      costPerMinute: 0,
+    })
+
+    const snap = buildSolverSnapshot(game, build, BUILD, DS)!
+    const byId = new Map(snap.recipes.map((r) => [r.id, r]))
+    expect(byId.get('r1')!.moduleEffects).toHaveLength(1)
+    expect(byId.get('r1')!.moduleEffects).toBe(byId.get('r2')!.moduleEffects)
+    expect(byId.get('r3')!.moduleEffects).not.toBe(byId.get('r1')!.moduleEffects)
+    expect(byId.get('r3')!.moduleEffects).toEqual([])
+  })
+
   it('emits one SolverTalent per bonus on a levelable bonus talent with capped values', () => {
     setupSettings()
     game.setRow('skills', 'sk1', {

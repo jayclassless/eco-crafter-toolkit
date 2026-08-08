@@ -3,6 +3,7 @@ import { createIndexedDbPersister } from 'tinybase/persisters/persister-indexed-
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { createBuildStore, createPersistedBuildStore } from '../build-store'
+import { peekPersistedTable } from '../peek-persisted-table'
 
 async function deleteDb(name: string): Promise<void> {
   await new Promise<void>((resolve) => {
@@ -162,10 +163,11 @@ describe('userCraftingTables v13 -> v14 module migration', () => {
 })
 
 // 🛑 Executable guard for the hazard that makes the migration above non-obvious.
-// If anyone "simplifies" readLegacyPluginModuleIds to reuse the schema'd store,
-// or moves the peek to after persister.load(), the migration silently finds
-// nothing and every user's installed upgrade module is lost with no error. This
-// test documents WHY the peek must use a bare, schemaless createStore().
+// If anyone "simplifies" readLegacyPluginModuleIds to read through the schema'd
+// store, or moves the peek to after persister.load(), the migration silently
+// finds nothing and every user's installed upgrade module is lost with no error.
+// These two tests are the pair that documents why: the schema DROPS the legacy
+// cell, and only the raw persisted record still carries it.
 describe('tinybase schema enforcement (why the migration peeks before load)', () => {
   it('strips cells that are not in the schema', () => {
     const schemad = createBuildStore()
@@ -187,16 +189,11 @@ describe('tinybase schema enforcement (why the migration peeks before load)', ()
     expect(row.specialtyModuleId).toBe('')
   })
 
-  it('keeps them in a bare store, which is what the peek relies on', () => {
-    const bare = createStore()
-    bare.setContent([
-      {
-        userCraftingTables: {
-          uct1: { id: 'uct1', buildId: 'b1', pluginModuleId: 'PRESERVED' },
-        },
-      },
-      {},
-    ])
-    expect(bare.getCell('userCraftingTables', 'uct1', 'pluginModuleId')).toBe('PRESERVED')
+  it('keeps them in the raw persisted record, which is what the peek relies on', async () => {
+    await seedLegacyStore({
+      uct1: { id: 'uct1', buildId: 'b1', craftingTableId: 'ct1', pluginModuleId: 'PRESERVED' },
+    })
+    const table = await peekPersistedTable('eco-crafter-builds', 'userCraftingTables')
+    expect(table.uct1?.pluginModuleId).toBe('PRESERVED')
   })
 })

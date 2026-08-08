@@ -92,6 +92,42 @@ describe('itemIdsByTagId', () => {
   })
 })
 
+describe('solverTagItemsByDatasetId', () => {
+  it('scopes tags to their own dataset', () => {
+    // The dataset split is the reason this can't just reuse `itemIdsByTagId`:
+    // `solve()` walks `for (const tagId in tagItems)` to emit tag prices, so a
+    // second installed dataset's tags would leak into SolverOutput.
+    store.setRow('tagItems', 'ti1', {
+      id: 'ti1',
+      datasetId: 'ds',
+      tagId: 'tag:wood',
+      itemId: 'oak',
+    })
+    store.setRow('tagItems', 'ti2', {
+      id: 'ti2',
+      datasetId: 'ds',
+      tagId: 'tag:wood',
+      itemId: 'birch',
+    })
+    store.setRow('tagItems', 'ti3', {
+      id: 'ti3',
+      datasetId: 'other-ds',
+      tagId: 'tag:metal',
+      itemId: 'iron',
+    })
+    clearGameDataIndexesCache(store)
+    const { solverTagItemsByDatasetId } = getGameDataIndexes(store)
+    expect(solverTagItemsByDatasetId.get('ds')).toEqual({ 'tag:wood': ['oak', 'birch'] })
+    expect(solverTagItemsByDatasetId.get('other-ds')).toEqual({ 'tag:metal': ['iron'] })
+  })
+
+  it('has no entry for a dataset with no tag items', () => {
+    // buildSolverSnapshot falls back to {} on a miss.
+    const { solverTagItemsByDatasetId } = getGameDataIndexes(store)
+    expect(solverTagItemsByDatasetId.get('ds')).toBeUndefined()
+  })
+})
+
 describe('canonicalFamilyByItemId', () => {
   function setRecipeWithProducts(
     recipeId: string,

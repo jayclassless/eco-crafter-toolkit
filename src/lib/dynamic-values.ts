@@ -5,7 +5,7 @@ export interface ModifierContext {
   laborReducePercent: number[]
   activeTalents: SolverTalent[]
   /** Every effect from every module on this recipe's table, unfiltered. */
-  moduleEffects: SolverModuleEffect[]
+  moduleEffects: readonly SolverModuleEffect[]
 }
 
 /** What kind of value these modifiers target. Selects which module action
@@ -39,7 +39,7 @@ const ACTION_BY_TARGET = {
  * multiplicative.
  */
 export function moduleFactor(
-  effects: SolverModuleEffect[],
+  effects: readonly SolverModuleEffect[],
   targetKind: ModifierTargetKind,
   scopeSkillId: string | undefined
 ): number {

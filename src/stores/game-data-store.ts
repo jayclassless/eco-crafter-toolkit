@@ -3,6 +3,8 @@ import { createIndexedDbPersister } from 'tinybase/persisters/persister-indexed-
 
 import { legacyModuleBonuses } from '@/lib/normalize-module-bonuses'
 
+import { peekPersistedTable } from './peek-persisted-table'
+
 export function createGameDataStore() {
   const store = createStore()
 
@@ -238,11 +240,13 @@ interface LegacyPluginModuleRow {
 /**
  * Read the pre-v14 `pluginModules` cells straight out of IndexedDB.
  *
- * 🛑 Bare `createStore()`, no schema, and it MUST run before the real store
- * loads — for the same reason as `readLegacyPluginModuleIds` in build-store.ts.
- * `createGameDataStore()` applies its schema at construction, and TinyBase
- * enforces schemas destructively, so by the time `persister.load()` returns,
- * `pluginType` / `percent` / `skillId` / `skillPercent` are already gone.
+ * 🛑 This reads the raw persisted table, bypassing TinyBase entirely, and it
+ * MUST run before the real store loads — for the same reason as
+ * `readLegacyPluginModuleIds` in build-store.ts. `createGameDataStore()` applies
+ * its schema at construction, and TinyBase enforces schemas destructively, so by
+ * the time `persister.load()` returns, `pluginType` / `percent` / `skillId` /
+ * `skillPercent` are already gone. Reading through the schema'd store here would
+ * look like an obvious simplification and would find nothing.
  *
  * Without this, an existing user who had already imported a dataset would come
  * back to a store where every module row survives but carries NO bonuses at all
@@ -251,29 +255,20 @@ interface LegacyPluginModuleRow {
  * would be wrong, with no error anywhere.
  */
 async function readLegacyPluginModules(): Promise<Map<string, LegacyPluginModuleRow>> {
-  if (typeof indexedDB === 'undefined') return new Map()
   const out = new Map<string, LegacyPluginModuleRow>()
-  const probe = createStore()
-  const probePersister = createIndexedDbPersister(probe, 'eco-crafter-game-data')
-  try {
-    await probePersister.load()
-    for (const rowId of probe.getRowIds('pluginModules')) {
-      const pluginType = probe.getCell('pluginModules', rowId, 'pluginType')
-      const percent = probe.getCell('pluginModules', rowId, 'percent')
-      // A row with neither cell is already migrated (or v14-shaped); skip it so
-      // this is self-disarming and therefore idempotent.
-      if (typeof pluginType !== 'string' && typeof percent !== 'number') continue
-      out.set(rowId, {
-        pluginType: typeof pluginType === 'string' ? pluginType : '',
-        percent: typeof percent === 'number' ? percent : 1,
-        skillId: (probe.getCell('pluginModules', rowId, 'skillId') as string) ?? '',
-        skillPercent: (probe.getCell('pluginModules', rowId, 'skillPercent') as number) ?? 0,
-      })
-    }
-  } catch {
-    return new Map()
-  } finally {
-    await probePersister.destroy()
+  const table = await peekPersistedTable('eco-crafter-game-data', 'pluginModules')
+  for (const [rowId, row] of Object.entries(table)) {
+    const pluginType = row.pluginType
+    const percent = row.percent
+    // A row with neither cell is already migrated (or v14-shaped); skip it so
+    // this is self-disarming and therefore idempotent.
+    if (typeof pluginType !== 'string' && typeof percent !== 'number') continue
+    out.set(rowId, {
+      pluginType: typeof pluginType === 'string' ? pluginType : '',
+      percent: typeof percent === 'number' ? percent : 1,
+      skillId: typeof row.skillId === 'string' ? row.skillId : '',
+      skillPercent: typeof row.skillPercent === 'number' ? row.skillPercent : 0,
+    })
   }
   return out
 }
