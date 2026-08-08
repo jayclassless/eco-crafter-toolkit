@@ -679,6 +679,85 @@ describe('resolveRecipeModifiers', () => {
     expect(result.bonuses[2].displayName).toBe('pluginModule:pm1')
   })
 
+  it('sorts module bonuses by crafting-table slot order, not alphabetically', () => {
+    setSkill()
+    setRecipe()
+    game.setRow('craftingTables', 'ct1', { id: 'ct1', datasetId: DS, name: 'Anvil' })
+    // Two modules whose alphabetical order (by id-derived display name) is the
+    // reverse of their slot order, so a slot-based sort is observably different
+    // from the old alphabetical one.
+    game.setRow('pluginModules', 'pm-z', {
+      id: 'pm-z',
+      datasetId: DS,
+      name: 'Zeta',
+      slot: 'Basic',
+    })
+    game.setRow('pluginModules', 'pm-a', {
+      id: 'pm-a',
+      datasetId: DS,
+      name: 'Alpha',
+      slot: 'Specialty',
+    })
+    for (const id of ['pm-z', 'pm-a']) {
+      game.setRow('pluginModuleBonuses', `${id}-b0`, {
+        id: `${id}-b0`,
+        datasetId: DS,
+        pluginModuleId: id,
+        bonusIndex: 0,
+        action: 'ResourceCost',
+        effectType: 'Multiplicative',
+        value: 0.9,
+        skillIds: '[]',
+      })
+    }
+    game.setRow('recipeElements', 're-i', {
+      id: 're-i',
+      datasetId: DS,
+      recipeId: 'r1',
+      itemOrTagId: 'iron',
+      baseQuantity: 10,
+      isProduct: false,
+      index: 0,
+    })
+    // One Module modifier on the ingredient element makes the ingredients metric
+    // module-eligible; each module's factor comes from its own bonus above.
+    game.setRow('modifiers', 'mod-mod', {
+      id: 'mod-mod',
+      datasetId: DS,
+      targetType: 'elementQuantity',
+      targetId: 're-i',
+      dynamicType: 'Module',
+      refName: 'Zeta',
+    })
+    build.setRow('userCraftingTables', 'uct1', {
+      id: 'uct1',
+      buildId: BUILD,
+      craftingTableId: 'ct1',
+      basicModuleId: 'pm-z',
+      specialtyModuleId: 'pm-a',
+      costPerMinute: 0,
+    })
+    setUserRecipe()
+
+    const indexes = buildRecipeIndexes(game)
+    const buildState = buildRecipeBuildState(build, BUILD)
+    const result = resolveRecipeModifiers(
+      game,
+      'r1',
+      'ur1',
+      0,
+      DS,
+      indexes,
+      buildState,
+      rawGetName
+    )!
+
+    const modules = result.bonuses.filter((b) => b.source === 'module')
+    expect(modules.map((b) => b.slot)).toEqual(['Basic', 'Specialty'])
+    // Basic (Zeta) sorts before Specialty (Alpha) despite 'Alpha' < 'Zeta'.
+    expect(modules.map((b) => b.displayName)).toEqual(['pluginModule:pm-z', 'pluginModule:pm-a'])
+  })
+
   it('does not reduce craft time when the plugin module is Resource-only', () => {
     setSkill()
     setRecipe({ baseCraftTime: 10 })

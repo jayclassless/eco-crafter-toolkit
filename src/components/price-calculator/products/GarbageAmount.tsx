@@ -1,5 +1,3 @@
-import { useTranslation } from 'react-i18next'
-
 import { ItemIcon } from '@/components/common/ItemIcon'
 import { useLocalization } from '@/hooks/use-localization'
 import type { GarbageQuantity } from '@/lib/recipe-garbage'
@@ -24,7 +22,6 @@ interface Props {
  * and the Waste tab so the two can never format the same figure differently.
  */
 export function GarbageAmount({ amount }: Props) {
-  const { t } = useTranslation()
   const { formatNumber } = useLocalization()
   const fmt = (v: number) => formatNumber(v, { maximumFractionDigits: 3 })
 
@@ -37,16 +34,7 @@ export function GarbageAmount({ amount }: Props) {
       />
       <span>{amount.name}</span>
       <span className="ml-auto white-space-nowrap">
-        {amount.min === amount.max ? (
-          fmt(amount.max)
-        ) : (
-          <>
-            {fmt(amount.min)} – {fmt(amount.max)}
-            <span className="text-color-secondary ml-1">
-              ({t('priceCalculator.recipe.garbageVaries')})
-            </span>
-          </>
-        )}
+        {amount.min === amount.max ? fmt(amount.max) : `${fmt(amount.min)} – ${fmt(amount.max)}`}
       </span>
     </span>
   )

@@ -76,20 +76,24 @@ export function GarbageBreakdownTab({ rows, totals }: Props) {
   return (
     <div className="flex flex-column gap-3">
       <DataTable value={rows} dataKey="key" size="small">
-        <Column header={t('priceCalculator.recipe.garbageSource')} body={sourceTemplate} />
+        <Column
+          header={t('priceCalculator.recipe.garbageSource')}
+          body={sourceTemplate}
+          style={{ width: '45%' }}
+        />
         <Column
           header={t('priceCalculator.recipe.quantity')}
           body={quantityTemplate}
-          style={{ width: '6rem' }}
+          style={{ width: '10%' }}
         />
         <Column
           header={t('priceCalculator.recipe.garbageProduced')}
           body={outputsTemplate}
-          style={{ width: '18rem' }}
+          style={{ width: '45%' }}
         />
       </DataTable>
-      <div className="border-top-1 surface-border pt-3">
-        <h4 className="mt-0 mb-2">{t('priceCalculator.recipe.subtotal')}</h4>
+      <div className="surface-border pt-3">
+        <h4 className="mt-0 mb-2">{t('priceCalculator.recipe.totalCost')}</h4>
         <ul className="list-none p-0 m-0 flex flex-column gap-2 ml-3">
           {totals.map((o) => (
             <li key={o.itemId}>

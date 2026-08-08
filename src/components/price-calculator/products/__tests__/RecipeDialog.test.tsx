@@ -746,8 +746,8 @@ describe('RecipeDialog garbage output', () => {
     // all, so every recipe lands here with no version check anywhere.
     renderDialog(stores)
     await waitFor(() => expect(screen.getAllByRole('row').length).toBeGreaterThan(0))
-    expect(screen.queryByText('Waste')).toBeNull()
-    expect(screen.queryByText('Waste Produced')).toBeNull()
+    expect(screen.queryByText('Garbage')).toBeNull()
+    expect(screen.queryByText('Garbage Produced')).toBeNull()
   })
 
   it('shows the Waste tab and the Cost Components summary when it does', async () => {
@@ -755,8 +755,8 @@ describe('RecipeDialog garbage output', () => {
     renderDialog(stores)
     await waitFor(() => expect(screen.getAllByRole('row').length).toBeGreaterThan(0))
     // Section heading in the Cost Components tab, plus the tab itself.
-    expect(screen.getByText('Waste')).toBeInTheDocument()
-    expect(screen.getAllByText('Waste Produced').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Garbage')).toBeInTheDocument()
+    expect(screen.getAllByText('Garbage Produced').length).toBeGreaterThanOrEqual(1)
     // 10 stone x 0.5 x 0.08 = 0.4 rubble; explicit ash is literal 0.25.
     await waitFor(() => {
       expect(screen.getByText('Rubble')).toBeInTheDocument()
@@ -816,7 +816,7 @@ describe('RecipeDialog garbage output', () => {
     seedGarbage()
     renderDialog(stores)
     await waitFor(() => expect(screen.getAllByRole('row').length).toBeGreaterThan(0))
-    fireEvent.click(screen.getByText('Waste'))
+    fireEvent.click(screen.getByText('Garbage'))
     await waitFor(() => expect(screen.getByText('Source')).toBeInTheDocument())
     // One row for the recipe's own explicit output, one for the ingredient it
     // derives from. The explicit row has no source quantity.
@@ -834,6 +834,19 @@ describe('RecipeDialog garbage output', () => {
     await waitFor(() => expect(screen.getByText('Rubble')).toBeInTheDocument())
     // stone 10 x 0.5 x 0.08 = 0.4 .. granite 10 x 1 x 0.08 = 0.8
     expect(screen.getAllByText(/0\.4\s*–\s*0\.8/).length).toBeGreaterThanOrEqual(1)
+    // The Cost Components summary shows the bare range: the "(varies by item)"
+    // caption lives only on the Waste tab's source column, not next to the
+    // amount here.
+    expect(screen.queryByText(/varies by item/)).toBeNull()
+  })
+
+  it('labels the unpinned tag source as varying in the Waste tab', async () => {
+    seedGarbage()
+    seedRockTag()
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getAllByRole('row').length).toBeGreaterThan(0))
+    fireEvent.click(screen.getByText('Garbage'))
+    await waitFor(() => expect(screen.getByText('Source')).toBeInTheDocument())
     expect(screen.getAllByText(/varies by item/).length).toBeGreaterThanOrEqual(1)
   })
 

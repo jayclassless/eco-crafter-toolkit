@@ -12,6 +12,8 @@ import {
   type ModifierContext,
   type ModifierTargetKind,
 } from '@/lib/dynamic-values'
+import { MODULE_SLOT_ORDER } from '@/lib/module-slots'
+import type { ModuleSlot } from '@/lib/normalize-module-bonuses'
 import type { SolverModifier, SolverRecipe } from '@/types/solver'
 
 type MetricKind = 'labor' | 'craftTime' | 'ingredients' | 'products'
@@ -31,6 +33,10 @@ export interface AppliedBonus {
   icon: BonusIcon
   displayName: string
   effects: AppliedEffect[]
+  /** The crafting-table slot a module occupies. Only set for module bonuses;
+   * drives their display order so this list matches the module icons shown
+   * next to the table. */
+  slot?: ModuleSlot
 }
 
 interface ResolvedRecipeModifiers {
@@ -292,12 +298,22 @@ export function resolveRecipeModifiers(
       icon: { kind: 'module', rawName },
       displayName: getName('pluginModule', moduleId) || rawName,
       effects,
+      slot: (pmRow.slot as ModuleSlot) ?? 'Specialty',
     })
   }
 
   bonuses.sort((a, b) => {
     const orderDiff = BONUS_ORDER.indexOf(a.source) - BONUS_ORDER.indexOf(b.source)
     if (orderDiff !== 0) return orderDiff
+    // Module bonuses follow the crafting-table slot order (Basic → Advanced →
+    // Modern → Specialty) so this list matches the module icons shown next to
+    // the table. Skills and talents fall back to alphabetical.
+    if (a.source === 'module' && b.source === 'module') {
+      const slotDiff =
+        MODULE_SLOT_ORDER.indexOf(a.slot ?? 'Specialty') -
+        MODULE_SLOT_ORDER.indexOf(b.slot ?? 'Specialty')
+      if (slotDiff !== 0) return slotDiff
+    }
     return a.displayName.localeCompare(b.displayName)
   })
 

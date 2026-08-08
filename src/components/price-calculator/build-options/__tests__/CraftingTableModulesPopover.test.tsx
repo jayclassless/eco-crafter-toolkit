@@ -121,4 +121,39 @@ describe('CraftingTableModulesPopover', () => {
     expect(panel.textContent).not.toMatch(/Basic/)
     expect(panel.textContent).toMatch(/Modern/)
   })
+
+  it('stops a checkbox click from bubbling out of the panel content', () => {
+    // Regression: PrimeReact's OverlayPanel flags itself "panel-clicked" on any
+    // content click, which then swallows the first outside click — so toggling a
+    // checkbox used to leave the panel needing two outside clicks to close. The
+    // popover stops content clicks before they reach that internal handler; a
+    // click still bubbling to an ancestor proves the flag would have been set.
+    const ancestorClick = vi.fn()
+    render(
+      <div onClick={ancestorClick}>
+        <Harness slots={FOUR_SLOTS} selected={{}} onSelect={vi.fn()} />
+      </div>
+    )
+    fireEvent.click(screen.getByText('open'))
+    ancestorClick.mockClear() // ignore the trigger-button click itself
+    fireEvent.click(screen.getByLabelText('BasicUpgradeItem'))
+    expect(ancestorClick).not.toHaveBeenCalled()
+  })
+
+  it('lets clicks inside the slot dropdown propagate so its overlay keeps coordinating', () => {
+    // The dropdown's list renders in the document body ("outside" the panel), so
+    // the panel-clicked flag is what keeps this popover open while the user
+    // picks from it — those clicks must be allowed through, unlike checkboxes.
+    const ancestorClick = vi.fn()
+    render(
+      <div onClick={ancestorClick}>
+        <Harness slots={FOUR_SLOTS} selected={{}} onSelect={vi.fn()} />
+      </div>
+    )
+    fireEvent.click(screen.getByText('open'))
+    ancestorClick.mockClear()
+    const panel = document.body.querySelector('.p-overlaypanel') as HTMLElement
+    fireEvent.click(panel.querySelector('.p-dropdown') as HTMLElement)
+    expect(ancestorClick).toHaveBeenCalled()
+  })
 })

@@ -40,7 +40,7 @@ export function AppliedBonuses({ bonuses }: Props) {
       <h4 className="mt-4 mb-2">{t('priceCalculator.recipe.bonusesApplied')}</h4>
       <ul className="list-none p-0 m-0 flex flex-column gap-2 ml-3">
         {bonuses.map((bonus, i) => (
-          <li key={`${bonus.source}-${i}`} className="mt-2">
+          <li key={`${bonus.source}-${i}`} className="mb-2">
             <span className="flex align-items-center gap-2">
               <BonusIconFor bonus={bonus} />
               <span>{bonus.displayName}</span>

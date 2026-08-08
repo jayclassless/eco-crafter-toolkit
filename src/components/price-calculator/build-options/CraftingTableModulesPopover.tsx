@@ -1,7 +1,7 @@
 import { Checkbox } from 'primereact/checkbox'
 import { Dropdown, type DropdownChangeEvent } from 'primereact/dropdown'
 import { OverlayPanel } from 'primereact/overlaypanel'
-import { memo, type RefObject } from 'react'
+import { memo, type MouseEvent, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { PluginModuleIcon } from '@/components/common/PluginModuleIcon'
@@ -52,9 +52,31 @@ export const CraftingTableModulesPopover = memo(function CraftingTableModulesPop
   const { t } = useTranslation()
   const dismiss = useOverlayScrollDismiss(op)
 
+  // PrimeReact's OverlayPanel flags itself "panel-clicked" on every mousedown /
+  // click inside its content, and that flag makes it swallow the FIRST outside
+  // click that follows. Because this popover stays open on interaction (it's a
+  // multi-slot configurator, not a one-shot menu), toggling a checkbox left the
+  // flag stuck set, so the panel then needed TWO outside clicks to close. Stop
+  // content interactions from reaching that internal handler so a single
+  // outside click always dismisses the panel.
+  //
+  // Clicks inside the slot Dropdown are deliberately let through: there the flag
+  // is load-bearing. The dropdown's list renders in the document body — i.e.
+  // "outside" the panel — and the flag is what keeps the panel open while the
+  // user picks from it.
+  const stopStickyPanelClick = (e: MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.p-dropdown')) return
+    e.stopPropagation()
+  }
+
   return (
     <OverlayPanel ref={op} onShow={dismiss.onShow} onHide={dismiss.onHide}>
-      <div className="flex flex-column gap-2" style={{ minWidth: '16rem' }}>
+      <div
+        className="flex flex-column gap-2"
+        style={{ minWidth: '16rem' }}
+        onClick={stopStickyPanelClick}
+        onMouseDown={stopStickyPanelClick}
+      >
         <div className="font-medium" title={t('priceCalculator.config.modulesPermanentTooltip')}>
           {t('priceCalculator.config.modulesTitle')}
           <i

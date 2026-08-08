@@ -1179,7 +1179,7 @@ export function RecipeDialog({
                     </>
                   )}
 
-                  <div className="mt-auto pt-3">{totalFooter(leftTotal)}</div>
+                  <div className="pt-3">{totalFooter(leftTotal)}</div>
                 </div>
 
                 <div className="col-6 flex flex-column">
@@ -1218,13 +1218,21 @@ export function RecipeDialog({
                   {/* The products total belongs with the rows it sums, not
                       pinned to the bottom of the pane — Bonuses and Waste sit
                       below it and describe the craft rather than its price. */}
-                  <div className="pt-3 mb-3">{totalFooter(productsTotal)}</div>
+                  <div className="pt-3 mb-2">{totalFooter(productsTotal)}</div>
 
-                  {resolvedMods && resolvedMods.bonuses.length > 0 && (
-                    <AppliedBonuses bonuses={resolvedMods.bonuses} />
-                  )}
+                  <div className="flex flex-wrap gap-3">
+                    {resolvedMods && resolvedMods.bonuses.length > 0 && (
+                      <div className="flex-1">
+                        <AppliedBonuses bonuses={resolvedMods.bonuses} />
+                      </div>
+                    )}
 
-                  {garbage && <GarbageOutputTable totals={garbage.totals} />}
+                    {garbage && (
+                      <div className="flex-1">
+                        <GarbageOutputTable totals={garbage.totals} />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </TabPanel>
