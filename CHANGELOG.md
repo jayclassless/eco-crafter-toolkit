@@ -1,6 +1,6 @@
 # Eco Crafter Toolkit Change Log
 
-## 0.7.0 (TBD)
+## 0.7.0 (2026-08-08)
 
 - Added support for v14 of Eco: new upgrade module system, new skills and
   recipes, garbage generation.
