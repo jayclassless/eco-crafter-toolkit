@@ -70,8 +70,8 @@ export const ParentFavoriteStar = memo(function ParentFavoriteStar({
       text
       size="small"
       aria-label={label}
-      tooltip={label}
-      tooltipOptions={{ position: 'top' }}
+      // Native title — see RecipeFavoriteStar for why not PrimeReact tooltip.
+      title={label}
       onClick={handleClick}
       className={filled ? undefined : 'text-color-secondary'}
       style={{

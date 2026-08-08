@@ -196,4 +196,49 @@ describe('NumericField', () => {
     const { container } = render(<NumericField value={25} onChange={() => {}} suffix="%" />)
     expect(container.textContent).toContain('%')
   })
+
+  // Virtualized tables unmount rows that scroll out of the render window, so
+  // an in-progress edit must commit on unmount instead of being dropped with
+  // the pending debounce timer.
+  describe('commit on unmount', () => {
+    it('commits a focused, uncommitted edit when the field unmounts', () => {
+      const onChange = vi.fn()
+      const { input, unmount } = renderField({ value: null, onChange, debounceMs: 5000 })
+
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: '7.77' } })
+      // No blur, debounce still pending — simulate the row scrolling away.
+      unmount()
+      expect(onChange).toHaveBeenCalledWith(7.77)
+    })
+
+    it('does not commit on unmount when the field was never focused', () => {
+      const onChange = vi.fn()
+      const { unmount } = renderField({ value: 5, onChange })
+      unmount()
+      expect(onChange).not.toHaveBeenCalled()
+    })
+
+    it('does not commit intermediate text like "." on unmount', () => {
+      const onChange = vi.fn()
+      const { input, unmount } = renderField({ value: null, onChange, debounceMs: 5000 })
+
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: '.' } })
+      unmount()
+      expect(onChange).not.toHaveBeenCalled()
+    })
+
+    it('does not re-commit an already-committed value on unmount', () => {
+      const onChange = vi.fn()
+      const { input, unmount } = renderField({ value: null, onChange, debounceMs: 200 })
+
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: '3' } })
+      advance(250)
+      expect(onChange).toHaveBeenCalledTimes(1)
+      unmount()
+      expect(onChange).toHaveBeenCalledTimes(1)
+    })
+  })
 })

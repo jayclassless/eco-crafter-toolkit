@@ -93,6 +93,29 @@ function NumericFieldImpl({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, debounceMs, min, max, maxFractionDigits])
 
+  // Commit a focused, in-progress edit if the field unmounts before blur.
+  // Virtualized tables unmount rows that scroll out of the render window, so
+  // without this a price typed moments before scrolling would be dropped
+  // (the debounce effect's cleanup cancels the pending commit). Refs carry
+  // the latest state because an unmount cleanup runs with the closure of the
+  // final render.
+  const commitStateRef = useRef({ text, value, min, max, maxFractionDigits })
+  commitStateRef.current = { text, value, min, max, maxFractionDigits }
+  useEffect(
+    () => () => {
+      if (!isFocused.current) return
+      const s = commitStateRef.current
+      const parsed = parseNumericText(s.text, {
+        min: s.min,
+        max: s.max,
+        maxFractionDigits: s.maxFractionDigits,
+      })
+      if (parsed === undefined || parsed === s.value) return
+      onChangeRef.current(parsed)
+    },
+    []
+  )
+
   const handleFocus = useCallback(() => {
     isFocused.current = true
   }, [])

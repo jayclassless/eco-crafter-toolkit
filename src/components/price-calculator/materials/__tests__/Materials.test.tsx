@@ -247,7 +247,7 @@ describe('Materials (smoke)', () => {
     // Barrel is reintegrated in r-iron, so it is NOT "produced" — both Ore and
     // Barrel render editable manual-price inputs (no computed-price cell).
     expect(document.body.querySelectorAll('.p-datatable-tbody input')).toHaveLength(2)
-    expect(document.body.querySelectorAll('.computed-price-icon')).toHaveLength(0)
+    expect(document.body.querySelectorAll('.p-datatable-tbody .pi-calculator')).toHaveLength(0)
   })
 
   it('shows a computed price for a container product when a user override turns reintegration off', () => {

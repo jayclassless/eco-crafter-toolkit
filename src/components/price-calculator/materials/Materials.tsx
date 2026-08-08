@@ -1,7 +1,6 @@
 import { Button } from 'primereact/button'
 import { Column } from 'primereact/column'
 import { DataTable } from 'primereact/datatable'
-import { Tooltip } from 'primereact/tooltip'
 import { memo, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -16,6 +15,7 @@ import {
   useStoreRevision,
   useTableRowIdsRevision,
 } from '@/hooks/use-store-revision'
+import { useTableVirtualScroll } from '@/hooks/use-table-virtual-scroll'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { buildReintegrationOverrides, computeReintegratedProductIds } from '@/lib/reintegration'
 import { useStores } from '@/stores/providers'
@@ -33,6 +33,20 @@ import type { Material, MaterialGroup } from './types'
 // Tag rows can use any price-resolution mode; the picker in the action menu
 // shows the full set.
 const TAG_MODE_ORDER: PriceMode[] = ['manual', 'min', 'max', 'avg', 'mirror']
+
+// Every row must render at EXACTLY this height — the virtual scroller
+// places rows at index × itemSize, so height drift desyncs rows from the
+// scrollbar and opens blank bands. Matches the tallest natural row (the
+// manual-price input rows). Applied to every cell via `bodyStyle` below,
+// also under the virtualization threshold, so row sizing doesn't shift
+// when the table crosses the row-count threshold.
+const ROW_REM_HEIGHT = 4
+
+const CELL_STYLE = {
+  height: `${ROW_REM_HEIGHT}rem`,
+  paddingTop: 0,
+  paddingBottom: 0,
+} as const
 
 interface Props {
   buildId: string
@@ -290,6 +304,9 @@ function MaterialsImpl({ buildId, datasetId, priceSignal, onOpenGatheringCalcula
     return { rows: out, topLevelCount: top }
   }, [allGroups, debouncedSearch])
 
+  // Windowed rendering for large builds — see ProductsDataTable for details.
+  const virtualScrollerOptions = useTableVirtualScroll(rows.length, ROW_REM_HEIGHT)
+
   const setPrice = priceMgmt.setPrice
   const setPriceMode = priceMgmt.setPriceMode
   const setPrimaryItem = priceMgmt.setPrimaryItem
@@ -480,26 +497,31 @@ function MaterialsImpl({ buildId, datasetId, priceSignal, onOpenGatheringCalcula
           setSelectedItemId(id)
         }}
       />
-      <Tooltip target=".computed-price-icon" position="top" />
       <DataTable
         value={rows}
         dataKey="rowKey"
         size="small"
         scrollable
         scrollHeight="flex"
+        virtualScrollerOptions={virtualScrollerOptions}
         emptyMessage={t('priceCalculator.materials.emptyMessage')}
       >
-        <Column header={t('priceCalculator.materials.item')} body={nameTemplate} />
+        <Column
+          header={t('priceCalculator.materials.item')}
+          body={nameTemplate}
+          bodyStyle={CELL_STYLE}
+        />
         <Column
           header={t('priceCalculator.materials.price')}
           body={priceTemplate}
           style={{ width: '13rem' }}
+          bodyStyle={CELL_STYLE}
           headerClassName="p-align-right"
         />
         <Column
           body={actionsTemplate}
           style={{ width: '2rem' }}
-          bodyStyle={{ paddingLeft: '0.25rem', paddingRight: '0.25rem' }}
+          bodyStyle={{ ...CELL_STYLE, paddingLeft: '0.25rem', paddingRight: '0.25rem' }}
           headerStyle={{ paddingLeft: '0.25rem', paddingRight: '0.25rem' }}
         />
       </DataTable>

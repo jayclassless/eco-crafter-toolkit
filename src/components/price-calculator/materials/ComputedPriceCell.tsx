@@ -42,10 +42,11 @@ export const ComputedPriceCell = memo(function ComputedPriceCell({
           : t('priceCalculator.materials.priceMode.noComputedPrice')}
       </div>
       {showIcon && (
-        <i
-          className="pi pi-calculator text-xs text-color-secondary computed-price-icon"
-          data-pr-tooltip={iconTooltip}
-        />
+        // Native title tooltip: the cell mounts and unmounts as the
+        // virtualized Materials table scrolls, and PrimeReact's
+        // selector-based <Tooltip> only binds targets that exist when its
+        // owner re-renders — icons mounted mid-scroll would never get one.
+        <i className="pi pi-calculator text-xs text-color-secondary" title={iconTooltip} />
       )}
     </div>
   )

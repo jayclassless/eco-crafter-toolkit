@@ -9,6 +9,7 @@
 - Fixed the Recipe Calculator resetting the skill level, upgrade modules,
   talents, and edited ingredient prices as soon as you touched any of them.
 - Another attempt at fixing the calculations in the Crop Tracker.
+- Some performance improvements for builds with lots of recipes.
 
 ## 0.6.0 (2026-07-19)
 

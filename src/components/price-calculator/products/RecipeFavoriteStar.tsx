@@ -37,8 +37,10 @@ export const RecipeFavoriteStar = memo(function RecipeFavoriteStar({
       text
       size="small"
       aria-label={label}
-      tooltip={label}
-      tooltipOptions={{ position: 'top' }}
+      // Native title, not PrimeReact `tooltip`: rows mount mid-scroll in the
+      // virtualized table, where the Tooltip's bind-on-update lifecycle never
+      // attaches — see ComputedPriceCell for the same trade-off.
+      title={label}
       onClick={handleClick}
       className={favorite ? undefined : 'text-color-secondary'}
       style={{

@@ -46,10 +46,10 @@ export const PriceModeButton = memo(function PriceModeButton({
         text
         size="small"
         aria-label={t('priceCalculator.materials.priceMode.label')}
-        tooltip={t('priceCalculator.materials.priceMode.modeTooltip', {
+        // Native title — see RecipeFavoriteStar for why not PrimeReact tooltip.
+        title={t('priceCalculator.materials.priceMode.modeTooltip', {
           mode: t(`priceCalculator.materials.priceMode.${activeMode}`),
         })}
-        tooltipOptions={{ position: 'top' }}
         onClick={(e) => op.current?.toggle(e)}
         style={{ width: '1rem', minWidth: '1rem', padding: 0 }}
       />
