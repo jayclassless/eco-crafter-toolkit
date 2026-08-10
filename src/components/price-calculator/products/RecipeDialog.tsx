@@ -646,10 +646,11 @@ export function RecipeDialog({
     primaryItemRev,
   ])
 
-  // Recipes in this build that consume the primary product of the current
-  // recipe. The primary product is the first product (by `index`) that isn't
-  // also an ingredient of this recipe (i.e. not reintegrated). Delegates the
-  // ingredient scan + tag-expansion to the shared helper.
+  // Recipes that consume the primary product of the current recipe (both in
+  // and out of the build — the table's scope toggle filters them). The primary
+  // product is the first product (by `index`) that isn't also an ingredient of
+  // this recipe (i.e. not reintegrated). Delegates the ingredient scan +
+  // tag-expansion to the shared helper.
   const usedInRows = useMemo<UsedInRecipe[]>(
     () => {
       if (!recipeId) return []
@@ -1239,7 +1240,11 @@ export function RecipeDialog({
             <TabPanel header={t('priceCalculator.recipe.tabUsedIn')}>
               <UsedInRecipesTable
                 rows={usedInRows}
-                emptyMessage={t('priceCalculator.recipe.usedInEmpty')}
+                emptyMessages={{
+                  mine: t('priceCalculator.recipe.usedInEmpty'),
+                  other: t('priceCalculator.recipe.usedInEmptyOther'),
+                  all: t('priceCalculator.recipe.usedInEmptyAll'),
+                }}
                 onOpenRecipe={onOpenRecipe ?? (() => {})}
               />
             </TabPanel>

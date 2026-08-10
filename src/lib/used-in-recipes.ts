@@ -13,6 +13,9 @@ export interface UsedInRecipe {
   skillRawName: string
   quantity: number
   viaTag: { tagId: string; tagName: string; tagRawName: string } | null
+  /** True when the consuming recipe is selected in the current build. Drives
+   * the Mine/Other/All scope toggle in `UsedInRecipesTable`. */
+  inBuild: boolean
 }
 
 interface ComputeUsedInRecipesParams {
@@ -26,10 +29,12 @@ interface ComputeUsedInRecipesParams {
   getName: (kind: string, id: string) => string
 }
 
-// Finds in-build recipes that consume `itemId` as an ingredient — either
-// directly by id, or indirectly via a tag that contains the item. Shared by
-// `MaterialDialog` and `RecipeDialog`, which both need this exact view with
-// only the inputs changing.
+// Finds every recipe in the dataset that consumes `itemId` as an ingredient —
+// either directly by id, or indirectly via a tag that contains the item. Each
+// row is flagged with `inBuild` so callers can scope the list to the build's
+// own recipes, to the rest of the game, or to both. Shared by `MaterialDialog`
+// and `RecipeDialog`, which both need this exact view with only the inputs
+// changing.
 export function computeUsedInRecipes(
   gameDataStore: Store,
   buildStore: Store,
@@ -43,7 +48,6 @@ export function computeUsedInRecipes(
     if (ur.buildId !== buildId) continue
     buildRecipeIds.add(ur.recipeId as string)
   }
-  if (buildRecipeIds.size === 0) return []
 
   // Match set: the item itself + any tag that contains it (for non-tag items).
   const matchSet = new Set<string>([itemId])
@@ -82,7 +86,6 @@ export function computeUsedInRecipes(
     const re = gameDataStore.getRow('recipeElements', reId)
     if (re.datasetId !== datasetId) continue
     const rId = re.recipeId as string
-    if (!buildRecipeIds.has(rId)) continue
     if (excludeRecipeId && rId === excludeRecipeId) continue
 
     if (re.isProduct) {
@@ -141,6 +144,7 @@ export function computeUsedInRecipes(
       skillRawName: skill.skillRawName,
       quantity: Math.abs(ing.baseQuantity),
       viaTag,
+      inBuild: buildRecipeIds.has(ing.recipeId),
     })
   }
 

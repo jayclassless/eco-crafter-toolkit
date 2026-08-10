@@ -394,7 +394,7 @@ describe('MaterialDialog', () => {
     expect(container.textContent).toBe('')
   })
 
-  it('lists in-build recipes that use the item as an ingredient (direct + via tag), and excludes producers and out-of-build recipes', async () => {
+  it('defaults to in-build recipes that use the item as an ingredient (direct + via tag), excluding producers and out-of-build recipes', async () => {
     renderDialog(stores, ITEM_STONE)
 
     await waitFor(() => {
@@ -414,6 +414,54 @@ describe('MaterialDialog', () => {
     expect(stoneCrusherRow).toContain('5')
     expect(rockSmeltingRow).toContain('3')
     expect(rockSmeltingRow).toContain('Rocks')
+  })
+
+  it('scope toggle switches the used-in list between in-build, out-of-build and all recipes', async () => {
+    renderDialog(stores, ITEM_STONE)
+
+    // Defaults to "Mine".
+    await waitFor(() => {
+      expect(screen.getByText('Stone Crusher')).toBeTruthy()
+    })
+    expect(screen.queryByText('Excluded Recipe')).toBeNull()
+
+    fireEvent.click(screen.getByText('Other'))
+    await waitFor(() => {
+      expect(screen.getByText('Excluded Recipe')).toBeTruthy()
+    })
+    // Stone Refining consumes Stone and isn't in the build — also "other".
+    expect(screen.getByText('Stone Refining')).toBeTruthy()
+    expect(screen.queryByText('Stone Crusher')).toBeNull()
+    expect(screen.queryByText('Rock Smelting')).toBeNull()
+
+    fireEvent.click(screen.getByText('All'))
+    await waitFor(() => {
+      expect(screen.getByText('Stone Crusher')).toBeTruthy()
+    })
+    expect(screen.getByText('Rock Smelting')).toBeTruthy()
+    expect(screen.getByText('Excluded Recipe')).toBeTruthy()
+    expect(screen.getByText('Stone Refining')).toBeTruthy()
+    // Producers still never show up here.
+    expect(screen.queryByText('Stone Quarry')).toBeNull()
+  })
+
+  it('shows a scope-specific empty message when no recipes match', async () => {
+    renderDialog(stores, ITEM_INGOT)
+
+    // Ingot is produced by both in-build recipes but consumed by none.
+    await waitFor(() => {
+      expect(screen.getByText('No recipes in this build use this item.')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('Other'))
+    await waitFor(() => {
+      expect(screen.getByText('No recipes outside this build use this item.')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('All'))
+    await waitFor(() => {
+      expect(screen.getByText('No recipes use this item.')).toBeTruthy()
+    })
   })
 
   it('invokes onOpenRecipe when a recipe name is clicked', async () => {

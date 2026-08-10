@@ -173,13 +173,19 @@
       "skill": "Skill",
       "recipe": "Recipe",
       "quantity": "Qty",
-      "viaTag": "via {tag}"
+      "viaTag": "via {tag}",
+      "scopeLabel": "Recipe scope",
+      "scopeMine": "Mine",
+      "scopeOther": "Other",
+      "scopeAll": "All"
     },
     "material": {
       "tabUsedIn": "Used in Recipes",
       "tabProducedBy": "Produced by Recipes",
       "tabDependencyGraph": "Dependency Graph",
       "usedInEmpty": "No recipes in this build use this item.",
+      "usedInEmptyOther": "No recipes outside this build use this item.",
+      "usedInEmptyAll": "No recipes use this item.",
       "producedByEmpty": "No recipes produce this item."
     },
     "recipe": {
@@ -210,6 +216,8 @@
       "tabUsedIn": "Used in Recipes",
       "tabDependencyGraph": "Dependency Graph",
       "usedInEmpty": "No recipes in this build use this recipe's primary product.",
+      "usedInEmptyOther": "No recipes outside this build use this recipe's primary product.",
+      "usedInEmptyAll": "No recipes use this recipe's primary product.",
       "bonusesApplied": "Bonuses Applied",
       "metric": {
         "labor": "labor",

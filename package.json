@@ -1,6 +1,6 @@
 {
   "name": "eco-crafter-toolkit",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "type": "module",
   "dependencies": {
     "@sentry/react": "^10.69.0",

@@ -247,7 +247,11 @@ export function MaterialDialog({
         <TabPanel header={t('priceCalculator.material.tabUsedIn')}>
           <UsedInRecipesTable
             rows={usedInRows}
-            emptyMessage={t('priceCalculator.material.usedInEmpty')}
+            emptyMessages={{
+              mine: t('priceCalculator.material.usedInEmpty'),
+              other: t('priceCalculator.material.usedInEmptyOther'),
+              all: t('priceCalculator.material.usedInEmptyAll'),
+            }}
             onOpenRecipe={onOpenRecipe}
           />
         </TabPanel>

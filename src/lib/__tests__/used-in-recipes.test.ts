@@ -22,7 +22,8 @@ const addRecipe = (
   recipeName: string,
   skillId: string,
   ingredients: Array<{ id: string; itemOrTagId: string; baseQuantity: number }>,
-  products: Array<{ id: string; itemOrTagId: string; baseQuantity: number }>
+  products: Array<{ id: string; itemOrTagId: string; baseQuantity: number }>,
+  inBuild = true
 ) => {
   game.setRow('recipes', recipeId, {
     id: recipeId,
@@ -60,6 +61,7 @@ const addRecipe = (
       index: i++,
     })
   }
+  if (!inBuild) return
   build.setRow('userRecipes', `ur-${recipeId}`, {
     id: `ur-${recipeId}`,
     buildId: BUILD,
@@ -106,7 +108,7 @@ beforeEach(() => {
 })
 
 describe('computeUsedInRecipes', () => {
-  it('returns an empty list when the build has no recipes', () => {
+  it('returns an empty list when no recipe consumes the item', () => {
     const result = computeUsedInRecipes(game, build, {
       itemId: 'iron',
       buildId: BUILD,
@@ -139,6 +141,7 @@ describe('computeUsedInRecipes', () => {
       quantity: 4,
       viaTag: null,
       recipePrimaryProductRawName: 'Table',
+      inBuild: true,
     })
   })
 
@@ -286,41 +289,36 @@ describe('computeUsedInRecipes', () => {
     expect(result[0].recipePrimaryProductRawName).toBe('Plank')
   })
 
-  it('drops recipes that are in another build', () => {
+  it('includes recipes outside the build, flagged with inBuild=false', () => {
     addRecipe(
-      'r-keep',
-      'KeepRecipe',
+      'r-mine',
+      'MineRecipe',
       'sk-carpentry',
       [{ id: 're-1', itemOrTagId: 'wood', baseQuantity: 1 }],
       [{ id: 're-2', itemOrTagId: 'plank', baseQuantity: 1 }]
     )
-    // Recipe in a different build
-    game.setRow('recipes', 'r-other', {
-      id: 'r-other',
-      datasetId: DS,
-      name: 'Other',
-      familyName: 'Other',
-      skillId: 'sk-mining',
-      requiredSkillLevel: 0,
-      isBlueprint: false,
-      isDefault: true,
-      craftingTableId: 'ct1',
-      baseCraftTime: 1,
-      baseLaborCost: 10,
-    })
-    game.setRow('recipeElements', 're-other-1', {
-      id: 're-other-1',
-      datasetId: DS,
-      recipeId: 'r-other',
-      itemOrTagId: 'wood',
-      baseQuantity: -1,
-      isProduct: false,
-      index: 0,
-    })
-    build.setRow('userRecipes', 'ur-other', {
-      id: 'ur-other',
+    // Never added to any build.
+    addRecipe(
+      'r-unowned',
+      'UnownedRecipe',
+      'sk-carpentry',
+      [{ id: 're-3', itemOrTagId: 'wood', baseQuantity: 2 }],
+      [{ id: 're-4', itemOrTagId: 'frame', baseQuantity: 1 }],
+      false
+    )
+    // Selected in a *different* build — still "other" from this build's view.
+    addRecipe(
+      'r-other-build',
+      'OtherBuildRecipe',
+      'sk-carpentry',
+      [{ id: 're-5', itemOrTagId: 'wood', baseQuantity: 3 }],
+      [{ id: 're-6', itemOrTagId: 'table', baseQuantity: 1 }],
+      false
+    )
+    build.setRow('userRecipes', 'ur-other-build', {
+      id: 'ur-other-build',
       buildId: 'other-build',
-      recipeId: 'r-other',
+      recipeId: 'r-other-build',
       roundFactor: 0,
     })
 
@@ -330,6 +328,76 @@ describe('computeUsedInRecipes', () => {
       datasetId: DS,
       getName,
     })
-    expect(result.map((r) => r.recipeId)).toEqual(['r-keep'])
+    expect(result.map((r) => [r.recipeId, r.inBuild])).toEqual([
+      ['r-mine', true],
+      ['r-other-build', false],
+      ['r-unowned', false],
+    ])
+  })
+
+  it('resolves tags, quantities and primary products for out-of-build recipes', () => {
+    addTagItem('tag-wood', 'birch')
+    addRecipe(
+      'r-unowned',
+      'UnownedRecipe',
+      'sk-carpentry',
+      [{ id: 're-1', itemOrTagId: 'tag-wood', baseQuantity: 5 }],
+      [{ id: 're-2', itemOrTagId: 'frame', baseQuantity: 1 }],
+      false
+    )
+    const result = computeUsedInRecipes(game, build, {
+      itemId: 'birch',
+      buildId: BUILD,
+      datasetId: DS,
+      getName,
+    })
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({
+      recipeId: 'r-unowned',
+      inBuild: false,
+      quantity: 5,
+      recipePrimaryProductRawName: 'Frame',
+      viaTag: { tagId: 'tag-wood', tagName: 'WoodTag', tagRawName: 'WoodTag' },
+    })
+  })
+
+  it('excludes the current recipe regardless of build membership', () => {
+    addRecipe(
+      'r-self',
+      'SelfRecipe',
+      'sk-carpentry',
+      [{ id: 're-1', itemOrTagId: 'wood', baseQuantity: 1 }],
+      [{ id: 're-2', itemOrTagId: 'frame', baseQuantity: 1 }],
+      false
+    )
+    const result = computeUsedInRecipes(game, build, {
+      itemId: 'wood',
+      buildId: BUILD,
+      datasetId: DS,
+      excludeRecipeId: 'r-self',
+      getName,
+    })
+    expect(result).toEqual([])
+  })
+
+  it('ignores recipes from another dataset', () => {
+    addRecipe(
+      'r-other-ds',
+      'OtherDatasetRecipe',
+      'sk-carpentry',
+      [{ id: 're-1', itemOrTagId: 'wood', baseQuantity: 1 }],
+      [{ id: 're-2', itemOrTagId: 'frame', baseQuantity: 1 }],
+      false
+    )
+    game.setCell('recipeElements', 're-1', 'datasetId', 'ds2')
+    game.setCell('recipeElements', 're-2', 'datasetId', 'ds2')
+
+    const result = computeUsedInRecipes(game, build, {
+      itemId: 'wood',
+      buildId: BUILD,
+      datasetId: DS,
+      getName,
+    })
+    expect(result).toEqual([])
   })
 })
