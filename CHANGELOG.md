@@ -4,6 +4,7 @@
 
 - The "Used in Recipes" tabs of item dialogs can now show recipes that aren't
   part of the active build.
+- The Skill dropdown now shows the star cost of taking the skill.
 
 ## 0.7.0 (2026-08-08)
 

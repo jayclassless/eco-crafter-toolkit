@@ -48,6 +48,8 @@
       "starsBreakdownTalents_other": "{count} from talents",
       "starsBreakdownModules_one": "{count} from upgrade modules",
       "starsBreakdownModules_other": "{count} from upgrade modules",
+      "starsToAddSkill_one": "{count} Star needed to take this skill",
+      "starsToAddSkill_other": "{count} Stars needed to take this skill",
       "addSkill": "Add skill...",
       "level": "Level",
       "talents": "Talents",

@@ -15,6 +15,7 @@ import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useSkillManagement } from '@/hooks/use-skill-management'
 import { useStarCost } from '@/hooks/use-star-cost'
 import { useTableRowIdsRevision } from '@/hooks/use-store-revision'
+import { SELF_IMPROVEMENT_SKILL_NAME } from '@/lib/game-constants'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { useStores } from '@/stores/providers'
 
@@ -38,6 +39,7 @@ interface SkillOption {
   name: string
   rawName: string
   profession: string
+  specialtyCost: number
 }
 
 type SkillGroup = GroupedAutoCompleteGroup<SkillOption>
@@ -150,6 +152,7 @@ export function SkillsPanel({ buildId, datasetId }: Props) {
           name,
           rawName: skill.name as string,
           profession: skill.profession as string,
+          specialtyCost: (skill.specialtyCost as number) ?? 1,
         })
       }
     }
@@ -199,6 +202,36 @@ export function SkillsPanel({ buildId, datasetId }: Props) {
   const handleRemoveSkill = useCallback(
     (userSkillId: string, skillId: string) => removeSkillFn(userSkillId, skillId),
     [removeSkillFn]
+  )
+
+  // Marginal star cost of adding one more skill, mirroring `useStarCost`'s
+  // total. Pre-v13 every skill is a flat 1 star. On v13+ the skill total is
+  // `specialtySum + n(n-1)/2`, so going from n to n+1 skills costs the new
+  // skill's own specialty cost plus n (the increase in the triangular term).
+  const { isV13, skillCount } = starCost
+  const starCostToAdd = useCallback(
+    (option: SkillOption) => (isV13 ? option.specialtyCost + skillCount : 1),
+    [isV13, skillCount]
+  )
+
+  const optionStarsTemplate = useCallback(
+    (option: SkillOption) => {
+      // Self Improvement is star-exempt in `useStarCost` — it costs nothing and
+      // doesn't raise the triangular term for other skills — so it gets no badge
+      // at all rather than a misleading number.
+      if (option.rawName === SELF_IMPROVEMENT_SKILL_NAME) return null
+      const count = starCostToAdd(option)
+      return (
+        <span
+          className="white-space-nowrap"
+          title={t('priceCalculator.config.starsToAddSkill', { count })}
+        >
+          <i className="pi pi-star-fill mr-1" style={{ color: 'var(--yellow-500)' }} />
+          {count}
+        </span>
+      )
+    },
+    [starCostToAdd, t]
   )
 
   const nameTemplate = useCallback(
@@ -274,6 +307,7 @@ export function SkillsPanel({ buildId, datasetId }: Props) {
         suggestions={suggestions}
         completeMethod={searchSkills}
         onSelect={(item) => skillMgmt.addSkill(item.id)}
+        itemEndTemplate={optionStarsTemplate}
       />
       {skills.length > 0 && (
         <DataTable value={skills} size="small" showGridlines={false}>

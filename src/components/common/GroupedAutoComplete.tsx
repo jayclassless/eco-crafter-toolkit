@@ -1,5 +1,5 @@
 import { AutoComplete, type AutoCompleteCompleteEvent } from 'primereact/autocomplete'
-import { useRef, useState } from 'react'
+import { type ReactNode, useRef, useState } from 'react'
 
 import { EcoIcon } from '@/components/common/EcoIcon'
 
@@ -22,6 +22,10 @@ interface Props<T extends GroupedAutoCompleteItem> {
   suggestions: GroupedAutoCompleteGroup<T>[]
   completeMethod: (event: AutoCompleteCompleteEvent) => void
   onSelect: (item: T) => void
+  /** Optional trailing content for each item, pinned to the right edge of the
+   * row (e.g. the star cost of adding a skill). Return null for an item that
+   * should have no trailing content. */
+  itemEndTemplate?: (item: T) => ReactNode
 }
 
 export function GroupedAutoComplete<T extends GroupedAutoCompleteItem>({
@@ -29,6 +33,7 @@ export function GroupedAutoComplete<T extends GroupedAutoCompleteItem>({
   suggestions,
   completeMethod,
   onSelect,
+  itemEndTemplate,
 }: Props<T>) {
   const [searchValue, setSearchValue] = useState<string>('')
   const ref = useRef<AutoComplete>(null)
@@ -64,10 +69,14 @@ export function GroupedAutoComplete<T extends GroupedAutoCompleteItem>({
       }}
       itemTemplate={(item: unknown) => {
         const opt = item as T
+        // A template that returns null opts this row out of the trailing slot,
+        // so no empty spacer is rendered for it.
+        const end = itemEndTemplate?.(opt)
         return (
           <div className="flex align-items-center gap-2 ml-3">
             <EcoIcon name={opt.rawName} size={24} />
             <span>{opt.name}</span>
+            {end != null && <span className="ml-auto">{end}</span>}
           </div>
         )
       }}

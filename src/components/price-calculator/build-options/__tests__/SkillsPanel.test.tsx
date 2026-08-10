@@ -184,6 +184,64 @@ describe('SkillsPanel (smoke)', () => {
     })
   })
 
+  it('shows a flat 1-star cost per dropdown option on a pre-v13 dataset', async () => {
+    const stores = makeStores()
+    stores.gameDataStore.setRow('skills', 'sk-smelting', {
+      id: 'sk-smelting',
+      datasetId: DS,
+      name: 'SmeltingSkill',
+      profession: 'Industrialist',
+      maxLevel: 7,
+      laborReducePercent: '[1]',
+      specialtyCost: 1,
+    })
+    renderPanel(stores)
+    fireEvent.click(document.body.querySelector('.p-autocomplete-dropdown') as HTMLButtonElement)
+    await waitFor(() => {
+      const opt = document.body.querySelector('.p-autocomplete-item') as HTMLElement
+      expect(opt).not.toBeNull()
+      expect(opt.querySelector('.pi-star-fill')).not.toBeNull()
+      expect(opt.textContent).toContain('1')
+    })
+  })
+
+  it('charges specialtyCost plus the current skill count on a v13 dataset', async () => {
+    const stores = makeStores()
+    // Any specialtyCost > 1 in the dataset flips useStarCost into v13 mode.
+    stores.gameDataStore.setCell('skills', 'sk-mine', 'specialtyCost', 2)
+    stores.gameDataStore.setRow('skills', 'sk-smelting', {
+      id: 'sk-smelting',
+      datasetId: DS,
+      name: 'SmeltingSkill',
+      profession: 'Industrialist',
+      maxLevel: 7,
+      laborReducePercent: '[1]',
+      specialtyCost: 3,
+    })
+    renderPanel(stores)
+    fireEvent.click(document.body.querySelector('.p-autocomplete-dropdown') as HTMLButtonElement)
+    await waitFor(() => {
+      const opt = document.body.querySelector('.p-autocomplete-item') as HTMLElement
+      expect(opt).not.toBeNull()
+      // specialtyCost 3 + 1 skill already in the build.
+      expect(opt.textContent).toContain('4')
+    })
+  })
+
+  it('shows no star cost for Self Improvement, which is star-exempt', async () => {
+    const stores = makeStores()
+    // Self Improvement carries a profession in every shipped dataset, so it is
+    // offered by the dropdown whenever it isn't already in the build.
+    stores.gameDataStore.setCell('skills', 'sk-self', 'profession', 'SurvivalistSkill')
+    renderPanel(stores)
+    fireEvent.click(document.body.querySelector('.p-autocomplete-dropdown') as HTMLButtonElement)
+    await waitFor(() => {
+      const opt = document.body.querySelector('.p-autocomplete-item') as HTMLElement
+      expect(opt).not.toBeNull()
+      expect(opt.querySelector('.pi-star-fill')).toBeNull()
+    })
+  })
+
   it('skips userSkills rows from other builds', () => {
     const stores = makeStores()
     // Foreign-build row must NOT render.
