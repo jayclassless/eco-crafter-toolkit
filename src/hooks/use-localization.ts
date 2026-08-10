@@ -6,6 +6,7 @@ const numberFormatterCache = new Map<string, Intl.NumberFormat>()
 const durationFormatterCache = new Map<string, Intl.DurationFormat>()
 const zeroDurationFormatterCache = new Map<string, Intl.DurationFormat>()
 const dateFormatterCache = new Map<string, Intl.DateTimeFormat>()
+const decimalSeparatorCache = new Map<string, string>()
 
 const DEFAULT_DATE_OPTIONS: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }
 const DEFAULT_NUMBER_OPTIONS: Intl.NumberFormatOptions = { maximumFractionDigits: 0 }
@@ -52,6 +53,20 @@ function getNumberFormatter(locale: string, options: Intl.NumberFormatOptions): 
     numberFormatterCache.set(key, fmt)
   }
   return fmt
+}
+
+function getDecimalSeparator(locale: string): string {
+  let sep = decimalSeparatorCache.get(locale)
+  if (sep === undefined) {
+    // Intl exposes no direct accessor for the separator, so read it off a
+    // formatted fractional value. The fallback only fires on an engine that
+    // omits the `decimal` part entirely, which no real ICU build does.
+    sep =
+      new Intl.NumberFormat(locale).formatToParts(1.1).find((part) => part.type === 'decimal')
+        ?.value ?? '.'
+    decimalSeparatorCache.set(locale, sep)
+  }
+  return sep
 }
 
 function getZeroDurationFormatter(locale: string): Intl.DurationFormat {
@@ -101,6 +116,15 @@ interface Localization {
    * customize (e.g. include time).
    */
   formatDate: (value: Date | number, options?: Intl.DateTimeFormatOptions) => string
+  /**
+   * The active locale's decimal separator — `.` in en-US, `,` in de-DE/pt-BR.
+   *
+   * Editable numeric inputs need this to accept back what they display:
+   * `NumericField` renders committed values with this character and treats it
+   * as the only decimal separator while parsing, so a user who sees `1,50`
+   * can type `1,50`.
+   */
+  decimalSeparator: string
 }
 
 /**
@@ -131,6 +155,7 @@ export function useLocalization(): Localization {
         const fmt = getNumberFormatter(i18n.language, options ?? DEFAULT_NUMBER_OPTIONS)
         return fmt.format(value)
       },
+      decimalSeparator: getDecimalSeparator(i18n.language),
     }
   }, [i18n.language])
 }

@@ -33,8 +33,13 @@ export function GatheringCostBreakdown({ result, kind, itemName }: Props) {
           {t('settings.gatheringCalculator.damagePerHit', { damage: num(result.damagePerHit) })}
         </span>
         <span>
+          {/*
+            Named `qty`, not `count`: `count` is i18next's plural selector, and
+            this value is fractional (0.14 items per source), which would drive
+            plural selection off a rounded number in languages that have one.
+          */}
           {t('settings.gatheringCalculator.yield', {
-            count: num(result.itemsPerSource),
+            qty: result.itemsPerSource,
             name: itemName,
             source: sourceLabel,
           })}

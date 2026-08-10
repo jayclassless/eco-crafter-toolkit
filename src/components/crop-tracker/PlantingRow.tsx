@@ -11,6 +11,7 @@ import {
   GroupedSinglePicker,
   type GroupedSinglePickerGroup,
 } from '@/components/common/GroupedSinglePicker'
+import { useLocalization } from '@/hooks/use-localization'
 import { useCellValue } from '@/hooks/use-store-revision'
 import {
   computeHarvestWindow,
@@ -37,13 +38,16 @@ interface Props {
   onRemove: (plantingId: string) => void
 }
 
-const timeFormat = new Intl.DateTimeFormat(undefined, {
+// Harvest timestamps are always within a few in-game days, so the year is
+// dropped. `hourCycle` pins 24h across locales to keep the row compact —
+// an "AM/PM" suffix pushes these onto a second line on narrow screens.
+const HARVEST_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
   month: 'short',
   day: 'numeric',
   hour: '2-digit',
   minute: '2-digit',
   hourCycle: 'h23',
-})
+}
 
 export function PlantingRow({
   buildStore,
@@ -55,7 +59,9 @@ export function PlantingRow({
   onRemove,
 }: Props) {
   const { t } = useTranslation()
+  const { formatDate } = useLocalization()
   const [suggestions, setSuggestions] = useState<GroupedSinglePickerGroup<CropOption>[]>([])
+  const formatTime = (value: Date) => formatDate(value, HARVEST_TIME_OPTIONS)
 
   const cropItemId =
     useCellValue<string>(buildStore, 'userPlantings', plantingId, 'cropItemId') ?? ''
@@ -211,7 +217,7 @@ export function PlantingRow({
               />
             )}
             {plantedDate && (
-              <span>{t('cropTracker.plantedAt', { time: timeFormat.format(plantedDate) })}</span>
+              <span>{t('cropTracker.plantedAt', { time: formatTime(plantedDate) })}</span>
             )}
             {window &&
               hasSeparateFirstYield &&
@@ -220,7 +226,7 @@ export function PlantingRow({
                 return (
                   <span>
                     {t('cropTracker.firstYieldAt', {
-                      time: timeFormat.format(window.firstYieldAt),
+                      time: formatTime(window.firstYieldAt),
                     })}
                     {until && ` (${t('cropTracker.timeUntil', { duration: until })})`}
                   </span>
@@ -231,7 +237,7 @@ export function PlantingRow({
                 const until = formatTimeUntil(window.maxYieldAt, now)
                 return (
                   <span>
-                    {t('cropTracker.fullYieldAt', { time: timeFormat.format(window.maxYieldAt) })}
+                    {t('cropTracker.fullYieldAt', { time: formatTime(window.maxYieldAt) })}
                     {until && ` (${t('cropTracker.timeUntil', { duration: until })})`}
                   </span>
                 )

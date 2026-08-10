@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { localeProvider } from '@/i18n/__tests__/locale-provider'
 import { createBuildStore } from '@/stores/build-store'
 
 import type { Crop } from '../crop-tracker-types'
@@ -173,5 +174,44 @@ describe('PlantingRow', () => {
     expect(buildStore.getCell('userPlantings', 'p1', 'hasRegrown')).toBe(true)
     // Re-planted (a fresh plantedAt timestamp), not cleared.
     expect(buildStore.getCell('userPlantings', 'p1', 'plantedAt')).not.toBe('')
+  })
+
+  // Timestamps previously went through a module-scope Intl.DateTimeFormat built
+  // with locale `undefined`, which followed the browser rather than the app and
+  // was frozen at import time.
+  describe('timestamp localization', () => {
+    function renderAt(locale: string) {
+      const buildStore = createBuildStore()
+      buildStore.setRow('userPlantings', 'p1', {
+        id: 'p1',
+        buildId: 'b1',
+        cropItemId: 'corn',
+        plantedAt: '2026-03-05T08:30:00.000Z',
+        hasRegrown: false,
+      })
+      return render(
+        <PlantingRow
+          buildStore={buildStore}
+          plantingId="p1"
+          crops={allCrops}
+          cropsById={cropsById}
+          growthRateModifier={1}
+          now={new Date('2026-03-05T09:00:00.000Z')}
+          onRemove={() => {}}
+        />,
+        { wrapper: localeProvider(locale) }
+      )
+    }
+
+    it('renders month names in the app locale, not the browser default', () => {
+      const en = renderAt('en-US')
+      expect(en.container.textContent).toContain('Mar')
+      en.unmount()
+
+      // de-DE abbreviates March as "März" and puts the day first.
+      const de = renderAt('de-DE')
+      expect(de.container.textContent).toContain('März')
+      expect(de.container.textContent).not.toContain('Mar 5')
+    })
   })
 })

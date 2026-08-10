@@ -1,6 +1,7 @@
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { localeProvider } from '@/i18n/__tests__/locale-provider'
 import '@/i18n'
 
 import { useLocalization } from '../use-localization'
@@ -109,6 +110,30 @@ describe('useLocalization', () => {
       const date = new Date(Date.UTC(2026, 3, 25, 12, 0, 0))
       const formatted = result.current.formatDate(date, { year: 'numeric', month: 'long' })
       expect(formatted).toBe('April 2026')
+    })
+  })
+
+  describe('decimalSeparator', () => {
+    it('is "." under the default en-US locale', () => {
+      const { result } = renderHook(() => useLocalization())
+      expect(result.current.decimalSeparator).toBe('.')
+    })
+
+    it('is "," for locales that use a comma', () => {
+      for (const locale of ['de-DE', 'pt-BR', 'pt-PT', 'nb-NO', 'fr-FR']) {
+        const { result } = renderHook(() => useLocalization(), { wrapper: localeProvider(locale) })
+        expect(result.current.decimalSeparator).toBe(',')
+      }
+    })
+
+    it('agrees with what formatPrice actually emits', () => {
+      // The contract NumericField relies on: whatever the app displays as a
+      // price must be typeable back into the field.
+      for (const locale of ['en-US', 'de-DE', 'pt-BR', 'nb-NO']) {
+        const { result } = renderHook(() => useLocalization(), { wrapper: localeProvider(locale) })
+        const { decimalSeparator, formatPrice } = result.current
+        expect(formatPrice(1.5)).toContain(`1${decimalSeparator}50`)
+      }
     })
   })
 

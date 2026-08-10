@@ -2,6 +2,8 @@ import { act, fireEvent, render } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { localeProvider } from '@/i18n/__tests__/locale-provider'
+
 import { NumericField } from '../NumericField'
 
 const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms))
@@ -26,6 +28,7 @@ function renderField(initial: {
   maxFractionDigits?: number
   debounceMs?: number
   suffix?: string
+  locale?: string
 }) {
   const spy = initial.onChange ?? vi.fn()
   function Host() {
@@ -45,7 +48,9 @@ function renderField(initial: {
       />
     )
   }
-  const utils = render(<Host />)
+  const utils = render(<Host />, {
+    wrapper: initial.locale ? localeProvider(initial.locale) : undefined,
+  })
   const input = utils.container.querySelector('input') as HTMLInputElement
   return { ...utils, input, onChange: spy }
 }
@@ -195,6 +200,91 @@ describe('NumericField', () => {
   it('renders a suffix addon when provided', () => {
     const { container } = render(<NumericField value={25} onChange={() => {}} suffix="%" />)
     expect(container.textContent).toContain('%')
+  })
+
+  // A comma-decimal locale previously had its separator stripped as an
+  // invalid character, so "1,5" committed as 15 — a silent 10x error in a
+  // price field. The separator now follows the locale.
+  describe('comma-decimal locales', () => {
+    it('commits "1,5" as 1.5 rather than 15', () => {
+      const onChange = vi.fn()
+      const { input } = renderField({ value: null, onChange, locale: 'de-DE' })
+
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: '1,5' } })
+      advance(300)
+      expect(onChange).toHaveBeenCalledWith(1.5)
+    })
+
+    it('keeps the comma in the visible text while typing', () => {
+      const { input } = renderField({ value: null, locale: 'pt-BR' })
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: '2,50' } })
+      expect(input.value).toBe('2,50')
+    })
+
+    it('renders a committed value with the locale separator', () => {
+      const { input } = renderField({ value: 1.5, locale: 'de-DE' })
+      expect(input.value).toBe('1,5')
+    })
+
+    it('reformats to the locale separator on blur', () => {
+      const { input } = renderField({ value: null, locale: 'nb-NO' })
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: ',3' } })
+      advance(300)
+      fireEvent.blur(input)
+      expect(input.value).toBe('0,3')
+    })
+
+    it('treats a leading comma as an intermediate value, not a commit', () => {
+      const onChange = vi.fn()
+      const { input } = renderField({ value: null, onChange, locale: 'de-DE' })
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: ',' } })
+      advance(300)
+      expect(onChange).not.toHaveBeenCalled()
+      expect(input.value).toBe(',')
+    })
+
+    it('allows only one comma', () => {
+      const { input } = renderField({ value: null, locale: 'de-DE' })
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: '1,2,3' } })
+      expect(input.value).toBe('1,23')
+    })
+
+    it('drops the locale grouping separator, so a pasted "1.234,5" reads as 1234.5', () => {
+      const onChange = vi.fn()
+      const { input } = renderField({ value: null, onChange, locale: 'de-DE' })
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: '1.234,5' } })
+      advance(300)
+      expect(onChange).toHaveBeenCalledWith(1234.5)
+    })
+
+    it('still drops a comma under en-US, where it is the grouping separator', () => {
+      const onChange = vi.fn()
+      const { input } = renderField({ value: null, onChange, locale: 'en-US' })
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: '1,234.5' } })
+      advance(300)
+      expect(onChange).toHaveBeenCalledWith(1234.5)
+    })
+
+    it('round-trips: a committed value re-renders as text the field accepts', () => {
+      const onChange = vi.fn()
+      const { input } = renderField({ value: 1234.56, onChange, locale: 'pt-BR' })
+      const displayed = input.value
+      expect(displayed).toBe('1234,56')
+
+      // Re-typing exactly what is on screen must commit the same number.
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: displayed } })
+      fireEvent.blur(input)
+      expect(onChange).not.toHaveBeenCalled()
+      expect(input.value).toBe('1234,56')
+    })
   })
 
   // Virtualized tables unmount rows that scroll out of the render window, so
