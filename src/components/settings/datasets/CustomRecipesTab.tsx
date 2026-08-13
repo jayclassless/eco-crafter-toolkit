@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 
 import { RecipeIcon } from '@/components/common/RecipeIcon'
 import { SkillIcon } from '@/components/common/SkillIcon'
+import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { buildRecipeProductItemIds } from '@/hooks/use-products'
 import { useStoreRevision } from '@/hooks/use-store-revision'
@@ -35,6 +36,7 @@ export function CustomRecipesTab({ datasetId }: Props) {
   const { t } = useTranslation()
   const { gameDataStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
+  const { compare } = useLocalization()
   const rev = useStoreRevision(gameDataStore, TABLES)
 
   const [formVisible, setFormVisible] = useState(false)
@@ -73,9 +75,9 @@ export function CustomRecipesTab({ datasetId }: Props) {
     }
     out.sort(
       (a, b) =>
-        a.skillName.localeCompare(b.skillName) ||
-        a.name.localeCompare(b.name) ||
-        a.productName.localeCompare(b.productName)
+        compare(a.skillName, b.skillName) ||
+        compare(a.name, b.name) ||
+        compare(a.productName, b.productName)
     )
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps

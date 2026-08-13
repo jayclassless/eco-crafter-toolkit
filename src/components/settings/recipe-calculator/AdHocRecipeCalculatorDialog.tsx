@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 
 import { type RecipeOption, resolveRecipeSkillName } from '@/components/common/recipe-option'
 import { RecipeOptionItem } from '@/components/common/RecipeOptionItem'
+import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import type { PriceSignal } from '@/hooks/use-prices-signal'
 import { buildRecipeProductItemIds, getRecipePrimaryProductRawName } from '@/hooks/use-products'
@@ -38,6 +39,7 @@ export function AdHocRecipeCalculatorDialog({
   const { t } = useTranslation()
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
+  const { compare } = useLocalization()
 
   // Holds either the picked recipe (object) or the in-progress typed string, so
   // the AutoComplete keeps the user's text visible until a choice is made. Only
@@ -78,9 +80,9 @@ export function AdHocRecipeCalculatorDialog({
         isCustom: !!recipe.isCustom,
       })
     }
-    out.sort((a, b) => a.name.localeCompare(b.name))
+    out.sort((a, b) => compare(a.name, b.name))
     return out
-  }, [gameDataStore, datasetId, getName])
+  }, [gameDataStore, datasetId, getName, compare])
 
   const { calorieCost, defaultShareForSecondaryItems } = useMemo(() => {
     let calorieCost = 0
@@ -149,6 +151,7 @@ export function AdHocRecipeCalculatorDialog({
       gameDataStore,
       datasetId,
       getName,
+      compare,
       selectedRecipeId,
       {
         skillLevel,
@@ -163,6 +166,7 @@ export function AdHocRecipeCalculatorDialog({
     gameDataStore,
     datasetId,
     getName,
+    compare,
     selectedRecipeId,
     skillLevel,
     moduleIdsBySlot,

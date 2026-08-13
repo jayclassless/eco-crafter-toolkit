@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { localeProvider } from '@/i18n/__tests__/locale-provider'
+import { getCompare } from '@/lib/collator'
 
 import { BIOME_ATLAS } from '../biome-atlas'
 import { FloraFaunaCard } from '../FloraFaunaCard'
@@ -40,7 +41,7 @@ describe('FloraFaunaCard', () => {
     const rows = screen
       .getAllByText((_, el) => el?.tagName === 'SPAN' && names.includes(el.textContent ?? ''))
       .map((el) => el.textContent)
-    expect(rows).toEqual([...names].sort((a, b) => a.localeCompare(b)))
+    expect(rows).toEqual([...names].sort(getCompare('en-US')))
     expect(rows[0]).toBe('Bison')
   })
 

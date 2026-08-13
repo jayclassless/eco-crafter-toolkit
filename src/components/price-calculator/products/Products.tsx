@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { DebouncedSearchInput } from '@/components/common/DebouncedSearchInput'
 import { PriceModeButton } from '@/components/common/PriceModeButton'
 import { RecipeIcon } from '@/components/common/RecipeIcon'
+import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { usePriceManagement } from '@/hooks/use-price-management'
 import { type PriceSignal } from '@/hooks/use-prices-signal'
@@ -156,6 +157,7 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
   const { t } = useTranslation()
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
+  const { compare } = useLocalization()
   const recipeMgmt = useRecipeManagement(buildId)
   const priceMgmt = usePriceManagement(buildId)
   const settingsMgmt = useSettings(buildId)
@@ -176,9 +178,18 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
   const favoriteCellRev = useCellInTableRevision(buildStore, 'userRecipes', 'favorite')
 
   const rawGroups = useMemo(
-    () => buildProductGroups(buildStore, gameDataStore, buildId, getName),
+    () => buildProductGroups(buildStore, gameDataStore, buildId, getName, compare),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [buildStore, gameDataStore, buildId, getName, groupsRev, userPricesRowIdsRev, isOverrideRev]
+    [
+      buildStore,
+      gameDataStore,
+      buildId,
+      getName,
+      compare,
+      groupsRev,
+      userPricesRowIdsRev,
+      isOverrideRev,
+    ]
   )
   // Preserve reference when content is semantically unchanged so downstream
   // memos (`rows`, `ProductsDataTable`) can bail out.
@@ -329,18 +340,18 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
     const ids = new Set<string>()
     for (const g of groups) for (const c of g.children) if (c.skillId) ids.add(c.skillId)
     const opts = [...ids].map((id) => ({ id, name: getName('skill', id) || id }))
-    opts.sort((a, b) => a.name.localeCompare(b.name))
+    opts.sort((a, b) => compare(a.name, b.name))
     return opts
-  }, [groups, getName])
+  }, [groups, getName, compare])
 
   const craftingTableOptions = useMemo(() => {
     const ids = new Set<string>()
     for (const g of groups)
       for (const c of g.children) if (c.craftingTableId) ids.add(c.craftingTableId)
     const opts = [...ids].map((id) => ({ id, name: getName('craftingTable', id) || id }))
-    opts.sort((a, b) => a.name.localeCompare(b.name))
+    opts.sort((a, b) => compare(a.name, b.name))
     return opts
-  }, [groups, getName])
+  }, [groups, getName, compare])
 
   // Tag/part index, rebuilt whenever the group view-model rebuilds. The
   // gameDataStore is effectively immutable after dataset import, so we piggy-
@@ -377,9 +388,9 @@ function ProductsImpl({ buildId, datasetId, priceSignal }: Props) {
         kind: 'part',
       })
     }
-    opts.sort((a, b) => a.name.localeCompare(b.name))
+    opts.sort((a, b) => compare(a.name, b.name))
     return opts
-  }, [groups, gameDataStore, tagIdsByItemId, getName, t])
+  }, [groups, gameDataStore, tagIdsByItemId, getName, compare, t])
 
   const childVisible = useCallback(
     (c: Product): boolean => {

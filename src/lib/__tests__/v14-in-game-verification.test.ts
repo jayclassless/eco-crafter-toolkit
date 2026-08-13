@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest'
 
 import { createGameDataOps } from '@/hooks/use-game-data'
 import { buildRecipeBuildState, buildRecipeIndexes } from '@/hooks/use-solver-snapshot'
+import { getCompare } from '@/lib/collator'
 import { parseDataset } from '@/lib/import-dataset'
 import { resolveRecipeModifiers } from '@/lib/recipe-modifiers'
 import { createBuildStore } from '@/stores/build-store'
@@ -69,7 +70,8 @@ describe('v14 module effects match a live server', () => {
       ds,
       buildRecipeIndexes(game),
       buildRecipeBuildState(build, 'b1'),
-      () => ''
+      () => '',
+      getCompare('en-US')
     )!
 
     // Ingredient quantities are stored negative; both Icebox ingredients are

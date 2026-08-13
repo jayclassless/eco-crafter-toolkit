@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest'
 
 import { createGameDataOps } from '@/hooks/use-game-data'
 import { buildSolverSnapshot } from '@/hooks/use-solver-snapshot'
+import { compareKeys } from '@/lib/collator'
 import { parseDataset } from '@/lib/import-dataset'
 import { solve } from '@/lib/solver'
 import { createBuildStore } from '@/stores/build-store'
@@ -86,12 +87,15 @@ describe('v13 price baseline', () => {
       })
     }
 
-    // All default recipes for the selected skills, ordered by raw name.
+    // All default recipes for the selected skills, ordered by raw name. The
+    // comparator is pinned so the baseline does not shift with the machine's
+    // default locale.
     const skillIds = new Set(SKILLS.map((s) => idByName.get(s)).filter(Boolean))
     const recipeIds = [...gameDataStore.getRowIds('recipes')]
       .filter((rid) => skillIds.has(gameDataStore.getCell('recipes', rid, 'skillId') as string))
       .sort((a, b) =>
-        (gameDataStore.getCell('recipes', a, 'name') as string).localeCompare(
+        compareKeys(
+          gameDataStore.getCell('recipes', a, 'name') as string,
           gameDataStore.getCell('recipes', b, 'name') as string
         )
       )

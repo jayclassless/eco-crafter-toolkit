@@ -12,6 +12,7 @@ import {
   type RecipeIndexes,
   type TalentIndexEntry,
 } from '@/hooks/use-solver-snapshot'
+import { compareKeys } from '@/lib/collator'
 import type { ModuleSlot } from '@/types/game-data'
 
 /** A module a crafting table accepts, in the shape the module UI needs. Names
@@ -180,7 +181,9 @@ function buildCanonicalFamilyByItemId(
   }
   const result = new Map<string, string>()
   for (const [itemId, list] of candidatesByItem) {
-    list.sort((a, b) => b.size - a.size || a.family.localeCompare(b.family))
+    // `family` is a raw (unlocalized) key and the sort only picks a stable
+    // winner, so this stays locale-independent.
+    list.sort((a, b) => b.size - a.size || compareKeys(a.family, b.family))
     result.set(itemId, list[0].family)
   }
   return result

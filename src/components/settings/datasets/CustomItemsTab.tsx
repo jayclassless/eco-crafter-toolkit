@@ -7,6 +7,7 @@ import { Tooltip } from 'primereact/tooltip'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useStoreRevision } from '@/hooks/use-store-revision'
 import { defaultLocale } from '@/i18n/config'
@@ -36,6 +37,7 @@ export function CustomItemsTab({ datasetId }: Props) {
   const { t } = useTranslation()
   const { gameDataStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
+  const { compare } = useLocalization()
   const rev = useStoreRevision(gameDataStore, TABLES)
 
   const [newName, setNewName] = useState('')
@@ -57,7 +59,7 @@ export function CustomItemsTab({ datasetId }: Props) {
         inUse: isItemReferencedByAnyRecipe(gameDataStore, id),
       })
     }
-    out.sort((a, b) => a.name.localeCompare(b.name))
+    out.sort((a, b) => compare(a.name, b.name))
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameDataStore, datasetId, getName, rev])

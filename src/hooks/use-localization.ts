@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { type Compare, getCompare } from '@/lib/collator'
+
 const priceFormatterCache = new Map<string, Intl.NumberFormat>()
 const numberFormatterCache = new Map<string, Intl.NumberFormat>()
 const percentFormatterCache = new Map<string, Intl.NumberFormat>()
@@ -185,6 +187,15 @@ interface Localization {
    */
   formatList: (values: readonly string[]) => string
   /**
+   * Comparator for sorting user-visible strings in the active locale, from a
+   * single resolved `Intl.Collator` (see `lib/collator.ts` for why a bare
+   * `localeCompare` is wrong on both correctness and performance grounds).
+   *
+   * Pure functions in `lib/` take this as a parameter rather than resolving
+   * their own — pass it down the same way `getName` is passed.
+   */
+  compare: Compare
+  /**
    * The active locale's decimal separator — `.` in en-US, `,` in de-DE/pt-BR.
    *
    * Editable numeric inputs need this to accept back what they display:
@@ -231,6 +242,7 @@ export function useLocalization(): Localization {
         return fmt.format(ratio)
       },
       formatList: (values) => listFmt.format(values),
+      compare: getCompare(i18n.language),
       decimalSeparator: getDecimalSeparator(i18n.language),
     }
   }, [i18n.language])

@@ -1,6 +1,7 @@
 import type { Store } from 'tinybase'
 
 import { getRecipeSkillInfo } from '@/hooks/use-products'
+import type { Compare } from '@/lib/collator'
 
 export interface UsedInRecipe {
   rowKey: string
@@ -27,6 +28,8 @@ interface ComputeUsedInRecipesParams {
   /** Recipe id to omit from results (e.g. the recipe the dialog is showing). */
   excludeRecipeId?: string
   getName: (kind: string, id: string) => string
+  /** Display-order comparator for the active locale (`useLocalization().compare`). */
+  compare: Compare
 }
 
 // Finds every recipe in the dataset that consumes `itemId` as an ingredient —
@@ -40,7 +43,7 @@ export function computeUsedInRecipes(
   buildStore: Store,
   params: ComputeUsedInRecipesParams
 ): UsedInRecipe[] {
-  const { itemId, buildId, datasetId, isTag = false, excludeRecipeId, getName } = params
+  const { itemId, buildId, datasetId, isTag = false, excludeRecipeId, getName, compare } = params
 
   const buildRecipeIds = new Set<string>()
   for (const urId of buildStore.getRowIds('userRecipes')) {
@@ -149,9 +152,9 @@ export function computeUsedInRecipes(
   }
 
   rows.sort((a, b) => {
-    const s = a.skillName.localeCompare(b.skillName)
+    const s = compare(a.skillName, b.skillName)
     if (s !== 0) return s
-    return a.recipeName.localeCompare(b.recipeName)
+    return compare(a.recipeName, b.recipeName)
   })
 
   return rows

@@ -200,6 +200,23 @@ describe('useLocalization', () => {
     })
   })
 
+  describe('compare', () => {
+    it('collates in the active language', () => {
+      const en = renderHook(() => useLocalization())
+      expect(['Öl', 'Zebra'].sort(en.result.current.compare)).toEqual(['Öl', 'Zebra'])
+
+      // Swedish sorts Ö after Z, so the same two names swap.
+      const sv = renderHook(() => useLocalization(), { wrapper: localeProvider('sv') })
+      expect(['Öl', 'Zebra'].sort(sv.result.current.compare)).toEqual(['Zebra', 'Öl'])
+    })
+
+    it('hands out one shared collator rather than a per-call closure', () => {
+      const a = renderHook(() => useLocalization())
+      const b = renderHook(() => useLocalization())
+      expect(a.result.current.compare).toBe(b.result.current.compare)
+    })
+  })
+
   describe('decimalSeparator', () => {
     it('is "." under the default en-US locale', () => {
       const { result } = renderHook(() => useLocalization())

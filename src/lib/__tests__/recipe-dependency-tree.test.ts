@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { getCompare } from '@/lib/collator'
 import { clearGameDataIndexesCache } from '@/lib/game-data-indexes'
 import { buildDependencyTree, type DepItemNode } from '@/lib/recipe-dependency-tree'
 import { createGameDataStore } from '@/stores/game-data-store'
@@ -77,7 +78,8 @@ describe('buildDependencyTree', () => {
       store,
       { type: 'recipe', recipeId: 'r1' },
       new Map(),
-      idGetName
+      idGetName,
+      getCompare('en-US')
     )
     expect(root.kind).toBe('root-recipe')
     if (root.kind !== 'root-recipe') return
@@ -98,7 +100,8 @@ describe('buildDependencyTree', () => {
       store,
       { type: 'recipe', recipeId: 'r1' },
       new Map(),
-      idGetName
+      idGetName,
+      getCompare('en-US')
     )
     expect(root.children.length).toBe(1)
     const child = root.children[0] as DepItemNode
@@ -126,7 +129,8 @@ describe('buildDependencyTree', () => {
       store,
       { type: 'recipe', recipeId: 'r-out' },
       new Map(),
-      idGetName
+      idGetName,
+      getCompare('en-US')
     )
     expect(root.children.length).toBe(1)
     const bar = root.children[0] as DepItemNode
@@ -167,7 +171,8 @@ describe('buildDependencyTree', () => {
       store,
       { type: 'recipe', recipeId: 'r-out' },
       new Map(),
-      localized
+      localized,
+      getCompare('en-US')
     )
     const matNode = defaultRoot.children[0] as DepItemNode
     expect(matNode.availableRecipeIds).toEqual(['r-mat-alpha', 'r-mat-zebra'])
@@ -180,7 +185,8 @@ describe('buildDependencyTree', () => {
       store,
       { type: 'recipe', recipeId: 'r-out' },
       sel,
-      localized
+      localized,
+      getCompare('en-US')
     )
     const matOverride = overrideRoot.children[0] as DepItemNode
     expect(matOverride.selectedRecipeId).toBe('r-mat-zebra')
@@ -219,7 +225,8 @@ describe('buildDependencyTree', () => {
       store,
       { type: 'recipe', recipeId: 'r-out' },
       new Map(),
-      localized
+      localized,
+      getCompare('en-US')
     )
     const woodNode = root.children[0] as DepItemNode
     expect(woodNode.isTag).toBe(true)
@@ -234,7 +241,8 @@ describe('buildDependencyTree', () => {
       store,
       { type: 'recipe', recipeId: 'r-out' },
       sel,
-      localized
+      localized,
+      getCompare('en-US')
     )
     const woodOverride = overrideRoot.children[0] as DepItemNode
     expect(woodOverride.selectedTagItemId).toBe('oak')
@@ -258,7 +266,8 @@ describe('buildDependencyTree', () => {
       store,
       { type: 'recipe', recipeId: 'r-a' },
       new Map(),
-      idGetName
+      idGetName,
+      getCompare('en-US')
     )
     // Root recipe r-a, whose primary product is A. Its ingredient B expands
     // to r-b, whose ingredient A would loop — so r-b's expansion has no
@@ -298,7 +307,8 @@ describe('buildDependencyTree', () => {
       store,
       { type: 'recipe', recipeId: 'r-out' },
       new Map(),
-      idGetName
+      idGetName,
+      getCompare('en-US')
     )
     const a = root.children[0] as DepItemNode
     const b = root.children[1] as DepItemNode
@@ -328,7 +338,8 @@ describe('buildDependencyTree', () => {
       store,
       { type: 'recipe', recipeId: 'r-out' },
       new Map(),
-      idGetName
+      idGetName,
+      getCompare('en-US')
     )
     const a = root.children[0] as DepItemNode
     expect(a.nodeId).toBe('i:A')
@@ -391,7 +402,8 @@ describe('buildDependencyTree', () => {
       store,
       { type: 'recipe', recipeId: 'r-out' },
       new Map(),
-      idGetName
+      idGetName,
+      getCompare('en-US')
     )
     // Raw-leaves: no recipe selection, no children — even though each has
     // a fake recipe producing it.
@@ -426,7 +438,8 @@ describe('buildDependencyTree', () => {
       store,
       { type: 'item', itemId: 'iron-bar' },
       new Map(),
-      idGetName
+      idGetName,
+      getCompare('en-US')
     )
     expect(root.kind).toBe('item')
     if (root.kind !== 'item') return

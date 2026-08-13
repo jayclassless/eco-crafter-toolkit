@@ -1,5 +1,6 @@
 import type { Store } from 'tinybase'
 
+import type { Compare } from '@/lib/collator'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
 
 export type DepNode = DepRootRecipeNode | DepItemNode
@@ -78,6 +79,8 @@ interface BuildContext {
   elementsByRecipeId: Map<string, Array<{ id: string; row: Record<string, unknown> }>>
   selections: Map<string, string>
   getName: (entityType: string, entityId: string) => string
+  /** Display-order comparator for the active locale (`useLocalization().compare`). */
+  compare: Compare
   shortcutEdges: ShortcutEdge[]
   /** Map<key, nodeId> for every item/tag we have created a node for so
    * far, anywhere in the graph. Lookups here drive deduplication: a child
@@ -155,7 +158,8 @@ export function buildDependencyTree(
   store: Store,
   start: DependencyTreeStart,
   selections: Map<string, string>,
-  getName: (entityType: string, entityId: string) => string
+  getName: (entityType: string, entityId: string) => string,
+  compare: Compare
 ): DependencyTree {
   const indexes = getGameDataIndexes(store)
   const ctx: BuildContext = {
@@ -165,6 +169,7 @@ export function buildDependencyTree(
     elementsByRecipeId: indexes.recipeIndexes.elementsByRecipeId,
     selections,
     getName,
+    compare,
     shortcutEdges: [],
     visited: new Map(),
     pathKeys: new Set(),
@@ -279,7 +284,7 @@ function createItemNode(ctx: BuildContext, itemOrTagId: string, key: string): De
   if (isTag) {
     const members = ctx.itemIdsByTagId.get(itemOrTagId) ?? []
     tagItemIds = [...members].sort((a, b) =>
-      ctx.getName('item', a).localeCompare(ctx.getName('item', b))
+      ctx.compare(ctx.getName('item', a), ctx.getName('item', b))
     )
     const sel = ctx.selections.get(SEL_TAG_ITEM + nodeId)
     selectedTagItemId = sel && tagItemIds.includes(sel) ? sel : (tagItemIds[0] ?? null)
@@ -292,7 +297,7 @@ function createItemNode(ctx: BuildContext, itemOrTagId: string, key: string): De
     ? []
     : (ctx.primaryRecipeIdsByItemId.get(resolvedItemId) ?? [])
   const availableRecipeIds = [...recipeIdsRaw].sort((a, b) =>
-    ctx.getName('recipe', a).localeCompare(ctx.getName('recipe', b))
+    ctx.compare(ctx.getName('recipe', a), ctx.getName('recipe', b))
   )
 
   let selectedRecipeId: string | null = null

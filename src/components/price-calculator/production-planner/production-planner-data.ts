@@ -1,5 +1,6 @@
 import type { Store } from 'tinybase'
 
+import type { Compare } from '@/lib/collator'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { type PlannerRecipe } from '@/lib/production-planner'
 import type { GetNameFn } from '@/lib/recipe-modifiers'
@@ -36,7 +37,8 @@ export function buildPlannerData(
   datasetId: string,
   snapshot: SolverInput,
   solverOutput: SolverOutput | null,
-  getName: GetNameFn
+  getName: GetNameFn,
+  compare: Compare
 ): PlannerData {
   const indexes = getGameDataIndexes(gameDataStore)
 
@@ -104,7 +106,7 @@ export function buildPlannerData(
   const targetOptions = [...targetIds]
     .map(toOption)
     .filter((o): o is PlannerItemOption => o != null)
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => compare(a.name, b.name))
 
   // Concrete items plus the ingredient tags, so the user can stock either.
   const itemOptions: PlannerItemOption[] = []
@@ -115,7 +117,7 @@ export function buildPlannerData(
     const option = toOption(id)
     if (option) itemOptions.push(option)
   }
-  itemOptions.sort((a, b) => a.name.localeCompare(b.name))
+  itemOptions.sort((a, b) => compare(a.name, b.name))
 
   return { recipeForItem, tagMembers, isTag, targetOptions, itemOptions }
 }

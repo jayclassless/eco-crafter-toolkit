@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
 import type { Store } from 'tinybase'
 
+import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
+import type { Compare } from '@/lib/collator'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { buildReintegrationOverrides, computeReintegratedProductIds } from '@/lib/reintegration'
 import { useStores } from '@/stores/providers'
@@ -230,7 +232,8 @@ export function buildProducts(
   buildStore: Store,
   gameDataStore: Store,
   buildId: string,
-  getName: (entityType: string, entityId: string) => string
+  getName: (entityType: string, entityId: string) => string,
+  compare: Compare
 ): Product[] {
   // Indexes are immutable per dataset import — pull from the cached bundle
   // instead of scanning ~4500 recipeElements + recipeUnlocks on every change
@@ -337,9 +340,9 @@ export function buildProducts(
 
   items.sort(
     (a, b) =>
-      a.skillName.localeCompare(b.skillName) ||
-      a.recipeName.localeCompare(b.recipeName) ||
-      a.primaryProductName.localeCompare(b.primaryProductName)
+      compare(a.skillName, b.skillName) ||
+      compare(a.recipeName, b.recipeName) ||
+      compare(a.primaryProductName, b.primaryProductName)
   )
 
   return items
@@ -371,9 +374,10 @@ export function buildProductGroups(
   buildStore: Store,
   gameDataStore: Store,
   buildId: string,
-  getName: (entityType: string, entityId: string) => string
+  getName: (entityType: string, entityId: string) => string,
+  compare: Compare
 ): ProductGroup[] {
-  const flat = buildProducts(buildStore, gameDataStore, buildId, getName)
+  const flat = buildProducts(buildStore, gameDataStore, buildId, getName, compare)
   const canonicalFamilyByItemId = getGameDataIndexes(gameDataStore).canonicalFamilyByItemId
 
   // userPrices indexed by itemOrTagId for this build.
@@ -412,7 +416,7 @@ export function buildProductGroups(
       continue
     }
     children.sort(
-      (a, b) => a.skillName.localeCompare(b.skillName) || a.recipeName.localeCompare(b.recipeName)
+      (a, b) => compare(a.skillName, b.skillName) || compare(a.recipeName, b.recipeName)
     )
     const first = children[0]
     groups.push({
@@ -446,8 +450,7 @@ export function buildProductGroups(
 
   groups.sort(
     (a, b) =>
-      clusterKeyOf(a).localeCompare(clusterKeyOf(b)) ||
-      productNameOf(a).localeCompare(productNameOf(b))
+      compare(clusterKeyOf(a), clusterKeyOf(b)) || compare(productNameOf(a), productNameOf(b))
   )
 
   return groups
@@ -475,12 +478,13 @@ export function useProducts(buildId: string): { groups: ProductGroup[]; margins:
   const { buildStore, gameDataStore } = useStores()
   const datasetId = (buildStore.getCell('builds', buildId, 'datasetId') as string) ?? ''
   const { getName } = useLocalizedName(datasetId)
+  const { compare } = useLocalization()
 
   return useMemo(
     () => ({
-      groups: buildProductGroups(buildStore, gameDataStore, buildId, getName),
+      groups: buildProductGroups(buildStore, gameDataStore, buildId, getName, compare),
       margins: buildMarginOptions(buildStore, buildId),
     }),
-    [buildStore, gameDataStore, buildId, getName]
+    [buildStore, gameDataStore, buildId, getName, compare]
   )
 }

@@ -103,7 +103,7 @@ export function RecipeDialog({
   const { t } = useTranslation()
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
-  const { formatPrice, formatDuration, formatNumber } = useLocalization()
+  const { formatPrice, formatDuration, formatNumber, compare } = useLocalization()
   const { setProductShare, setProductReintegrated, setRecipeFavorite } =
     useRecipeManagement(buildId)
   const { setPrice } = usePriceManagement(buildId)
@@ -149,7 +149,8 @@ export function RecipeDialog({
         datasetId,
         indexes,
         buildState,
-        getName
+        getName,
+        compare
       )
     },
     // gameRevForMods / buildRevForMods are the invalidation signals; getName
@@ -162,6 +163,7 @@ export function RecipeDialog({
       buildId,
       datasetId,
       getName,
+      compare,
       gameRevForMods,
       buildRevForMods,
     ]
@@ -677,11 +679,22 @@ export function RecipeDialog({
         datasetId,
         excludeRecipeId: recipeId,
         getName,
+        compare,
       })
     },
     // gameRev / buildRecipesRev are the invalidation signals for this memo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [recipeId, buildId, datasetId, gameDataStore, buildStore, getName, gameRev, buildRecipesRev]
+    [
+      recipeId,
+      buildId,
+      datasetId,
+      gameDataStore,
+      buildStore,
+      getName,
+      compare,
+      gameRev,
+      buildRecipesRev,
+    ]
   )
 
   if (!recipeId) return null
@@ -750,7 +763,7 @@ export function RecipeDialog({
       }
     }
     if (usedIn.length > 0) {
-      usedIn.sort((a, b) => a.name.localeCompare(b.name))
+      usedIn.sort((a, b) => compare(a.name, b.name))
       partLabelTitle = usedIn.map((u) => `${u.name} ×${u.quantity}`).join('\n')
     }
   }

@@ -17,6 +17,8 @@
  *    under-report garbage on every upgraded table.
  */
 
+import { compareKeys } from '@/lib/collator'
+
 /**
  * An amount of one garbage item.
  *
@@ -89,9 +91,13 @@ function aggregate(parts: readonly GarbageQuantity[]): GarbageQuantity[] {
       byItem.set(p.itemId, { itemId: p.itemId, min: p.min, max: p.max })
     }
   }
-  return [...byItem.values()]
-    .filter((q) => q.max > 0)
-    .sort((a, b) => b.max - a.max || b.min - a.min || a.itemId.localeCompare(b.itemId))
+  return (
+    [...byItem.values()]
+      .filter((q) => q.max > 0)
+      // The itemId tiebreak only makes the result deterministic; it is never
+      // read, so it must not follow the display locale.
+      .sort((a, b) => b.max - a.max || b.min - a.min || compareKeys(a.itemId, b.itemId))
+  )
 }
 
 /** One concrete item's salvage, scaled to `quantity` units of it. */

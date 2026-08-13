@@ -12,6 +12,7 @@ import { SkillIcon } from '@/components/common/SkillIcon'
 import { TagLabel } from '@/components/common/TagLabel'
 import { RecipeDependencyGraph } from '@/components/price-calculator/recipe-dependency-graph/RecipeDependencyGraph'
 import { UsedInRecipesTable } from '@/components/price-calculator/UsedInRecipesTable'
+import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { getRecipeSkillInfo } from '@/hooks/use-products'
 import { useStoreRevision } from '@/hooks/use-store-revision'
@@ -60,6 +61,7 @@ export function MaterialDialog({
   const { t } = useTranslation()
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
+  const { compare } = useLocalization()
 
   const gameRev = useStoreRevision(gameDataStore, GAME_TABLES)
   const buildRev = useStoreRevision(buildStore, BUILD_TABLES)
@@ -79,6 +81,7 @@ export function MaterialDialog({
         datasetId,
         isTag,
         getName,
+        compare,
       })
     },
     // Revision counters drive recomputation when the underlying tables change.
@@ -92,6 +95,7 @@ export function MaterialDialog({
       gameDataStore,
       buildStore,
       getName,
+      compare,
       gameRev,
       buildRev,
     ]
@@ -153,9 +157,9 @@ export function MaterialDialog({
         }
       }
       rows.sort((a, b) => {
-        const s = a.skillName.localeCompare(b.skillName)
+        const s = compare(a.skillName, b.skillName)
         if (s !== 0) return s
-        return a.recipeName.localeCompare(b.recipeName)
+        return compare(a.recipeName, b.recipeName)
       })
       return rows
     },

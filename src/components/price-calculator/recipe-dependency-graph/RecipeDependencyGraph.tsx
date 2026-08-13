@@ -11,6 +11,7 @@ import { DepItemNode } from '@/components/price-calculator/recipe-dependency-gra
 import { DepRecipeNode } from '@/components/price-calculator/recipe-dependency-graph/DepRecipeNode'
 import { DepShortcutEdge } from '@/components/price-calculator/recipe-dependency-graph/DepShortcutEdge'
 import { layoutTree } from '@/components/price-calculator/recipe-dependency-graph/recipe-dependency-layout'
+import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useStoreRevision } from '@/hooks/use-store-revision'
 import { buildDependencyTree, type DependencyTreeStart } from '@/lib/recipe-dependency-tree'
@@ -35,6 +36,7 @@ function targetKey(target: DependencyTreeStart): string {
 export function RecipeDependencyGraph({ target, datasetId, onOpenRecipe, onOpenMaterial }: Props) {
   const { gameDataStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
+  const { compare } = useLocalization()
   const gameRev = useStoreRevision(gameDataStore, GAME_TABLES)
 
   const [selections, setSelections] = useState<Map<string, string>>(() => new Map())
@@ -68,13 +70,14 @@ export function RecipeDependencyGraph({ target, datasetId, onOpenRecipe, onOpenM
         gameDataStore,
         target,
         selections,
-        getName
+        getName,
+        compare
       )
       return layoutTree(root, shortcutEdges)
     },
     // gameRev forces recomputation when game-data tables change
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [gameDataStore, tKey, selections, getName, gameRev]
+    [gameDataStore, tKey, selections, getName, compare, gameRev]
   )
 
   // Local copy of nodes so users can drag — reset whenever the layout

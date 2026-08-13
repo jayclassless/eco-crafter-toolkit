@@ -3,6 +3,7 @@ import type { Store } from 'tinybase'
 
 import type { TalentRow } from '@/components/price-calculator/build-options/skills-types'
 import { TalentChipView } from '@/components/price-calculator/build-options/TalentChipView'
+import { useLocalization } from '@/hooks/use-localization'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import type { GetNameFn } from '@/lib/recipe-modifiers'
 
@@ -28,6 +29,8 @@ export function AdHocTalentsCell({
   talentStates,
   onTalentChange,
 }: Props) {
+  const { compare } = useLocalization()
+
   const talents = useMemo<TalentRow[]>(() => {
     if (!skillId) return []
     const details = getGameDataIndexes(gameDataStore).talentDetailsBySkillId.get(skillId) ?? []
@@ -43,8 +46,8 @@ export function AdHocTalentsCell({
         isLevelable: tl.isLevelable,
         maxTalentLevel: tl.maxTalentLevel,
       }))
-      .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name))
-  }, [gameDataStore, skillId, skillLevel, getName])
+      .sort((a, b) => a.level - b.level || compare(a.name, b.name))
+  }, [gameDataStore, skillId, skillLevel, getName, compare])
 
   if (talents.length === 0) return null
 

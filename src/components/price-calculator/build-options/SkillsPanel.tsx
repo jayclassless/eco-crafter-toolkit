@@ -11,6 +11,7 @@ import {
   type GroupedAutoCompleteGroup,
 } from '@/components/common/GroupedAutoComplete'
 import { SkillIcon } from '@/components/common/SkillIcon'
+import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useSkillManagement } from '@/hooks/use-skill-management'
 import { useStarCost } from '@/hooks/use-star-cost'
@@ -48,6 +49,7 @@ export function SkillsPanel({ buildId, datasetId }: Props) {
   const { t } = useTranslation()
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
+  const { compare } = useLocalization()
   const skillMgmt = useSkillManagement(buildId, datasetId)
   const starCost = useStarCost(buildId, datasetId)
   // The total now has up to three sources, so the tooltip breaks it down. Only
@@ -109,7 +111,7 @@ export function SkillsPanel({ buildId, datasetId }: Props) {
         maxTalentLevel: t.maxTalentLevel,
       }))
 
-      talents.sort((a, b) => a.level - b.level || a.name.localeCompare(b.name))
+      talents.sort((a, b) => a.level - b.level || compare(a.name, b.name))
 
       rows.push({
         id: rowId,
@@ -169,11 +171,11 @@ export function SkillsPanel({ buildId, datasetId }: Props) {
     }
 
     const groups: SkillGroup[] = [...grouped.values()]
-      .sort((a, b) => a.label.localeCompare(b.label))
+      .sort((a, b) => compare(a.label, b.label))
       .map(({ label, rawName, items }) => ({
         profession: label,
         professionRawName: rawName,
-        items: items.sort((a, b) => a.name.localeCompare(b.name)),
+        items: items.sort((a, b) => compare(a.name, b.name)),
       }))
 
     setSuggestions(groups)

@@ -5,6 +5,7 @@ import {
   type RecipeBuildState,
   type RecipeIndexes,
 } from '@/hooks/use-solver-snapshot'
+import type { Compare } from '@/lib/collator'
 import {
   applyRoundFactor,
   moduleFactor,
@@ -85,7 +86,8 @@ export function resolveRecipeModifiers(
   datasetId: string,
   indexes: RecipeIndexes,
   buildState: RecipeBuildState,
-  getName: GetNameFn
+  getName: GetNameFn,
+  compare: Compare
 ): ResolvedRecipeModifiers | null {
   const solverRecipe = assembleSolverRecipe(
     gameDataStore,
@@ -314,7 +316,7 @@ export function resolveRecipeModifiers(
         MODULE_SLOT_ORDER.indexOf(b.slot ?? 'Specialty')
       if (slotDiff !== 0) return slotDiff
     }
-    return a.displayName.localeCompare(b.displayName)
+    return compare(a.displayName, b.displayName)
   })
 
   return {

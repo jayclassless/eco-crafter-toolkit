@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { NumericField } from '@/components/common/NumericField'
 import { TypeAheadPicker } from '@/components/common/TypeAheadPicker'
+import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useSolverSnapshot } from '@/hooks/use-solver-snapshot'
 import { planProduction } from '@/lib/production-planner'
@@ -33,6 +34,7 @@ export function ProductionPlannerDialog({
   const { t } = useTranslation()
   const { gameDataStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
+  const { compare } = useLocalization()
   const { buildSnapshot } = useSolverSnapshot()
 
   const [targetOption, setTargetOption] = useState<PlannerItemOption | null>(null)
@@ -55,9 +57,9 @@ export function ProductionPlannerDialog({
     if (!visible) return null
     const snapshot = buildSnapshot(buildId, datasetId)
     if (!snapshot) return null
-    return buildPlannerData(gameDataStore, datasetId, snapshot, solverOutput, getName)
+    return buildPlannerData(gameDataStore, datasetId, snapshot, solverOutput, getName, compare)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, buildId, datasetId, buildSnapshot, gameDataStore, getName, solverOutput])
+  }, [visible, buildId, datasetId, buildSnapshot, gameDataStore, getName, compare, solverOutput])
 
   const targetItemId = targetOption?.id
 

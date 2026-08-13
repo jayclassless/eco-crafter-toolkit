@@ -58,7 +58,7 @@ export function GatheringCalculatorDialog({
   const { t } = useTranslation()
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
-  const { formatPrice } = useLocalization()
+  const { formatPrice, compare } = useLocalization()
   const { setPrice } = usePriceManagement(buildId)
   const { getSettingsRowId, setSetting } = useSettings(buildId)
 
@@ -75,8 +75,8 @@ export function GatheringCalculatorDialog({
   const [applied, setApplied] = useState('')
 
   const catalog = useMemo(
-    () => buildGatheringCatalog(gameDataStore, datasetId, getName),
-    [gameDataStore, datasetId, getName]
+    () => buildGatheringCatalog(gameDataStore, datasetId, getName, compare),
+    [gameDataStore, datasetId, getName, compare]
   )
 
   const settingsRowId = getSettingsRowId()

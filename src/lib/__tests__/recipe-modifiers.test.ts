@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { buildRecipeBuildState, buildRecipeIndexes } from '@/hooks/use-solver-snapshot'
+import { getCompare } from '@/lib/collator'
 import { resolveRecipeModifiers, type GetNameFn } from '@/lib/recipe-modifiers'
 import { createBuildStore } from '@/stores/build-store'
 import { createGameDataStore } from '@/stores/game-data-store'
@@ -74,7 +75,8 @@ const resolve = (recipeId = 'r1', userRecipeId = 'ur1', roundFactor = 0) => {
     DS,
     indexes,
     buildState,
-    emptyGetName
+    emptyGetName,
+    getCompare('en-US')
   )
 }
 
@@ -670,7 +672,8 @@ describe('resolveRecipeModifiers', () => {
       DS,
       indexes,
       buildState,
-      rawGetName
+      rawGetName,
+      getCompare('en-US')
     )!
 
     expect(result.bonuses.map((b) => b.source)).toEqual(['skill', 'talent', 'module'])
@@ -749,7 +752,8 @@ describe('resolveRecipeModifiers', () => {
       DS,
       indexes,
       buildState,
-      rawGetName
+      rawGetName,
+      getCompare('en-US')
     )!
 
     const modules = result.bonuses.filter((b) => b.source === 'module')

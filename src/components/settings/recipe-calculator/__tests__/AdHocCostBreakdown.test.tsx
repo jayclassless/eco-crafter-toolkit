@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { getCompare } from '@/lib/collator'
 import { createGameDataStore } from '@/stores/game-data-store'
 
 import { computeAdHocRecipe } from '../adhoc-recipe-calc'
@@ -60,6 +61,7 @@ function makeResult(ingredientPrices: Record<string, number>) {
     game,
     DS,
     () => '',
+    getCompare('en-US'),
     'r1',
     { skillLevel: 0, moduleIds: [], talentStates: {}, ingredientPrices },
     0,

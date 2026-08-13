@@ -12,8 +12,10 @@ import {
 } from '@/components/common/GroupedSinglePicker'
 import { NumericField } from '@/components/common/NumericField'
 import { TypeAheadPicker } from '@/components/common/TypeAheadPicker'
+import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { defaultLocale } from '@/i18n/config'
+import type { Compare } from '@/lib/collator'
 import {
   createCustomRecipe,
   type CustomRecipeInput,
@@ -83,6 +85,7 @@ function buildItemCandidates(
   gameDataStore: ReturnType<typeof useStores>['gameDataStore'],
   datasetId: string,
   getName: (entityType: string, entityId: string) => string,
+  compare: Compare,
   includeTags: boolean
 ): PickerOption[] {
   const out: PickerOption[] = []
@@ -95,7 +98,7 @@ function buildItemCandidates(
     const label = getName('item', id) || rawName
     out.push({ id, name: label, rawName, isCustom })
   }
-  out.sort((a, b) => a.name.localeCompare(b.name))
+  out.sort((a, b) => compare(a.name, b.name))
   return out
 }
 
@@ -103,6 +106,7 @@ export function CustomRecipeFormDialog({ visible, onHide, datasetId, recipeId }:
   const { t } = useTranslation()
   const { gameDataStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
+  const { compare } = useLocalization()
 
   const isEdit = !!recipeId
 
@@ -158,11 +162,11 @@ export function CustomRecipeFormDialog({ visible, onHide, datasetId, recipeId }:
       bucket.items.push({ id, name: label, rawName })
     }
     return [...byProf.values()]
-      .sort((a, b) => a.label.localeCompare(b.label))
+      .sort((a, b) => compare(a.label, b.label))
       .map(({ label, rawName, items }) => ({
         groupLabel: label,
         groupRawName: rawName,
-        items: items.sort((a, b) => a.name.localeCompare(b.name)),
+        items: items.sort((a, b) => compare(a.name, b.name)),
       }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameDataStore, datasetId, getName, professionLabelByRaw, visible])
@@ -208,22 +212,22 @@ export function CustomRecipeFormDialog({ visible, onHide, datasetId, recipeId }:
     }
 
     return [...byProf.values()]
-      .sort((a, b) => a.label.localeCompare(b.label))
+      .sort((a, b) => compare(a.label, b.label))
       .map(({ label, rawName, items }) => ({
         groupLabel: label,
         groupRawName: rawName,
-        items: items.sort((a, b) => a.name.localeCompare(b.name)),
+        items: items.sort((a, b) => compare(a.name, b.name)),
       }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameDataStore, datasetId, getName, professionLabelByRaw, t, visible])
 
   const ingredientCandidates = useMemo(
-    () => buildItemCandidates(gameDataStore, datasetId, getName, true),
+    () => buildItemCandidates(gameDataStore, datasetId, getName, compare, true),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [gameDataStore, datasetId, getName, visible]
   )
   const productCandidates = useMemo(
-    () => buildItemCandidates(gameDataStore, datasetId, getName, false),
+    () => buildItemCandidates(gameDataStore, datasetId, getName, compare, false),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [gameDataStore, datasetId, getName, visible]
   )

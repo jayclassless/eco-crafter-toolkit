@@ -1,5 +1,6 @@
 import type { Store } from 'tinybase'
 
+import { type Compare, compareKeys } from '@/lib/collator'
 import { EMPOWER_TALENT_NAME, EMPOWER_TOOL_KINDS } from '@/lib/game-constants'
 import type {
   GatheringKind,
@@ -84,7 +85,8 @@ type GetNameFn = (entityType: string, entityId: string) => string
 export function buildGatheringCatalog(
   gameDataStore: Store,
   datasetId: string,
-  getName: GetNameFn
+  getName: GetNameFn,
+  compare: Compare
 ): GatheringCatalog {
   const options: GatheringOption[] = []
   const clothing: GatheringClothingOption[] = []
@@ -160,13 +162,15 @@ export function buildGatheringCatalog(
         name,
         rawName,
         target: { kind: 'log', treeHealth: primary.treeHealth },
-        species: species.slice().sort((a, b) => a.name.localeCompare(b.name)),
+        species: species.slice().sort((a, b) => compare(a.name, b.name)),
       })
     }
   }
 
-  options.sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name))
-  clothing.sort((a, b) => a.name.localeCompare(b.name))
+  // `kind` is a raw (unlocalized) grouping key, so it uses the stable
+  // comparator; only the name within a kind is user-facing text.
+  options.sort((a, b) => compareKeys(a.kind, b.kind) || compare(a.name, b.name))
+  clothing.sort((a, b) => compare(a.name, b.name))
 
   const tools: GatheringToolOption[] = []
   for (const toolId of gameDataStore.getRowIds('gatheringTools')) {
@@ -193,9 +197,7 @@ export function buildGatheringCatalog(
       strengthTalentId: (row.strengthTalentId as string) ?? '',
     })
   }
-  tools.sort(
-    (a, b) => a.kind.localeCompare(b.kind) || a.tier - b.tier || a.name.localeCompare(b.name)
-  )
+  tools.sort((a, b) => compareKeys(a.kind, b.kind) || a.tier - b.tier || compare(a.name, b.name))
 
   return { options, byItemId: new Map(options.map((o) => [o.itemId, o])), tools, clothing }
 }

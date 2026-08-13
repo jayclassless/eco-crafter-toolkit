@@ -1,9 +1,11 @@
 import { Dropdown } from 'primereact/dropdown'
 import { useTranslation } from 'react-i18next'
 
-import { BIOME_ATLAS, BIOME_GROUPS } from './biome-atlas'
+import { useLocalization } from '@/hooks/use-localization'
 
 import './BiomeSelector.css'
+
+import { BIOME_ATLAS, BIOME_GROUPS } from './biome-atlas'
 
 interface Props {
   selected: string
@@ -14,12 +16,13 @@ interface Props {
 // the biomes alphabetized (by label) within each group.
 export function BiomeSelector({ selected, onSelect }: Props) {
   const { t } = useTranslation()
+  const { compare } = useLocalization()
 
   const options = BIOME_GROUPS.map(({ groupKey, keys }) => ({
     label: t(`biomeResources.groups.${groupKey}`),
     items: keys
       .map((key) => ({ label: BIOME_ATLAS.biomes[key].label, value: key }))
-      .sort((a, b) => a.label.localeCompare(b.label)),
+      .sort((a, b) => compare(a.label, b.label)),
   }))
 
   return (

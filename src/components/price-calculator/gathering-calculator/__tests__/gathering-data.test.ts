@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { getCompare } from '@/lib/collator'
 import { clearGameDataIndexesCache, getGameDataIndexes } from '@/lib/game-data-indexes'
 import { createBuildStore } from '@/stores/build-store'
 import { createGameDataStore } from '@/stores/game-data-store'
@@ -150,7 +151,7 @@ beforeEach(() => {
 
 describe('buildGatheringCatalog', () => {
   it('classifies each gathering kind', () => {
-    const { byItemId } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { byItemId } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     expect(byItemId.get('granite')?.kind).toBe('rock')
     expect(byItemId.get('dirt')?.kind).toBe('excavatable')
     expect(byItemId.get('deer')?.kind).toBe('carcass')
@@ -160,20 +161,20 @@ describe('buildGatheringCatalog', () => {
   it('excludes a minable item whose block yields no rubble', () => {
     // v11's Slag is Minable(4) with no rubble file at all.
     addItem('slag', 'SlagItem', { minableHardness: 4, rubbleItemsPerBlock: 0 })
-    const { byItemId } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { byItemId } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     expect(byItemId.has('slag')).toBe(false)
   })
 
   it('surfaces every species behind one log item', () => {
     // Flattening health onto the item would silently drop Old-Growth Redwood.
-    const { byItemId } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { byItemId } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     const log = byItemId.get('redwoodLog')!
     expect(log.species?.map((s) => s.name)).toEqual(['OldGrowthRedwood', 'Redwood'])
     expect(new Set(log.species?.map((s) => s.treeHealth)).size).toBe(2)
   })
 
   it('offers both calorie-reducing clothing slots', () => {
-    const { clothing } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { clothing } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     expect(clothing.map((c) => c.rawName).sort()).toEqual(['BuilderBootsItem', 'WorkBackpackItem'])
   })
 
@@ -185,7 +186,7 @@ describe('buildGatheringCatalog', () => {
       isTag: false,
       requiresShovel: true,
     })
-    const { byItemId } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { byItemId } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     expect(byItemId.has('other')).toBe(false)
   })
 
@@ -193,7 +194,7 @@ describe('buildGatheringCatalog', () => {
     // An installed dataset predating gathering extraction; the dialog shows an
     // "update your dataset" state rather than zeros.
     const empty = createGameDataStore()
-    const catalog = buildGatheringCatalog(empty, DS, getName)
+    const catalog = buildGatheringCatalog(empty, DS, getName, getCompare('en-US'))
     expect(catalog.options).toEqual([])
     expect(catalog.tools).toEqual([])
   })
@@ -201,7 +202,7 @@ describe('buildGatheringCatalog', () => {
 
 describe('tool selection', () => {
   it('offers only tools that can gather the target', () => {
-    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     expect(toolsForKind(tools, 'rock').map((t) => t.rawName)).toEqual([
       'StonePickaxeItem',
       'SteelPickaxeItem',
@@ -211,7 +212,7 @@ describe('tool selection', () => {
   })
 
   it('defaults to the lowest tier available', () => {
-    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     expect(defaultToolFor(tools, 'rock')?.rawName).toBe('StonePickaxeItem')
     expect(defaultToolFor(tools, 'carcass')).toBeNull()
   })
@@ -225,7 +226,7 @@ describe('seedGatheringControls', () => {
       skillId: 'mining',
       level: 5,
     })
-    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     const tool = defaultToolFor(tools, 'rock')
     const seeded = seedGatheringControls(gameDataStore, buildStore, BUILD, DS, 'rock', tool)
     expect(seeded.skillLevel).toBe(5)
@@ -238,7 +239,7 @@ describe('seedGatheringControls', () => {
       skillId: 'mining',
       level: 7,
     })
-    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     const seeded = seedGatheringControls(
       gameDataStore,
       buildStore,
@@ -263,7 +264,7 @@ describe('seedGatheringControls', () => {
       talentId: 'lucky',
       enabled: true,
     })
-    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     const seeded = seedGatheringControls(
       gameDataStore,
       buildStore,
@@ -284,7 +285,7 @@ describe('seedGatheringControls', () => {
       talentId: 'eff',
       enabled: false,
     })
-    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     const seeded = seedGatheringControls(
       gameDataStore,
       buildStore,
@@ -300,7 +301,7 @@ describe('seedGatheringControls', () => {
     // Shovels and bows name the abstract ToolEfficiencyTalent, which is never
     // granted, so the extractor omits it and the id is ''.
     addTool('t4', 'stonePick', 'Shovel', 1)
-    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     const shovel = toolsForKind(tools, 'excavatable')[0]
     expect(availableTalents('excavatable', shovel).efficiency).toBe(false)
     const seeded = seedGatheringControls(
@@ -319,7 +320,7 @@ describe('retainTalents', () => {
   it('keeps toggles the user set across a tool change', () => {
     // Swapping tools is a refinement of the same estimate, not a fresh start:
     // re-seeding from the build would silently undo the user's edits.
-    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     const stone = toolsForKind(tools, 'rock')[0]
     const steel = toolsForKind(tools, 'rock')[1]
     const previous = { ...NO_TALENTS, efficiency: true, luckyBreak: true }
@@ -334,7 +335,7 @@ describe('retainTalents', () => {
 
   it('switches off a talent the new tool cannot have', () => {
     addTool('t4', 'stonePick', 'Shovel', 1)
-    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     const shovel = toolsForKind(tools, 'excavatable')[0]
     const previous = { ...NO_TALENTS, efficiency: true }
     const merged = retainTalents(previous, { ...NO_TALENTS }, 'excavatable', shovel)
@@ -342,7 +343,7 @@ describe('retainTalents', () => {
   })
 
   it('takes talent values from the newly seeded state', () => {
-    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     const pick = defaultToolFor(tools, 'rock')
     const seeded = seedGatheringControls(gameDataStore, buildStore, BUILD, DS, 'rock', pick)
     const merged = retainTalents(
@@ -360,21 +361,21 @@ describe('shouldReseedSkillLevel', () => {
     // The bug this guards: every tool of a kind shares one calorie skill, so
     // re-seeding on a tier swap discards a level the user typed — resetting it
     // to zero for a skill they have not taken.
-    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     const [stone, steel] = toolsForKind(tools, 'rock')
     expect(stone.calorieSkillId).toBe(steel.calorieSkillId)
     expect(shouldReseedSkillLevel(stone, steel)).toBe(false)
   })
 
   it('re-reads the level when the skill actually changes', () => {
-    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     const pick = toolsForKind(tools, 'rock')[0]
     const axe = toolsForKind(tools, 'log')[0]
     expect(shouldReseedSkillLevel(pick, axe)).toBe(true)
   })
 
   it('treats a missing tool as no skill rather than throwing', () => {
-    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     const pick = toolsForKind(tools, 'rock')[0]
     expect(shouldReseedSkillLevel(null, null)).toBe(false)
     expect(shouldReseedSkillLevel(null, pick)).toBe(true)
@@ -383,7 +384,7 @@ describe('shouldReseedSkillLevel', () => {
 
 describe('availableTalents', () => {
   it('scopes kind-specific talents to their kind', () => {
-    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName)
+    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
     const pick = defaultToolFor(tools, 'rock')!
     expect(availableTalents('rock', pick)).toMatchObject({
       luckyBreak: true,

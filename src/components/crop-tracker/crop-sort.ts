@@ -1,3 +1,5 @@
+import type { Compare } from '@/lib/collator'
+
 export type CropSortField = 'name' | 'plant' | 'planted' | 'firstYield' | 'harvest'
 export type CropSortDir = 'asc' | 'desc'
 
@@ -15,12 +17,17 @@ export interface SortablePlanting {
 // a field with no planting/harvest is "not yet" rather than earliest.
 const timeKey = (ms: number | null) => (ms == null ? Infinity : ms)
 
-function compare(a: SortablePlanting, b: SortablePlanting, field: CropSortField): number {
+function compareField(
+  a: SortablePlanting,
+  b: SortablePlanting,
+  field: CropSortField,
+  compare: Compare
+): number {
   switch (field) {
     case 'name':
-      return a.fieldName.localeCompare(b.fieldName, undefined, { sensitivity: 'base' })
+      return compare(a.fieldName, b.fieldName)
     case 'plant':
-      return a.plantName.localeCompare(b.plantName, undefined, { sensitivity: 'base' })
+      return compare(a.plantName, b.plantName)
     case 'planted':
       return timeKey(a.plantedAtMs) - timeKey(b.plantedAtMs)
     case 'firstYield':
@@ -35,8 +42,9 @@ function compare(a: SortablePlanting, b: SortablePlanting, field: CropSortField)
 export function sortPlantings(
   items: SortablePlanting[],
   field: CropSortField,
-  dir: CropSortDir
+  dir: CropSortDir,
+  compare: Compare
 ): SortablePlanting[] {
   const sign = dir === 'desc' ? -1 : 1
-  return [...items].sort((a, b) => sign * compare(a, b, field))
+  return [...items].sort((a, b) => sign * compareField(a, b, field, compare))
 }

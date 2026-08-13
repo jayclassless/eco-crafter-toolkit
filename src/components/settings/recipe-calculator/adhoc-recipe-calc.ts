@@ -2,6 +2,7 @@ import type { Store } from 'tinybase'
 
 import type { PriceSignal } from '@/hooks/use-prices-signal'
 import type { RecipeBuildState } from '@/hooks/use-solver-snapshot'
+import type { Compare } from '@/lib/collator'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { resolveRecipeModifiers, type GetNameFn } from '@/lib/recipe-modifiers'
 import { solve } from '@/lib/solver'
@@ -38,6 +39,7 @@ export function computeAdHocRecipe(
   gameDataStore: Store,
   datasetId: string,
   getName: GetNameFn,
+  compare: Compare,
   recipeId: string,
   controls: AdHocControls,
   calorieCost: number,
@@ -70,7 +72,8 @@ export function computeAdHocRecipe(
     datasetId,
     indexes,
     buildState,
-    getName
+    getName,
+    compare
   )
   if (!mods) return null
 

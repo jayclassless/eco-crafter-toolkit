@@ -1,6 +1,7 @@
 import type { Store } from 'tinybase'
 import { describe, it, expect, beforeEach } from 'vitest'
 
+import { getCompare } from '@/lib/collator'
 import { createBuildStore } from '@/stores/build-store'
 import { createGameDataStore } from '@/stores/game-data-store'
 
@@ -92,7 +93,9 @@ beforeEach(() => {
 
 describe('buildProducts', () => {
   it('returns empty when the build has no recipes', () => {
-    expect(buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)).toEqual([])
+    expect(
+      buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName, getCompare('en-US'))
+    ).toEqual([])
   })
 
   it('joins recipe with primary product, skill, and margin', () => {
@@ -109,7 +112,7 @@ describe('buildProducts', () => {
       userMarginId: 'm-prem',
     })
 
-    const items = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    const items = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName, getCompare('en-US'))
 
     expect(items).toHaveLength(1)
     const [it0] = items
@@ -139,7 +142,7 @@ describe('buildProducts', () => {
       roundFactor: 0,
     })
 
-    const [it0] = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    const [it0] = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName, getCompare('en-US'))
     expect(it0.recipeIsCustom).toBe(true)
     expect(it0.primaryProductIsCustom).toBe(true)
   })
@@ -151,7 +154,7 @@ describe('buildProducts', () => {
       recipeId: 'recipe-iron',
       roundFactor: 0,
     })
-    const [it0] = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    const [it0] = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName, getCompare('en-US'))
     expect(it0.userMarginId).toBe('')
   })
 
@@ -162,7 +165,9 @@ describe('buildProducts', () => {
       recipeId: 'recipe-iron',
       roundFactor: 0,
     })
-    expect(buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)).toEqual([])
+    expect(
+      buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName, getCompare('en-US'))
+    ).toEqual([])
   })
 
   it('emits no entries for a recipe with no product elements', () => {
@@ -184,7 +189,9 @@ describe('buildProducts', () => {
       recipeId: 'recipe-empty',
       roundFactor: 0,
     })
-    expect(buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)).toEqual([])
+    expect(
+      buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName, getCompare('en-US'))
+    ).toEqual([])
   })
 
   it('emits one entry per non-ingredient product for multi-product recipes', () => {
@@ -235,7 +242,7 @@ describe('buildProducts', () => {
       recipeId: 'recipe-iron',
       roundFactor: 0,
     })
-    const items = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    const items = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName, getCompare('en-US'))
     const productIds = items.map((i) => i.primaryProductId).sort()
     expect(productIds).toEqual(['item-coal', 'item-iron'])
     for (const it of items) {
@@ -267,7 +274,7 @@ describe('buildProducts', () => {
       recipeId: 'recipe-iron',
       roundFactor: 0,
     })
-    const items = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    const items = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName, getCompare('en-US'))
     expect(items.map((i) => i.primaryProductId)).toEqual(['item-iron'])
   })
 
@@ -300,7 +307,7 @@ describe('buildProducts', () => {
       productItemOrTagId: 'item-barrel',
       isReintegrated: false,
     })
-    const items = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    const items = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName, getCompare('en-US'))
     expect(items.map((i) => i.primaryProductId).sort()).toEqual(['item-barrel', 'item-iron'])
   })
 
@@ -318,7 +325,7 @@ describe('buildProducts', () => {
       userRecipeId: 'ur1',
       userMarginId: 'm-prem',
     })
-    const [it0] = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    const [it0] = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName, getCompare('en-US'))
     expect(it0.userMarginId).toBe('')
   })
 
@@ -341,7 +348,7 @@ describe('buildProducts', () => {
       recipeId: 'recipe-iron',
       roundFactor: 0,
     })
-    const [it0] = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    const [it0] = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName, getCompare('en-US'))
     expect([...it0.unlockingTalentIds].sort()).toEqual(['talent-unlock-a', 'talent-unlock-b'])
   })
 
@@ -352,7 +359,7 @@ describe('buildProducts', () => {
       recipeId: 'recipe-iron',
       roundFactor: 0,
     })
-    const [it0] = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    const [it0] = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName, getCompare('en-US'))
     expect(it0.unlockingTalentIds).toEqual([])
   })
 
@@ -401,7 +408,7 @@ describe('buildProducts', () => {
       roundFactor: 0,
     })
 
-    const items = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    const items = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName, getCompare('en-US'))
     // skill:skill-aaa < skill:skill-mining alphabetically
     expect(items.map((i) => i.recipeId)).toEqual(['recipe-zzz', 'recipe-iron'])
   })
@@ -422,7 +429,7 @@ describe('buildProducts', () => {
       primaryItemId: '',
       priceMode: 'min',
     })
-    const [it0] = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    const [it0] = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName, getCompare('en-US'))
     expect(it0.userPriceId).toBe('up1')
   })
 
@@ -442,7 +449,9 @@ describe('buildProducts', () => {
       primaryItemId: '',
       priceMode: 'manual',
     })
-    expect(buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)).toEqual([])
+    expect(
+      buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName, getCompare('en-US'))
+    ).toEqual([])
   })
 
   it("does not omit products when isOverride=true but priceMode isn't 'manual'", () => {
@@ -461,7 +470,7 @@ describe('buildProducts', () => {
       primaryItemId: '',
       priceMode: 'min',
     })
-    const items = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName)
+    const items = buildProducts(buildStore, gameDataStore, BUILD_ID, fakeName, getCompare('en-US'))
     expect(items).toHaveLength(1)
   })
 })
@@ -630,7 +639,13 @@ describe('buildProductGroups', () => {
       roundFactor: 0,
     })
 
-    const groups = buildProductGroups(buildStore, gameDataStore, BUILD_ID, fakeName)
+    const groups = buildProductGroups(
+      buildStore,
+      gameDataStore,
+      BUILD_ID,
+      fakeName,
+      getCompare('en-US')
+    )
     expect(groups).toHaveLength(2)
     for (const g of groups) expect(g.parent).toBeNull()
     // Sorted alphabetically by primary product name
@@ -688,7 +703,13 @@ describe('buildProductGroups', () => {
       userMarginId: 'm-prem',
     })
 
-    const groups = buildProductGroups(buildStore, gameDataStore, BUILD_ID, fakeName)
+    const groups = buildProductGroups(
+      buildStore,
+      gameDataStore,
+      BUILD_ID,
+      fakeName,
+      getCompare('en-US')
+    )
     expect(groups).toHaveLength(1)
     const group = groups[0]
     expect(group.parent).not.toBeNull()
@@ -737,7 +758,13 @@ describe('buildProductGroups', () => {
       roundFactor: 0,
     })
 
-    const [group] = buildProductGroups(buildStore, gameDataStore, BUILD_ID, fakeName)
+    const [group] = buildProductGroups(
+      buildStore,
+      gameDataStore,
+      BUILD_ID,
+      fakeName,
+      getCompare('en-US')
+    )
     expect(group.parent?.userPriceId).toBe('')
     expect(group.parent?.productUserMarginId).toBe('')
   })
@@ -790,7 +817,13 @@ describe('buildProductGroups', () => {
       userMarginId: 'm-prem',
     })
 
-    const [group] = buildProductGroups(buildStore, gameDataStore, BUILD_ID, fakeName)
+    const [group] = buildProductGroups(
+      buildStore,
+      gameDataStore,
+      BUILD_ID,
+      fakeName,
+      getCompare('en-US')
+    )
     expect(group.parent?.userPriceId).toBe('')
     expect(group.parent?.productUserMarginId).toBe('')
   })
@@ -875,7 +908,13 @@ describe('buildProductGroups', () => {
     it('clusters family variants adjacently when 2+ family members are visible', () => {
       addBoardFamily({ hardwood: true, softwood: true })
 
-      const groups = buildProductGroups(buildStore, gameDataStore, BUILD_ID, namedFakeName)
+      const groups = buildProductGroups(
+        buildStore,
+        gameDataStore,
+        BUILD_ID,
+        namedFakeName,
+        getCompare('en-US')
+      )
       const order = groups.map((g) => g.children[0].primaryProductName)
       // Without clustering: [Board, Hardwood Board, Iron Ore, Softwood Board].
       // With clustering, Board family stays adjacent.
@@ -885,7 +924,13 @@ describe('buildProductGroups', () => {
     it('keeps lone family members in alphabetical product order', () => {
       addBoardFamily({ hardwood: true, softwood: false })
 
-      const groups = buildProductGroups(buildStore, gameDataStore, BUILD_ID, namedFakeName)
+      const groups = buildProductGroups(
+        buildStore,
+        gameDataStore,
+        BUILD_ID,
+        namedFakeName,
+        getCompare('en-US')
+      )
       const order = groups.map((g) => g.children[0].primaryProductName)
       // Family "Board" has 2 visible members → still clusters.
       expect(order).toEqual(['Board', 'Hardwood Board', 'Iron Ore'])
@@ -934,7 +979,13 @@ describe('buildProductGroups', () => {
         roundFactor: 0,
       })
 
-      const groups = buildProductGroups(buildStore, gameDataStore, BUILD_ID, namedFakeName)
+      const groups = buildProductGroups(
+        buildStore,
+        gameDataStore,
+        BUILD_ID,
+        namedFakeName,
+        getCompare('en-US')
+      )
       const order = groups.map((g) => g.children[0].primaryProductName)
       // Hardwood Board is the only Board-family member; sorts by its own
       // product name alongside Iron Ore.
@@ -998,7 +1049,13 @@ describe('buildProductGroups', () => {
         roundFactor: 0,
       })
 
-      const groups = buildProductGroups(buildStore, gameDataStore, BUILD_ID, namedFakeName)
+      const groups = buildProductGroups(
+        buildStore,
+        gameDataStore,
+        BUILD_ID,
+        namedFakeName,
+        getCompare('en-US')
+      )
       const order = groups.map((g) => g.children[0].primaryProductName)
       // All three Board items resolve to canonical family "Board" (size 3,
       // alphabetically before "Boards") regardless of which family produced
@@ -1084,7 +1141,13 @@ describe('buildProductGroups', () => {
         roundFactor: 0,
       })
 
-      const groups = buildProductGroups(buildStore, gameDataStore, BUILD_ID, fakeName)
+      const groups = buildProductGroups(
+        buildStore,
+        gameDataStore,
+        BUILD_ID,
+        fakeName,
+        getCompare('en-US')
+      )
       const order = groups.map((g) => g.children[0].primaryProductId)
       // Empty familyName never clusters even with multiple empty-family
       // recipes; iron's family ("Iron") has count 1 so it doesn't cluster

@@ -6,6 +6,7 @@ import { CraftingTableIcon } from '@/components/common/CraftingTableIcon'
 import { SkillIcon } from '@/components/common/SkillIcon'
 import type { ModuleSlotRow } from '@/components/price-calculator/build-options/crafting-table-modules-types'
 import { CraftingTableModulesCell } from '@/components/price-calculator/build-options/CraftingTableModulesCell'
+import { useLocalization } from '@/hooks/use-localization'
 import { craftingTableModules, getGameDataIndexes } from '@/lib/game-data-indexes'
 import { deriveTableModuleSlots, type SlotSelection } from '@/lib/module-slots'
 import type { GetNameFn } from '@/lib/recipe-modifiers'
@@ -43,6 +44,8 @@ export function AdHocRecipeInputs({
   talentStates,
   onTalentChange,
 }: Props) {
+  const { compare } = useLocalization()
+
   const skillRawName = skillId
     ? ((gameDataStore.getRow('skills', skillId)?.name as string) ?? '')
     : ''
@@ -74,9 +77,9 @@ export function AdHocRecipeInputs({
         ...s,
         candidates: s.candidates
           .map(({ id, name, rawName }) => ({ id, name, rawName }))
-          .sort((a, b) => a.name.localeCompare(b.name)),
+          .sort((a, b) => compare(a.name, b.name)),
       })),
-    [gameDataStore, datasetId, craftingTableId, getName]
+    [gameDataStore, datasetId, craftingTableId, getName, compare]
   )
 
   return (

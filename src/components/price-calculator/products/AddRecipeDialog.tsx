@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { type RecipeOption, resolveRecipeSkillName } from '@/components/common/recipe-option'
 import { RecipeOptionItem } from '@/components/common/RecipeOptionItem'
 import { CustomEntitiesDialog } from '@/components/settings/datasets/CustomEntitiesDialog'
+import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { buildRecipeProductItemIds, getRecipePrimaryProductRawName } from '@/hooks/use-products'
 import { useRecipeManagement } from '@/hooks/use-recipe-management'
@@ -42,6 +43,7 @@ export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingR
   const { t } = useTranslation()
   const { buildStore, gameDataStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
+  const { compare } = useLocalization()
   const recipeMgmt = useRecipeManagement(buildId)
 
   const buildRev = useStoreRevision(buildStore, BUILD_TABLES)
@@ -109,7 +111,7 @@ export function AddRecipeDialog({ visible, onHide, buildId, datasetId, existingR
       }
     }
 
-    const byName = (a: RecipeOption, b: RecipeOption) => a.name.localeCompare(b.name)
+    const byName = (a: RecipeOption, b: RecipeOption) => compare(a.name, b.name)
     skill.sort(byName)
     standard.sort(byName)
     custom.sort(byName)

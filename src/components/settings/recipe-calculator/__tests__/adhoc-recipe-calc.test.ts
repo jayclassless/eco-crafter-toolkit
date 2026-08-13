@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { PriceSignal } from '@/hooks/use-prices-signal'
+import { getCompare } from '@/lib/collator'
 import { createBuildStore } from '@/stores/build-store'
 import { createGameDataStore } from '@/stores/game-data-store'
 
@@ -85,7 +86,7 @@ describe('computeAdHocRecipe', () => {
 
     // Level 0: laborReducePercent[0]=1 → labor 100 → laborCost = 100*10/1000 = 1.
     // ingredient cost = 5 * 2 = 10. costPrice = 11.
-    const lvl0 = computeAdHocRecipe(game, DS, getName, 'r1', controls, 10, 20)!
+    const lvl0 = computeAdHocRecipe(game, DS, getName, getCompare('en-US'), 'r1', controls, 10, 20)!
     expect(lvl0.output.recipeCosts['r1'].laborCost).toBeCloseTo(1)
     expect(lvl0.output.prices['bar'].costPrice).toBeCloseTo(11)
 
@@ -94,6 +95,7 @@ describe('computeAdHocRecipe', () => {
       game,
       DS,
       getName,
+      getCompare('en-US'),
       'r1',
       { ...controls, skillLevel: 1 },
       10,
@@ -155,13 +157,23 @@ describe('computeAdHocRecipe', () => {
       ingredientPrices: { iron: 5 },
     }
     // No module: 4 iron × 5 = 20.
-    const noMod = computeAdHocRecipe(game, DS, getName, 'r1', { ...base, moduleIds: [] }, 0, 20)!
+    const noMod = computeAdHocRecipe(
+      game,
+      DS,
+      getName,
+      getCompare('en-US'),
+      'r1',
+      { ...base, moduleIds: [] },
+      0,
+      20
+    )!
     expect(noMod.output.prices['bar'].costPrice).toBeCloseTo(20)
     // Resource module 0.5: 2 iron × 5 = 10.
     const withMod = computeAdHocRecipe(
       game,
       DS,
       getName,
+      getCompare('en-US'),
       'r1',
       { ...base, moduleIds: ['pm1'] },
       0,
@@ -217,12 +229,22 @@ describe('computeAdHocRecipe', () => {
       moduleIds: [],
       ingredientPrices: { iron: 5 },
     }
-    const off = computeAdHocRecipe(game, DS, getName, 'r1', { ...base, talentStates: {} }, 0, 20)!
+    const off = computeAdHocRecipe(
+      game,
+      DS,
+      getName,
+      getCompare('en-US'),
+      'r1',
+      { ...base, talentStates: {} },
+      0,
+      20
+    )!
     expect(off.output.prices['bar'].costPrice).toBeCloseTo(20)
     const on = computeAdHocRecipe(
       game,
       DS,
       getName,
+      getCompare('en-US'),
       'r1',
       { ...base, talentStates: { 't-sharp': { enabled: true, level: 0 } } },
       0,
@@ -257,6 +279,7 @@ describe('computeAdHocRecipe', () => {
       game,
       DS,
       getName,
+      getCompare('en-US'),
       'r1',
       { skillLevel: 0, moduleIds: [], talentStates: {}, ingredientPrices: { 'wood-tag': 2 } },
       0,
@@ -302,6 +325,7 @@ describe('computeAdHocRecipe', () => {
       game,
       DS,
       getName,
+      getCompare('en-US'),
       'r1',
       { skillLevel: 0, moduleIds: [], talentStates: {}, ingredientPrices: { iron: 1 } },
       0,

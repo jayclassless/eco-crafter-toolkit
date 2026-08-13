@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { getCompare } from '@/lib/collator'
 import { createBuildStore } from '@/stores/build-store'
 import { createGameDataStore } from '@/stores/game-data-store'
 
@@ -114,6 +115,7 @@ describe('computeUsedInRecipes', () => {
       buildId: BUILD,
       datasetId: DS,
       getName,
+      compare: getCompare('en-US'),
     })
     expect(result).toEqual([])
   })
@@ -131,6 +133,7 @@ describe('computeUsedInRecipes', () => {
       buildId: BUILD,
       datasetId: DS,
       getName,
+      compare: getCompare('en-US'),
     })
     expect(result).toHaveLength(1)
     expect(result[0]).toMatchObject({
@@ -159,6 +162,7 @@ describe('computeUsedInRecipes', () => {
       buildId: BUILD,
       datasetId: DS,
       getName,
+      compare: getCompare('en-US'),
     })
     expect(row.recipeIsCustom).toBe(true)
   })
@@ -177,6 +181,7 @@ describe('computeUsedInRecipes', () => {
       buildId: BUILD,
       datasetId: DS,
       getName,
+      compare: getCompare('en-US'),
     })
     expect(result).toHaveLength(1)
     expect(result[0]).toMatchObject({
@@ -204,6 +209,7 @@ describe('computeUsedInRecipes', () => {
       datasetId: DS,
       isTag: true,
       getName,
+      compare: getCompare('en-US'),
     })
     // Only the direct-tag ingredient row should be matched.
     expect(result).toHaveLength(1)
@@ -232,6 +238,7 @@ describe('computeUsedInRecipes', () => {
       datasetId: DS,
       excludeRecipeId: 'r-self',
       getName,
+      compare: getCompare('en-US'),
     })
     expect(result.map((r) => r.recipeId)).toEqual(['r-other'])
   })
@@ -263,6 +270,7 @@ describe('computeUsedInRecipes', () => {
       buildId: BUILD,
       datasetId: DS,
       getName,
+      compare: getCompare('en-US'),
     })
     expect(result.map((r) => r.recipeId)).toEqual(['r-m', 'r-z', 'r-a'])
   })
@@ -285,6 +293,7 @@ describe('computeUsedInRecipes', () => {
       buildId: BUILD,
       datasetId: DS,
       getName,
+      compare: getCompare('en-US'),
     })
     expect(result[0].recipePrimaryProductRawName).toBe('Plank')
   })
@@ -327,6 +336,7 @@ describe('computeUsedInRecipes', () => {
       buildId: BUILD,
       datasetId: DS,
       getName,
+      compare: getCompare('en-US'),
     })
     expect(result.map((r) => [r.recipeId, r.inBuild])).toEqual([
       ['r-mine', true],
@@ -350,6 +360,7 @@ describe('computeUsedInRecipes', () => {
       buildId: BUILD,
       datasetId: DS,
       getName,
+      compare: getCompare('en-US'),
     })
     expect(result).toHaveLength(1)
     expect(result[0]).toMatchObject({
@@ -376,6 +387,7 @@ describe('computeUsedInRecipes', () => {
       datasetId: DS,
       excludeRecipeId: 'r-self',
       getName,
+      compare: getCompare('en-US'),
     })
     expect(result).toEqual([])
   })
@@ -397,6 +409,7 @@ describe('computeUsedInRecipes', () => {
       buildId: BUILD,
       datasetId: DS,
       getName,
+      compare: getCompare('en-US'),
     })
     expect(result).toEqual([])
   })

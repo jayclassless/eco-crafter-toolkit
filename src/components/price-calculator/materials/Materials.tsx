@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 
 import { DebouncedSearchInput } from '@/components/common/DebouncedSearchInput'
 import { ItemIcon } from '@/components/common/ItemIcon'
+import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { usePriceManagement } from '@/hooks/use-price-management'
 import { type PriceSignal } from '@/hooks/use-prices-signal'
@@ -85,6 +86,7 @@ function MaterialsImpl({ buildId, datasetId, priceSignal, onOpenGatheringCalcula
   const { t } = useTranslation()
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
+  const { compare } = useLocalization()
   const priceMgmt = usePriceManagement(buildId)
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
@@ -248,13 +250,13 @@ function MaterialsImpl({ buildId, datasetId, priceSignal, onOpenGatheringCalcula
             )
             if (childMat) children.push(childMat)
           }
-          children.sort((a, b) => a.name.localeCompare(b.name))
+          children.sort((a, b) => compare(a.name, b.name))
         }
 
         groups.push({ parent, children })
       }
 
-      return groups.sort((a, b) => a.parent.name.localeCompare(b.parent.name))
+      return groups.sort((a, b) => compare(a.parent.name, b.parent.name))
     },
     // allGroups depends on store structure (via revisions) and the name
     // lookup, NOT on `search` or on price *values* — typing a price into an

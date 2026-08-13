@@ -10,6 +10,7 @@ import { AboutDialog } from '@/components/settings/AboutDialog'
 import { CustomEntitiesDialog } from '@/components/settings/datasets/CustomEntitiesDialog'
 import { DatasetsDialog } from '@/components/settings/datasets/DatasetsDialog'
 import { SettingsSidebar } from '@/components/settings/SettingsSidebar'
+import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useNowTick } from '@/hooks/use-now-tick'
 import { useSettings } from '@/hooks/use-settings'
@@ -34,6 +35,7 @@ export function CropTracker() {
   const { t } = useTranslation()
   const { gameDataStore, buildStore, uiStore } = useStores()
   const { getName } = useLocalizedName(datasetId ?? '')
+  const { compare } = useLocalization()
   const now = useNowTick()
 
   const [settingsVisible, setSettingsVisible] = useState(false)
@@ -77,10 +79,10 @@ export function CropTracker() {
         primaryResourceMax: (item.primaryResourceMax as number) ?? 0,
       })
     }
-    out.sort((a, b) => a.name.localeCompare(b.name))
+    out.sort((a, b) => compare(a.name, b.name))
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datasetId, gameDataStore, getName, itemsRev])
+  }, [datasetId, gameDataStore, getName, compare, itemsRev])
   const cropsById = useMemo(() => new Map(crops.map((c) => [c.id, c])), [crops])
   // Read the latest crop map inside the sort memo via a ref so the memo can use
   // current crop data WITHOUT re-sorting merely because `cropsById` got a new
@@ -133,12 +135,12 @@ export function CropTracker() {
           harvestMs: window ? window.maxYieldAt.getTime() : null,
         }
       })
-    return sortPlantings(rows, sortField, sortDir).map((r) => r.id)
+    return sortPlantings(rows, sortField, sortDir, compare).map((r) => r.id)
     // cropsById is read via a ref (see above) so its identity changes don't
     // trigger a live re-sort; the real triggers are row add/remove and the
     // sort/growth settings.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildId, buildStore, growthRateModifier, sortField, sortDir, rowIdsRev])
+  }, [buildId, buildStore, growthRateModifier, sortField, sortDir, compare, rowIdsRev])
 
   const sortFieldOptions = useMemo(
     () => [

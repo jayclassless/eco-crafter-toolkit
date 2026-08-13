@@ -14,6 +14,7 @@ import {
 } from '@/components/common/GroupedAutoComplete'
 import { NumericField } from '@/components/common/NumericField'
 import { useCraftingTableManagement } from '@/hooks/use-crafting-table-management'
+import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useStoreRevision } from '@/hooks/use-store-revision'
 import { craftingTableModules } from '@/lib/game-data-indexes'
@@ -59,6 +60,7 @@ export function CraftingTablesPanel({ buildId, datasetId }: Props) {
   const { t } = useTranslation()
   const { gameDataStore, buildStore } = useStores()
   const { getName } = useLocalizedName(datasetId)
+  const { compare } = useLocalization()
   const tableMgmt = useCraftingTableManagement(buildId, datasetId)
   const [suggestions, setSuggestions] = useState<TableGroup[]>([])
   const [pendingDeleteTableId, setPendingDeleteTableId] = useState<string | null>(null)
@@ -90,7 +92,7 @@ export function CraftingTablesPanel({ buildId, datasetId }: Props) {
         ...s,
         candidates: s.candidates
           .map(({ id, name, rawName }) => ({ id, name, rawName }))
-          .sort((a, b) => a.name.localeCompare(b.name)),
+          .sort((a, b) => compare(a.name, b.name)),
       }))
 
       const selectedModules: SlotSelection = {}
@@ -109,9 +111,9 @@ export function CraftingTablesPanel({ buildId, datasetId }: Props) {
         costPerMinute: row.costPerMinute as number,
       })
     }
-    rows.sort((a, b) => a.name.localeCompare(b.name))
+    rows.sort((a, b) => compare(a.name, b.name))
     return rows
-  }, [buildId, buildStore, datasetId, gameDataStore, getName])
+  }, [buildId, buildStore, datasetId, gameDataStore, getName, compare])
 
   const tables = getUserTables()
 
@@ -186,11 +188,11 @@ export function CraftingTablesPanel({ buildId, datasetId }: Props) {
     }
 
     const groups: TableGroup[] = [...grouped.values()]
-      .sort((a, b) => a.label.localeCompare(b.label))
+      .sort((a, b) => compare(a.label, b.label))
       .map(({ label, rawName, items }) => ({
         profession: label,
         professionRawName: rawName,
-        items: items.sort((a, b) => a.name.localeCompare(b.name)),
+        items: items.sort((a, b) => compare(a.name, b.name)),
       }))
 
     setSuggestions(groups)
