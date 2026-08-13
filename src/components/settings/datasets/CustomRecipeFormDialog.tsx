@@ -22,6 +22,8 @@ import {
 import { generateId } from '@/lib/ids'
 import { useStores } from '@/stores/providers'
 
+import { validationErrorMessage } from './validation-error-message'
+
 interface PickerOption {
   id: string
   name: string
@@ -403,7 +405,7 @@ export function CustomRecipeFormDialog({ visible, onHide, datasetId, recipeId }:
       }
       onHide()
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(validationErrorMessage(e, t))
     } finally {
       setSubmitting(false)
     }

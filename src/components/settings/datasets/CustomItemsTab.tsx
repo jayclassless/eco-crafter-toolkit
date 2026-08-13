@@ -18,6 +18,8 @@ import {
 } from '@/lib/custom-entities'
 import { useStores } from '@/stores/providers'
 
+import { validationErrorMessage } from './validation-error-message'
+
 interface ItemRow {
   id: string
   name: string
@@ -77,7 +79,7 @@ export function CustomItemsTab({ datasetId }: Props) {
       await createCustomItem(gameDataStore, datasetId, trimmed, defaultLocale)
       setNewName('')
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(validationErrorMessage(e, t))
     }
   }
 
@@ -94,7 +96,7 @@ export function CustomItemsTab({ datasetId }: Props) {
       await renameCustomItem(gameDataStore, renameTarget.id, renameValue, defaultLocale)
       setRenameTarget(null)
     } catch (e) {
-      setRenameError(e instanceof Error ? e.message : String(e))
+      setRenameError(validationErrorMessage(e, t))
     }
   }
 
@@ -105,7 +107,7 @@ export function CustomItemsTab({ datasetId }: Props) {
       await deleteCustomItem(gameDataStore, deleteTarget.id)
       setDeleteTarget(null)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(validationErrorMessage(e, t))
     }
   }
 

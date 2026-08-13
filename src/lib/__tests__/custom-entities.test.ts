@@ -15,6 +15,7 @@ import {
   ItemInUseError,
   renameCustomItem,
   updateCustomRecipe,
+  ValidationError,
 } from '../custom-entities'
 
 const DS_ID = 'ds-test'
@@ -317,6 +318,127 @@ describe('deleteCustomRecipe', () => {
       .map((id) => store.getRow('modifiers', id))
       .filter((m) => m.targetId === recipeId)
     expect(orphanModifiers.length).toBe(0)
+  })
+})
+
+describe('validation error codes', () => {
+  // The UI renders these by mapping `code` onto a catalog key, so the codes are
+  // part of the contract — a renamed code silently breaks the message.
+  async function codeOf(op: () => Promise<unknown>): Promise<string> {
+    try {
+      await op()
+    } catch (e) {
+      if (e instanceof ValidationError) return e.code
+      throw e
+    }
+    throw new Error('expected the operation to reject')
+  }
+
+  it('tags item validation failures', async () => {
+    const store = setupBaseDataset()
+    const itemId = await createCustomItem(store, DS_ID, 'Ore', LOCALE)
+
+    expect(await codeOf(() => createCustomItem(store, DS_ID, '  ', LOCALE))).toBe(
+      'itemNameRequired'
+    )
+    expect(await codeOf(() => renameCustomItem(store, itemId, '  ', LOCALE))).toBe(
+      'itemNameRequired'
+    )
+    expect(await codeOf(() => renameCustomItem(store, 'no-such-item', 'X', LOCALE))).toBe(
+      'itemNotFound'
+    )
+    expect(await codeOf(() => createCustomItem(store, DS_ID, 'Wood', LOCALE))).toBe(
+      'duplicateItemName'
+    )
+
+    store.setRow('recipeElements', 're-1', {
+      datasetId: DS_ID,
+      recipeId: 'fake-recipe',
+      itemOrTagId: itemId,
+      baseQuantity: -1,
+      isProduct: false,
+      index: 0,
+    })
+    expect(await codeOf(() => deleteCustomItem(store, itemId))).toBe('itemInUse')
+  })
+
+  it('carries the colliding name as an interpolation param', async () => {
+    const store = setupBaseDataset()
+    await expect(createCustomItem(store, DS_ID, 'Wood', LOCALE)).rejects.toMatchObject({
+      code: 'duplicateItemName',
+      params: { name: 'Wood' },
+      itemName: 'Wood',
+    })
+  })
+
+  it('tags every recipe validation failure', async () => {
+    const store = setupBaseDataset()
+    const productItemId = await createCustomItem(store, DS_ID, 'Refined Ore', LOCALE)
+    const base = () => buildBaseRecipeInput(productItemId)
+
+    const cases: [string, CustomRecipeInput][] = [
+      ['nameRequired', { ...base(), name: '  ' }],
+      ['craftingTableRequired', { ...base(), craftingTableId: '' }],
+      ['skillRequired', { ...base(), skillId: '' }],
+      ['laborNonNegative', { ...base(), baseLaborCost: -1 }],
+      ['craftTimeNonNegative', { ...base(), baseCraftTime: -1 }],
+      ['skillLevelNonNegative', { ...base(), requiredSkillLevel: -1 }],
+      ['ingredientRequired', { ...base(), ingredients: [] }],
+      ['productRequired', { ...base(), products: [] }],
+      [
+        'ingredientItemRequired',
+        { ...base(), ingredients: [{ itemId: '', baseQuantity: 1, isReducedByModule: false }] },
+      ],
+      [
+        'ingredientQty',
+        {
+          ...base(),
+          ingredients: [{ itemId: 'item-wood', baseQuantity: 0, isReducedByModule: false }],
+        },
+      ],
+      [
+        'duplicateIngredient',
+        {
+          ...base(),
+          ingredients: [
+            { itemId: 'item-wood', baseQuantity: 1, isReducedByModule: false },
+            { itemId: 'item-wood', baseQuantity: 2, isReducedByModule: false },
+          ],
+        },
+      ],
+      ['productItemRequired', { ...base(), products: [{ itemId: '', quantity: 1 }] }],
+      ['productQty', { ...base(), products: [{ itemId: productItemId, quantity: 0 }] }],
+      [
+        'duplicateProduct',
+        {
+          ...base(),
+          products: [
+            { itemId: productItemId, quantity: 1 },
+            { itemId: productItemId, quantity: 2 },
+          ],
+        },
+      ],
+    ]
+
+    for (const [expected, input] of cases) {
+      expect(await codeOf(() => createCustomRecipe(store, DS_ID, input, LOCALE))).toBe(expected)
+    }
+  })
+
+  it('tags an update against a missing recipe', async () => {
+    const store = setupBaseDataset()
+    const productItemId = await createCustomItem(store, DS_ID, 'Refined Ore', LOCALE)
+    expect(
+      await codeOf(() =>
+        updateCustomRecipe(store, 'no-such-recipe', buildBaseRecipeInput(productItemId), LOCALE)
+      )
+    ).toBe('recipeNotFound')
+  })
+
+  it('keeps a developer-readable message for stack traces', () => {
+    expect(new ValidationError('productQty').message).toBe(
+      'Custom entity validation failed: productQty'
+    )
   })
 })
 

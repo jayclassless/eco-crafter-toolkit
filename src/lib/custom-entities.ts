@@ -6,16 +6,63 @@ import {
   upsertLocalizedNames,
 } from '@/stores/localized-name-store'
 
-export class ItemInUseError extends Error {
+/**
+ * Every validation failure this module can raise. Each code is also the leaf
+ * key under `settings.customEntities.errors` in the message catalog, so the UI
+ * maps one to the other without a lookup table
+ * (`validationErrorMessage` in `components/settings/datasets`).
+ *
+ * Adding a code here without adding the matching catalog key will surface the
+ * raw code to the user, so do both.
+ */
+export type ValidationCode =
+  | 'itemNameRequired'
+  | 'itemNotFound'
+  | 'duplicateItemName'
+  | 'itemInUse'
+  | 'recipeNotFound'
+  | 'nameRequired'
+  | 'craftingTableRequired'
+  | 'skillRequired'
+  | 'laborNonNegative'
+  | 'craftTimeNonNegative'
+  | 'skillLevelNonNegative'
+  | 'ingredientRequired'
+  | 'productRequired'
+  | 'ingredientItemRequired'
+  | 'ingredientQty'
+  | 'duplicateIngredient'
+  | 'productItemRequired'
+  | 'productQty'
+  | 'duplicateProduct'
+
+/**
+ * A user-facing validation failure. The `message` is a developer-facing
+ * fallback (it shows up in stack traces and test output); anything rendered to
+ * the user must go through `code` + `params` so the copy stays translatable.
+ */
+export class ValidationError extends Error {
+  constructor(
+    public readonly code: ValidationCode,
+    public readonly params?: Record<string, string | number>
+  ) {
+    super(`Custom entity validation failed: ${code}`)
+    this.name = 'ValidationError'
+  }
+}
+
+export class ItemInUseError extends ValidationError {
   constructor(public readonly itemId: string) {
-    super(`Item ${itemId} is referenced by one or more recipes`)
+    super('itemInUse')
     this.name = 'ItemInUseError'
   }
 }
 
-export class DuplicateItemNameError extends Error {
-  constructor(public readonly name: string) {
-    super(`An item named "${name}" already exists in this dataset`)
+export class DuplicateItemNameError extends ValidationError {
+  // Deliberately NOT `name` — that is `Error.name`, and a parameter property
+  // by that name would be clobbered by the `this.name = ...` below.
+  constructor(public readonly itemName: string) {
+    super('duplicateItemName', { name: itemName })
     this.name = 'DuplicateItemNameError'
   }
 }
@@ -69,7 +116,7 @@ export async function createCustomItem(
   locale: string
 ): Promise<string> {
   const trimmed = name.trim()
-  if (!trimmed) throw new Error('Custom item name is required')
+  if (!trimmed) throw new ValidationError('itemNameRequired')
   if (findItemNameCollision(store, datasetId, trimmed)) {
     throw new DuplicateItemNameError(trimmed)
   }
@@ -94,9 +141,9 @@ export async function renameCustomItem(
   locale: string
 ): Promise<void> {
   const trimmed = name.trim()
-  if (!trimmed) throw new Error('Custom item name is required')
+  if (!trimmed) throw new ValidationError('itemNameRequired')
   const datasetId = store.getCell('items', itemId, 'datasetId') as string
-  if (!datasetId) throw new Error('Item not found')
+  if (!datasetId) throw new ValidationError('itemNotFound')
   if (findItemNameCollision(store, datasetId, trimmed, itemId)) {
     throw new DuplicateItemNameError(trimmed)
   }
@@ -121,26 +168,26 @@ export async function deleteCustomItem(store: Store, itemId: string): Promise<vo
 }
 
 function validateRecipeInput(input: CustomRecipeInput): void {
-  if (!input.name.trim()) throw new Error('Recipe name is required')
-  if (!input.craftingTableId) throw new Error('Crafting table is required')
-  if (!input.skillId) throw new Error('Skill is required')
-  if (input.baseLaborCost < 0) throw new Error('Labor cost must be non-negative')
-  if (input.baseCraftTime < 0) throw new Error('Craft time must be non-negative')
-  if (input.requiredSkillLevel < 0) throw new Error('Required skill level must be non-negative')
-  if (input.ingredients.length === 0) throw new Error('At least one ingredient is required')
-  if (input.products.length === 0) throw new Error('At least one product is required')
+  if (!input.name.trim()) throw new ValidationError('nameRequired')
+  if (!input.craftingTableId) throw new ValidationError('craftingTableRequired')
+  if (!input.skillId) throw new ValidationError('skillRequired')
+  if (input.baseLaborCost < 0) throw new ValidationError('laborNonNegative')
+  if (input.baseCraftTime < 0) throw new ValidationError('craftTimeNonNegative')
+  if (input.requiredSkillLevel < 0) throw new ValidationError('skillLevelNonNegative')
+  if (input.ingredients.length === 0) throw new ValidationError('ingredientRequired')
+  if (input.products.length === 0) throw new ValidationError('productRequired')
   const ingItems = new Set<string>()
   for (const ing of input.ingredients) {
-    if (!ing.itemId) throw new Error('Each ingredient must select an item')
-    if (ing.baseQuantity <= 0) throw new Error('Ingredient quantity must be positive')
-    if (ingItems.has(ing.itemId)) throw new Error('Duplicate ingredient item')
+    if (!ing.itemId) throw new ValidationError('ingredientItemRequired')
+    if (ing.baseQuantity <= 0) throw new ValidationError('ingredientQty')
+    if (ingItems.has(ing.itemId)) throw new ValidationError('duplicateIngredient')
     ingItems.add(ing.itemId)
   }
   const prodItems = new Set<string>()
   for (const prod of input.products) {
-    if (!prod.itemId) throw new Error('Each product must select an item')
-    if (prod.quantity <= 0) throw new Error('Product quantity must be positive')
-    if (prodItems.has(prod.itemId)) throw new Error('Duplicate product item')
+    if (!prod.itemId) throw new ValidationError('productItemRequired')
+    if (prod.quantity <= 0) throw new ValidationError('productQty')
+    if (prodItems.has(prod.itemId)) throw new ValidationError('duplicateProduct')
     prodItems.add(prod.itemId)
   }
 }
@@ -286,7 +333,7 @@ export async function updateCustomRecipe(
 ): Promise<void> {
   validateRecipeInput(input)
   const datasetId = store.getCell('recipes', recipeId, 'datasetId') as string
-  if (!datasetId) throw new Error('Recipe not found')
+  if (!datasetId) throw new ValidationError('recipeNotFound')
   const skillName = getSkillName(store, input.skillId)
   const trimmedName = input.name.trim()
 
