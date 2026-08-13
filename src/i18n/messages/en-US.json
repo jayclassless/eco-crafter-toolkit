@@ -221,6 +221,7 @@
       "usedInEmptyOther": "No recipes outside this build use this recipe's primary product.",
       "usedInEmptyAll": "No recipes use this recipe's primary product.",
       "bonusesApplied": "Bonuses Applied",
+      "bonusEffect": "{percent} {metric}",
       "metric": {
         "labor": "labor",
         "craftTime": "craft time",
@@ -443,7 +444,7 @@
       "storageFullSummary": "Browser storage full",
       "storageFullDetail": "There isn't enough room in this browser's storage to finish. Delete a dataset you don't need and try again.",
       "storageLabel": "Browser storage",
-      "storageUsageDetail": "{used} MB of ~{total} MB used ({percent, number}%)",
+      "storageUsageDetail": "{used} MB of ~{total} MB used ({percent})",
       "storageAdvisory": "Estimated by the browser. Delete unused datasets to free space."
     },
     "deleteDataset": {
@@ -548,7 +549,7 @@
       "noTool": "No tool available",
       "clothing": "Clothing",
       "noClothing": "None equipped",
-      "clothingMultiplier": "{percent, number}% calorie cost",
+      "clothingMultiplier": "{percent} calorie cost",
       "talents": {
         "efficiency": "Tool Efficiency",
         "strength": "Tool Strength",

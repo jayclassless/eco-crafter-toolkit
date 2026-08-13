@@ -29,7 +29,7 @@ function formatMB(
  */
 export function StorageUsageRow({ refreshKey }: Props) {
   const { t } = useTranslation()
-  const { formatNumber } = useLocalization()
+  const { formatNumber, formatPercent } = useLocalization()
   const [estimate, setEstimate] = useState<StorageEstimate | null | 'pending'>('pending')
 
   useEffect(() => {
@@ -55,7 +55,11 @@ export function StorageUsageRow({ refreshKey }: Props) {
       <div className="flex justify-content-between align-items-center">
         <small className="text-color-secondary">{t('settings.datasets.storageLabel')}</small>
         <small className="text-color-secondary">
-          {t('settings.datasets.storageUsageDetail', { used: usageMB, total: quotaMB, percent })}
+          {t('settings.datasets.storageUsageDetail', {
+            used: usageMB,
+            total: quotaMB,
+            percent: formatPercent(percent / 100),
+          })}
         </small>
       </div>
       <ProgressBar value={percent} showValue={false} style={{ height: '0.5rem' }} />

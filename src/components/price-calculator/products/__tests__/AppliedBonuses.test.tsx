@@ -1,6 +1,7 @@
 import { render } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { localeProvider } from '@/i18n/__tests__/locale-provider'
 import type { AppliedBonus } from '@/lib/recipe-modifiers'
 
 import { AppliedBonuses } from '../AppliedBonuses'
@@ -58,6 +59,22 @@ describe('AppliedBonuses', () => {
     const { container } = render(<AppliedBonuses bonuses={[skillBonus]} />)
     expect(container.textContent).toContain('-10%')
     expect(container.textContent).toContain('-5%')
+  })
+
+  it('renders the percent and the metric as one catalog phrase', () => {
+    const { container } = render(<AppliedBonuses bonuses={[skillBonus]} />)
+    const effects = [...container.querySelectorAll('li > ul > li')].map((el) => el.textContent)
+    expect(effects).toEqual(['-10% labor', '-5% craft time'])
+  })
+
+  it('places the percent sign per locale rather than in JS', () => {
+    // Turkish prefixes the sign; the old `${percent}% ${metric}` template could
+    // not express that, and neither could a translator.
+    const { container } = render(<AppliedBonuses bonuses={[skillBonus]} />, {
+      wrapper: localeProvider('tr'),
+    })
+    const effects = [...container.querySelectorAll('li > ul > li')].map((el) => el.textContent)
+    expect(effects).toEqual(['-%10 labor', '-%5 craft time'])
   })
 
   it('renders the appropriate icon kind for each bonus source', () => {

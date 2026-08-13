@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { localeProvider } from '@/i18n/__tests__/locale-provider'
+
 import type { GatheringClothingOption, GatheringToolOption } from '../gathering-data'
 import { GatheringToolInputs } from '../GatheringToolInputs'
 
@@ -117,5 +119,25 @@ describe('GatheringToolInputs', () => {
     // showing the result is what makes that visible.
     renderInputs({ selectedClothingIds: ['it-boots', 'it-pack'], clothingMultiplier: 0.6 })
     expect(screen.getByText('60% calorie cost')).toBeTruthy()
+  })
+
+  it('formats the multiplier percent for the active locale', () => {
+    // fr-FR separates the number from the sign with a non-breaking space.
+    render(
+      <GatheringToolInputs
+        tools={TOOLS}
+        selectedToolId="it-stone"
+        onSelectTool={vi.fn()}
+        skillName="MiningSkill"
+        skillLevel={0}
+        onSkillLevel={vi.fn()}
+        clothing={CLOTHING}
+        selectedClothingIds={['it-boots', 'it-pack']}
+        onSelectClothing={vi.fn()}
+        clothingMultiplier={0.6}
+      />,
+      { wrapper: localeProvider('fr-FR') }
+    )
+    expect(screen.getByText(/^60\s%\scalorie cost$/u)).toBeTruthy()
   })
 })

@@ -4,6 +4,7 @@ import { MultiSelect, type MultiSelectChangeEvent } from 'primereact/multiselect
 import { useTranslation } from 'react-i18next'
 
 import { ItemIcon } from '@/components/common/ItemIcon'
+import { useLocalization } from '@/hooks/use-localization'
 import { TOOL_CALORIE_STRATEGY } from '@/lib/game-constants'
 
 import type { GatheringClothingOption, GatheringToolOption } from './gathering-data'
@@ -36,6 +37,7 @@ export function GatheringToolInputs({
   clothingMultiplier,
 }: Props) {
   const { t } = useTranslation()
+  const { formatPercent } = useLocalization()
   // The tool curves are 8 entries long and clamp past the end, so this is the
   // highest level that still changes anything.
   const maxSkillLevel = TOOL_CALORIE_STRATEGY.length - 1
@@ -58,7 +60,7 @@ export function GatheringToolInputs({
         <ItemIcon item={{ name: opt.rawName }} />
         <span>{opt.name}</span>
         <span className="text-color-secondary text-sm ml-auto">
-          {Math.round(opt.calorieRate * 100)}%
+          {formatPercent(opt.calorieRate)}
         </span>
       </div>
     ) : null
@@ -113,7 +115,7 @@ export function GatheringToolInputs({
         />
         <span className="text-sm text-color-secondary">
           {t('settings.gatheringCalculator.clothingMultiplier', {
-            percent: Math.round(clothingMultiplier * 100),
+            percent: formatPercent(clothingMultiplier),
           })}
         </span>
       </div>

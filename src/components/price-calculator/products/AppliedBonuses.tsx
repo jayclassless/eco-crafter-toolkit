@@ -23,16 +23,21 @@ function BonusIconFor({ bonus }: { bonus: AppliedBonus }) {
 
 export function AppliedBonuses({ bonuses }: Props) {
   const { t } = useTranslation()
-  const { formatNumber } = useLocalization()
+  const { formatPercent } = useLocalization()
 
   if (bonuses.length === 0) return null
 
   const renderEffect = (e: AppliedEffect): string => {
-    const percent = formatNumber(e.signedPercent, {
+    // `signedPercent` is already a percentage (-10 for a 10% reduction), so it
+    // has to come back to a ratio for Intl's percent style.
+    const percent = formatPercent(e.signedPercent / 100, {
       signDisplay: 'exceptZero',
       maximumFractionDigits: 1,
     })
-    return `${percent}% ${t(`priceCalculator.recipe.metric.${e.metric}`)}`
+    return t('priceCalculator.recipe.bonusEffect', {
+      percent,
+      metric: t(`priceCalculator.recipe.metric.${e.metric}`),
+    })
   }
 
   return (

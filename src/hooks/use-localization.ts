@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 const priceFormatterCache = new Map<string, Intl.NumberFormat>()
 const numberFormatterCache = new Map<string, Intl.NumberFormat>()
+const percentFormatterCache = new Map<string, Intl.NumberFormat>()
 const durationFormatterCache = new Map<string, Intl.DurationFormat>()
 const zeroDurationFormatterCache = new Map<string, Intl.DurationFormat>()
 const dateFormatterCache = new Map<string, Intl.DateTimeFormat>()
@@ -11,6 +12,7 @@ const decimalSeparatorCache = new Map<string, string>()
 
 const DEFAULT_DATE_OPTIONS: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }
 const DEFAULT_NUMBER_OPTIONS: Intl.NumberFormatOptions = { maximumFractionDigits: 0 }
+const DEFAULT_PERCENT_OPTIONS: Intl.NumberFormatOptions = { maximumFractionDigits: 0 }
 
 function getPriceFormatter(locale: string): Intl.NumberFormat {
   let fmt = priceFormatterCache.get(locale)
@@ -52,6 +54,16 @@ function getNumberFormatter(locale: string, options: Intl.NumberFormatOptions): 
   if (!fmt) {
     fmt = new Intl.NumberFormat(locale, options)
     numberFormatterCache.set(key, fmt)
+  }
+  return fmt
+}
+
+function getPercentFormatter(locale: string, options: Intl.NumberFormatOptions): Intl.NumberFormat {
+  const key = `${locale}|${JSON.stringify(options)}`
+  let fmt = percentFormatterCache.get(key)
+  if (!fmt) {
+    fmt = new Intl.NumberFormat(locale, { style: 'percent', ...options })
+    percentFormatterCache.set(key, fmt)
   }
   return fmt
 }
@@ -110,11 +122,23 @@ interface Localization {
    * `{ maximumFractionDigits: 2 }` for quantities, `{ signDisplay: 'exceptZero' }`
    * for signed deltas, etc.
    *
-   * Use this for counts, quantities, and bonus percentages. Prices go through
-   * `formatPrice`; editable inputs go through `NumericField` (which keeps its
-   * own canonical form, see `formatPrice` doc).
+   * Use this for counts and quantities. Prices go through `formatPrice`,
+   * percentages through `formatPercent`, and editable inputs through
+   * `NumericField` (which keeps its own canonical form, see `formatPrice` doc).
    */
   formatNumber: (value: number, options?: Intl.NumberFormatOptions) => string
+  /**
+   * Format a ratio as a localized percentage — **not** a percentage number:
+   * `0.25` renders as `25%`, matching `Intl.NumberFormat`'s `style: 'percent'`.
+   * A caller holding `25` must pass `25 / 100`.
+   *
+   * Never write the `%` in JSX or in a catalog string next to a number: sign
+   * placement and spacing are locale-dependent (Turkish writes `%25`, French
+   * inserts a non-breaking space), and only `Intl` gets that right. Defaults
+   * to whole percentages; pass options for fractions or an explicit sign
+   * (`{ signDisplay: 'exceptZero' }`).
+   */
+  formatPercent: (ratio: number, options?: Intl.NumberFormatOptions) => string
   /**
    * Format a craft time (in minutes) as a localized duration string. The
    * input is rounded to whole seconds, then split into minutes + seconds.
@@ -178,6 +202,10 @@ export function useLocalization(): Localization {
       formatNumber: (value, options) => {
         const fmt = getNumberFormatter(i18n.language, options ?? DEFAULT_NUMBER_OPTIONS)
         return fmt.format(value)
+      },
+      formatPercent: (ratio, options) => {
+        const fmt = getPercentFormatter(i18n.language, options ?? DEFAULT_PERCENT_OPTIONS)
+        return fmt.format(ratio)
       },
       formatList: (values) => listFmt.format(values),
       decimalSeparator: getDecimalSeparator(i18n.language),

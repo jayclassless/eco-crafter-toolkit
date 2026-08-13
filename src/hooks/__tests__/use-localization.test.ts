@@ -113,6 +113,40 @@ describe('useLocalization', () => {
     })
   })
 
+  describe('formatPercent', () => {
+    it('takes a ratio and renders whole percentages by default', () => {
+      const { result } = renderHook(() => useLocalization())
+      expect(result.current.formatPercent(0.25)).toBe('25%')
+      expect(result.current.formatPercent(1)).toBe('100%')
+      expect(result.current.formatPercent(0)).toBe('0%')
+      // The default rounds; fractions need explicit options.
+      expect(result.current.formatPercent(0.075)).toBe('8%')
+    })
+
+    it('honors fraction digits and signDisplay', () => {
+      const { result } = renderHook(() => useLocalization())
+      const f = (ratio: number) =>
+        result.current.formatPercent(ratio, {
+          signDisplay: 'exceptZero',
+          maximumFractionDigits: 1,
+        })
+      expect(f(0.25)).toBe('+25%')
+      expect(f(-0.075)).toBe('-7.5%')
+      expect(f(0)).toBe('0%')
+    })
+
+    it('places the percent sign per locale', () => {
+      // The whole point of routing through Intl: Turkish prefixes the sign and
+      // French separates it from the number with a non-breaking space.
+      const tr = renderHook(() => useLocalization(), { wrapper: localeProvider('tr') })
+      expect(tr.result.current.formatPercent(0.25)).toBe('%25')
+      const fr = renderHook(() => useLocalization(), { wrapper: localeProvider('fr-FR') })
+      // The exact separator codepoint varies by ICU build (U+202F vs U+00A0),
+      // so match on whitespace rather than pinning it.
+      expect(fr.result.current.formatPercent(0.25)).toMatch(/^25\s%$/u)
+    })
+  })
+
   describe('formatList', () => {
     it('joins with the en-US conjunction form', () => {
       const { result } = renderHook(() => useLocalization())

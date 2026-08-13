@@ -53,7 +53,9 @@ describe('number interpolation', () => {
       i18n.t('settings.datasets.storageUsageDetail', {
         used: '1,024',
         total: '4,096',
-        percent: 25,
+        // Percentages arrive pre-formatted too — the `%` is placed by
+        // `Intl.NumberFormat`, not by the catalog.
+        percent: '25%',
       })
     ).toBe('1,024 MB of ~4,096 MB used (25%)')
     expect(
@@ -76,6 +78,14 @@ describe('catalog conventions', () => {
   // a bare `{count}` renders unformatted and silently loses grouping.
   it('never interpolates a bare {count} or {qty}', () => {
     const offenders = ENTRIES.filter(([, text]) => /\{(count|qty)\}/.test(text)).map(([key]) => key)
+    expect(offenders).toEqual([])
+  })
+
+  // Sign placement is locale-dependent (Turkish writes %25, French inserts a
+  // narrow no-break space), so a percentage must arrive already formatted by
+  // `useLocalization().formatPercent` rather than have the catalog append `%`.
+  it('never glues a literal % onto a placeholder', () => {
+    const offenders = ENTRIES.filter(([, text]) => /\{[^{}]+\}\s*%/.test(text)).map(([key]) => key)
     expect(offenders).toEqual([])
   })
 
