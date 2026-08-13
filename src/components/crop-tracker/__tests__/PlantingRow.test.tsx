@@ -129,6 +129,28 @@ describe('PlantingRow', () => {
     expect(screen.getByText(/^Full yield /)).toBeInTheDocument()
   })
 
+  it('renders each milestone and its countdown as one catalog phrase', () => {
+    // The parentheses and word order used to be glued on in JSX, leaving a
+    // translator unable to move either.
+    // 2h in: corn first yields at 13.58h and finishes at 19.2h, so both
+    // milestones still have a countdown.
+    setup('corn', '2026-01-01T00:00:00.000Z', false, new Date('2026-01-01T02:00:00.000Z'))
+    expect(screen.getByText(/^First yield .+ \(in .+\)$/)).toBeInTheDocument()
+    expect(screen.getByText(/^Full yield .+ \(in .+\)$/)).toBeInTheDocument()
+  })
+
+  it('drops the countdown clause once a milestone has passed', () => {
+    // `formatTimeUntil` returns '' for a past target, and the catalog has a
+    // separate no-countdown phrase rather than an empty pair of parens.
+    setup('corn', '2026-01-01T00:00:00.000Z', false, new Date('2026-01-05T00:00:00.000Z'))
+    expect(screen.getByText(/^Full yield /).textContent).not.toContain('(')
+  })
+
+  it('names an unnamed field after its crop through the catalog', () => {
+    setup('corn')
+    expect(screen.getByPlaceholderText('Corn Field')).toBeInTheDocument()
+  })
+
   it('shows a partial-yield badge between the two milestones', () => {
     // Planted 24h ago: tomato first yields at 23.04h, fully grown at 28.8h.
     const plantedAt = new Date('2026-01-01T00:00:00.000Z').toISOString()

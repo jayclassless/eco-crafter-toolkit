@@ -198,6 +198,13 @@ describe('RecipeDialog', () => {
     expect(screen.getByText('Dependency Graph')).toBeTruthy()
   })
 
+  it('builds the header icon tooltip from the shared label catalog key', async () => {
+    // "{label}: {value}" lives in the catalog, so a language that spaces or
+    // punctuates label/value differently can express that.
+    renderDialog(stores)
+    await waitFor(() => expect(screen.getByTitle('Crafting Table: Anvil')).toBeTruthy())
+  })
+
   it('renders the returned-ingredient section and excludes that product from the Products table', async () => {
     renderDialog(stores)
 

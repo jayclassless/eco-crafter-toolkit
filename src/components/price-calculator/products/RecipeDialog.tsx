@@ -1032,7 +1032,10 @@ export function RecipeDialog({
       {skillRawName && (
         <span
           className="flex align-items-center"
-          title={`${t('priceCalculator.recipe.skill')}: ${skillName}`}
+          title={t('common.labeledValue', {
+            label: t('priceCalculator.recipe.skill'),
+            value: skillName,
+          })}
         >
           <SkillIcon skill={{ name: skillRawName }} />
         </span>
@@ -1040,7 +1043,10 @@ export function RecipeDialog({
       {tableRawName && (
         <span
           className="flex align-items-center"
-          title={`${t('priceCalculator.recipe.craftingTable')}: ${tableName}`}
+          title={t('common.labeledValue', {
+            label: t('priceCalculator.recipe.craftingTable'),
+            value: tableName,
+          })}
         >
           <CraftingTableIcon table={{ name: tableRawName }} />
         </span>

@@ -2,6 +2,7 @@
   "common": {
     "title": "Eco Crafter Toolkit",
     "otherProfession": "Other",
+    "labeledValue": "{label}: {value}",
     "none": "None",
     "notApplicable": "N/A",
     "ok": "OK",
@@ -248,7 +249,7 @@
     "removeField": "Remove field",
     "empty": "This dataset has no crop data. Re-import or update the dataset to enable the Crop Tracker.",
     "fieldNamePlaceholder": "Field name (optional)",
-    "fieldLabel": "Field",
+    "fieldNameDefault": "{crop} Field",
     "cropPlaceholder": "Select a crop",
     "cropGroupLabel": "Crops",
     "treeGroupLabel": "Trees",
@@ -270,8 +271,9 @@
     "notPlanted": "Not planted",
     "plantedAt": "Planted {time}",
     "firstYieldAt": "First yield {time}",
+    "firstYieldAtWithUntil": "First yield {time} (in {duration})",
     "fullYieldAt": "Full yield {time}",
-    "timeUntil": "in {duration}",
+    "fullYieldAtWithUntil": "Full yield {time} (in {duration})",
     "statusGrowing": "Growing",
     "statusPartial": "Partial yield",
     "statusReady": "Ready"
@@ -352,7 +354,7 @@
     "loading": "Loading…",
     "errorTitle": "Could not load news",
     "retry": "Retry",
-    "byAuthor": "by {author}"
+    "dateByAuthor": "{date} \u00b7 by {author}"
   },
   "settings": {
     "title": "Eco Crafter Toolkit",

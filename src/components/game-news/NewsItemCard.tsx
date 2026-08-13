@@ -15,6 +15,7 @@ export function NewsItemCard({ item }: Props) {
   const { t } = useTranslation()
   const { formatDate } = useLocalization()
   const html = bbcodeToHtml(item.contents)
+  const publishedAt = formatDate(new Date(item.date * 1000))
 
   // Wrap the custom header content in `options.className` so PrimeReact's
   // default panel-header background and border are preserved.
@@ -30,8 +31,9 @@ export function NewsItemCard({ item }: Props) {
           {item.title}
         </a>
         <div className="text-sm text-color-secondary font-normal">
-          {formatDate(new Date(item.date * 1000))}
-          {item.author ? ` · ${t('gameNews.byAuthor', { author: item.author })}` : ''}
+          {item.author
+            ? t('gameNews.dateByAuthor', { date: publishedAt, author: item.author })
+            : publishedAt}
         </div>
       </div>
     </div>

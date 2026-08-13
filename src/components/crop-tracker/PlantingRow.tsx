@@ -167,7 +167,7 @@ export function PlantingRow({
           onChange={(e) => setCell('name', e.target.value)}
           placeholder={
             crop
-              ? `${crop.name} ${t('cropTracker.fieldLabel')}`
+              ? t('cropTracker.fieldNameDefault', { crop: crop.name })
               : t('cropTracker.fieldNamePlaceholder')
           }
           className="flex-grow-1"
@@ -223,22 +223,24 @@ export function PlantingRow({
               hasSeparateFirstYield &&
               (() => {
                 const until = formatTimeUntil(window.firstYieldAt, now)
+                const time = formatTime(window.firstYieldAt)
                 return (
                   <span>
-                    {t('cropTracker.firstYieldAt', {
-                      time: formatTime(window.firstYieldAt),
-                    })}
-                    {until && ` (${t('cropTracker.timeUntil', { duration: until })})`}
+                    {until
+                      ? t('cropTracker.firstYieldAtWithUntil', { time, duration: until })
+                      : t('cropTracker.firstYieldAt', { time })}
                   </span>
                 )
               })()}
             {window &&
               (() => {
                 const until = formatTimeUntil(window.maxYieldAt, now)
+                const time = formatTime(window.maxYieldAt)
                 return (
                   <span>
-                    {t('cropTracker.fullYieldAt', { time: formatTime(window.maxYieldAt) })}
-                    {until && ` (${t('cropTracker.timeUntil', { duration: until })})`}
+                    {until
+                      ? t('cropTracker.fullYieldAtWithUntil', { time, duration: until })
+                      : t('cropTracker.fullYieldAt', { time })}
                   </span>
                 )
               })()}
