@@ -15,9 +15,9 @@ import { useLocalization } from '@/hooks/use-localization'
 import { useCellValue } from '@/hooks/use-store-revision'
 import {
   computeHarvestWindow,
-  formatTimeUntil,
   harvestProgress,
   isRegrowCrop,
+  timeUntilParts,
 } from '@/lib/crop-growth'
 
 import type { Crop } from './crop-tracker-types'
@@ -59,9 +59,22 @@ export function PlantingRow({
   onRemove,
 }: Props) {
   const { t } = useTranslation()
-  const { formatDate } = useLocalization()
+  const { formatDate, formatDurationParts } = useLocalization()
   const [suggestions, setSuggestions] = useState<GroupedSinglePickerGroup<CropOption>[]>([])
   const formatTime = (value: Date) => formatDate(value, HARVEST_TIME_OPTIONS)
+
+  // '' when the milestone has passed, so callers can fall back to the phrasing
+  // that carries no countdown clause.
+  const formatCountdown = (target: Date): string => {
+    const parts = timeUntilParts(target, now)
+    if (!parts) return ''
+    // All-zero parts mean under a minute is left — still counting down, but no
+    // unit can say so.
+    if (parts.days === 0 && parts.hours === 0 && parts.minutes === 0) {
+      return t('common.lessThan', { duration: formatDurationParts({ minutes: 1 }) })
+    }
+    return formatDurationParts(parts)
+  }
 
   const cropItemId =
     useCellValue<string>(buildStore, 'userPlantings', plantingId, 'cropItemId') ?? ''
@@ -222,7 +235,7 @@ export function PlantingRow({
             {window &&
               hasSeparateFirstYield &&
               (() => {
-                const until = formatTimeUntil(window.firstYieldAt, now)
+                const until = formatCountdown(window.firstYieldAt)
                 const time = formatTime(window.firstYieldAt)
                 return (
                   <span>
@@ -234,7 +247,7 @@ export function PlantingRow({
               })()}
             {window &&
               (() => {
-                const until = formatTimeUntil(window.maxYieldAt, now)
+                const until = formatCountdown(window.maxYieldAt)
                 const time = formatTime(window.maxYieldAt)
                 return (
                   <span>

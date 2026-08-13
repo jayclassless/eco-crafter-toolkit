@@ -194,10 +194,29 @@ export function computeHarvestWindow(
   }
 }
 
-// A compact "time remaining" string from `now` until `target`, showing the two
-// largest non-zero units — e.g. "2d 3h", "5h 12m", "8m", or "<1m". Returns null
-// when `target` is at or before `now` (nothing left to count down to).
-export function formatTimeUntil(target: Date, now: Date): string | null {
+export interface TimeUntilParts {
+  days: number
+  hours: number
+  minutes: number
+}
+
+const UNIT_ORDER = ['days', 'hours', 'minutes'] as const
+
+/**
+ * The time remaining from `now` until `target`, as the two largest non-zero
+ * units — 2d 3h 15m yields `{ days: 2, hours: 3, minutes: 0 }`, and a zero
+ * middle unit is skipped rather than counted (2d 0h 5m keeps both).
+ *
+ * Returns null when `target` is at or before `now` (nothing left to count down
+ * to). A sub-minute remainder returns all-zero parts: time is still left, but
+ * no unit here can express it, so the caller supplies its own "less than a
+ * minute" phrasing.
+ *
+ * Deliberately returns parts rather than text — unit abbreviations, their
+ * order, and the separator are locale-dependent, so rendering belongs to
+ * `useLocalization().formatDurationParts`.
+ */
+export function timeUntilParts(target: Date, now: Date): TimeUntilParts | null {
   let remaining = target.getTime() - now.getTime()
   if (remaining <= 0) return null
   const minuteMs = 60 * 1000
@@ -208,13 +227,15 @@ export function formatTimeUntil(target: Date, now: Date): string | null {
   const hours = Math.floor(remaining / hourMs)
   remaining -= hours * hourMs
   const minutes = Math.floor(remaining / minuteMs)
-  const parts: string[] = []
-  if (days > 0) parts.push(`${days}d`)
-  if (hours > 0) parts.push(`${hours}h`)
-  if (minutes > 0) parts.push(`${minutes}m`)
-  // A sub-minute remainder still counts down — show "<1m" rather than nothing.
-  if (parts.length === 0) return '<1m'
-  return parts.slice(0, 2).join(' ')
+
+  const parts: TimeUntilParts = { days, hours, minutes }
+  let kept = 0
+  for (const unit of UNIT_ORDER) {
+    if (parts[unit] === 0) continue
+    if (kept === 2) parts[unit] = 0
+    else kept++
+  }
+  return parts
 }
 
 // Growth progress in [0, 1] from planting to the given target date.

@@ -5,6 +5,7 @@ const priceFormatterCache = new Map<string, Intl.NumberFormat>()
 const numberFormatterCache = new Map<string, Intl.NumberFormat>()
 const percentFormatterCache = new Map<string, Intl.NumberFormat>()
 const durationFormatterCache = new Map<string, Intl.DurationFormat>()
+const narrowDurationFormatterCache = new Map<string, Intl.DurationFormat>()
 const zeroDurationFormatterCache = new Map<string, Intl.DurationFormat>()
 const dateFormatterCache = new Map<string, Intl.DateTimeFormat>()
 const listFormatterCache = new Map<string, Intl.ListFormat>()
@@ -31,6 +32,15 @@ function getDurationFormatter(locale: string): Intl.DurationFormat {
   if (!fmt) {
     fmt = new Intl.DurationFormat(locale, { style: 'short' })
     durationFormatterCache.set(locale, fmt)
+  }
+  return fmt
+}
+
+function getNarrowDurationFormatter(locale: string): Intl.DurationFormat {
+  let fmt = narrowDurationFormatterCache.get(locale)
+  if (!fmt) {
+    fmt = new Intl.DurationFormat(locale, { style: 'narrow' })
+    narrowDurationFormatterCache.set(locale, fmt)
   }
   return fmt
 }
@@ -148,6 +158,17 @@ interface Localization {
    */
   formatDuration: (minutes: number) => string
   /**
+   * Format an already-decomposed duration compactly — `{ days: 2, hours: 3 }`
+   * renders `2d 3h` in en-US, `2 T, 3h` in de-DE, `2 д. 3 ч` in ru. Zero-valued
+   * units are omitted by `Intl.DurationFormat`, so a caller can pass a fixed
+   * shape and let the unset units drop out.
+   *
+   * This is the narrow-style counterpart to `formatDuration` (short style,
+   * minutes + seconds, for craft times). Use it for compact countdowns where
+   * the units come from arithmetic elsewhere — e.g. `timeUntilParts`.
+   */
+  formatDurationParts: (parts: { days?: number; hours?: number; minutes?: number }) => string
+  /**
    * Format a Date or unix-millisecond timestamp using Intl.DateTimeFormat in
    * the active locale. Defaults to `{ dateStyle: 'medium' }`. Pass options to
    * customize (e.g. include time).
@@ -185,6 +206,7 @@ export function useLocalization(): Localization {
     const priceFmt = getPriceFormatter(i18n.language)
     const durationFmt = getDurationFormatter(i18n.language)
     const zeroDurationFmt = getZeroDurationFormatter(i18n.language)
+    const narrowDurationFmt = getNarrowDurationFormatter(i18n.language)
     const listFmt = getListFormatter(i18n.language)
     return {
       formatPrice: (value) => priceFmt.format(value),
@@ -195,6 +217,7 @@ export function useLocalization(): Localization {
         if (m === 0 && s === 0) return zeroDurationFmt.format({ seconds: 0 })
         return durationFmt.format({ minutes: m, seconds: s })
       },
+      formatDurationParts: (parts) => narrowDurationFmt.format(parts),
       formatDate: (value, options) => {
         const fmt = getDateFormatter(i18n.language, options ?? DEFAULT_DATE_OPTIONS)
         return fmt.format(value)

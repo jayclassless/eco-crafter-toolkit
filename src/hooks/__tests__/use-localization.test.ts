@@ -91,6 +91,30 @@ describe('useLocalization', () => {
     })
   })
 
+  describe('formatDurationParts', () => {
+    it('renders compact d/h/m in en-US', () => {
+      const { result } = renderHook(() => useLocalization())
+      expect(result.current.formatDurationParts({ days: 2, hours: 3 })).toBe('2d 3h')
+      expect(result.current.formatDurationParts({ hours: 5, minutes: 12 })).toBe('5h 12m')
+      expect(result.current.formatDurationParts({ minutes: 8 })).toBe('8m')
+    })
+
+    it('omits zero-valued units, so callers can pass a fixed shape', () => {
+      const { result } = renderHook(() => useLocalization())
+      expect(result.current.formatDurationParts({ days: 2, hours: 0, minutes: 5 })).toBe('2d 5m')
+      expect(result.current.formatDurationParts({ days: 0, hours: 0, minutes: 8 })).toBe('8m')
+    })
+
+    it('translates the unit abbreviations', () => {
+      // The point of the fix: d/h/m are English, and other locales neither
+      // spell nor space them the same way.
+      const de = renderHook(() => useLocalization(), { wrapper: localeProvider('de-DE') })
+      expect(de.result.current.formatDurationParts({ hours: 5, minutes: 12 })).toBe('5h, 12 Min.')
+      const ru = renderHook(() => useLocalization(), { wrapper: localeProvider('ru') })
+      expect(ru.result.current.formatDurationParts({ minutes: 8 })).toBe('8 мин')
+    })
+  })
+
   describe('formatDate', () => {
     it('formats a Date with the default medium style in en-US', () => {
       const { result } = renderHook(() => useLocalization())

@@ -5,10 +5,10 @@ import {
   type CropGrowth,
   cycleStartGrowth,
   firstYieldGrowth,
-  formatTimeUntil,
   harvestProgress,
   hoursBetweenGrowth,
   isRegrowCrop,
+  timeUntilParts,
 } from '../crop-growth'
 
 // Species fixtures transcribed from Eco v13.0.4's AutoGen/Plant/*.cs. The range
@@ -387,7 +387,7 @@ describe('computeHarvestWindow', () => {
   })
 })
 
-describe('formatTimeUntil', () => {
+describe('timeUntilParts', () => {
   const now = new Date('2026-01-01T00:00:00.000Z')
   const after = (ms: number) => new Date(now.getTime() + ms)
   const MIN = 60 * 1000
@@ -395,22 +395,44 @@ describe('formatTimeUntil', () => {
   const DAY = 24 * HOUR
 
   it('returns null when the target is at or before now', () => {
-    expect(formatTimeUntil(now, now)).toBeNull()
-    expect(formatTimeUntil(after(-HOUR), now)).toBeNull()
+    expect(timeUntilParts(now, now)).toBeNull()
+    expect(timeUntilParts(after(-HOUR), now)).toBeNull()
   })
 
-  it('shows the two largest non-zero units', () => {
-    expect(formatTimeUntil(after(2 * DAY + 3 * HOUR + 15 * MIN), now)).toBe('2d 3h')
-    expect(formatTimeUntil(after(5 * HOUR + 12 * MIN), now)).toBe('5h 12m')
-    expect(formatTimeUntil(after(8 * MIN), now)).toBe('8m')
+  it('keeps only the two largest non-zero units', () => {
+    expect(timeUntilParts(after(2 * DAY + 3 * HOUR + 15 * MIN), now)).toEqual({
+      days: 2,
+      hours: 3,
+      minutes: 0,
+    })
+    expect(timeUntilParts(after(5 * HOUR + 12 * MIN), now)).toEqual({
+      days: 0,
+      hours: 5,
+      minutes: 12,
+    })
+    expect(timeUntilParts(after(8 * MIN), now)).toEqual({ days: 0, hours: 0, minutes: 8 })
   })
 
-  it('skips a zero middle unit', () => {
-    expect(formatTimeUntil(after(2 * DAY + 5 * MIN), now)).toBe('2d 5m')
+  it('skips a zero middle unit rather than counting it', () => {
+    expect(timeUntilParts(after(2 * DAY + 5 * MIN), now)).toEqual({
+      days: 2,
+      hours: 0,
+      minutes: 5,
+    })
   })
 
-  it('shows "<1m" for a sub-minute remainder', () => {
-    expect(formatTimeUntil(after(30 * 1000), now)).toBe('<1m')
+  it('returns all-zero parts for a sub-minute remainder', () => {
+    // Distinct from null: time is still left, but no unit can express it, so
+    // the caller renders its own "less than a minute" phrasing.
+    expect(timeUntilParts(after(30 * 1000), now)).toEqual({ days: 0, hours: 0, minutes: 0 })
+  })
+
+  it('truncates rather than rounds', () => {
+    expect(timeUntilParts(after(HOUR + 59 * 1000), now)).toEqual({
+      days: 0,
+      hours: 1,
+      minutes: 0,
+    })
   })
 })
 

@@ -3,6 +3,7 @@
     "title": "Eco Crafter Toolkit",
     "otherProfession": "Other",
     "labeledValue": "{label}: {value}",
+    "lessThan": "<{duration}",
     "none": "None",
     "notApplicable": "N/A",
     "ok": "OK",

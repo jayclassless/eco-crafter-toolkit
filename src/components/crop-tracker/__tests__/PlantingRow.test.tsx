@@ -140,10 +140,22 @@ describe('PlantingRow', () => {
   })
 
   it('drops the countdown clause once a milestone has passed', () => {
-    // `formatTimeUntil` returns '' for a past target, and the catalog has a
+    // `timeUntilParts` returns null for a past target, and the catalog has a
     // separate no-countdown phrase rather than an empty pair of parens.
     setup('corn', '2026-01-01T00:00:00.000Z', false, new Date('2026-01-05T00:00:00.000Z'))
     expect(screen.getByText(/^Full yield /).textContent).not.toContain('(')
+  })
+
+  it('says "less than a minute" instead of an empty countdown', () => {
+    // Corn fully yields 19.2h after planting; 30s short of that, no d/h/m unit
+    // can express what is left.
+    setup(
+      'corn',
+      '2026-01-01T00:00:00.000Z',
+      false,
+      new Date('2026-01-01T19:11:30.000Z') // 19.2h = 19:12:00
+    )
+    expect(screen.getByText(/^Full yield .+ \(in <1m\)$/)).toBeInTheDocument()
   })
 
   it('names an unnamed field after its crop through the catalog', () => {
@@ -224,6 +236,17 @@ describe('PlantingRow', () => {
         { wrapper: localeProvider(locale) }
       )
     }
+
+    it('renders countdown units in the app locale', () => {
+      // The d/h/m abbreviations were hardcoded English; narrow-style German
+      // writes minutes as "Min.".
+      const en = renderAt('en-US')
+      expect(en.container.textContent).toMatch(/\(in \d+h \d+m\)/)
+      en.unmount()
+
+      const de = renderAt('de-DE')
+      expect(de.container.textContent).toContain('Min.')
+    })
 
     it('renders month names in the app locale, not the browser default', () => {
       const en = renderAt('en-US')
