@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { useLocalization } from '@/hooks/use-localization'
+
 import { ORE_COLOR, ROCK_COLOR } from './biome-atlas'
 import type { Biome } from './biome-resources-types'
 import {
@@ -40,7 +42,8 @@ function bandLabel(
 
 function bandTooltip(
   band: PackedBand,
-  t: (key: string, options?: Record<string, unknown>) => string
+  t: (key: string, options?: Record<string, unknown>) => string,
+  formatList: (values: readonly string[]) => string
 ): string {
   if (band.flecks) return t('biomeResources.chart.tooltipFlecks', { name: band.oreName })
   return t('biomeResources.chart.tooltip', {
@@ -48,7 +51,7 @@ function bandTooltip(
     min: band.dmin,
     max: band.dmax,
     kind: t(band.deposit ? 'biomeResources.chart.depositVein' : 'biomeResources.chart.seam'),
-    hosts: band.hosts.join(', '),
+    hosts: formatList(band.hosts),
   })
 }
 
@@ -57,6 +60,7 @@ function bandTooltip(
 // right, against a 0-100 blocks-below-surface ruler.
 export function CrossSectionChart({ biome }: Props) {
   const { t } = useTranslation()
+  const { formatList } = useLocalization()
   const { bands, columnCount } = useMemo(
     () => packOreBands(buildOreBandItems(biome.ores), { minHeight: MIN_BAND_HEIGHT_BLOCKS }),
     [biome]
@@ -108,7 +112,7 @@ export function CrossSectionChart({ biome }: Props) {
                 left: `calc(${LANE_LEFT}rem + ${band.col} * (${columnWidth} + ${COLUMN_GAP}rem))`,
                 backgroundColor: ORE_COLOR[band.oreRaw],
               }}
-              title={bandTooltip(band, t)}
+              title={bandTooltip(band, t, formatList)}
             >
               <span>{bandLabel(band, columnCount, t)}</span>
             </div>

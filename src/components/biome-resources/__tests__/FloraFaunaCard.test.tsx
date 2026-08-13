@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { localeProvider } from '@/i18n/__tests__/locale-provider'
+
 import { BIOME_ATLAS } from '../biome-atlas'
 import { FloraFaunaCard } from '../FloraFaunaCard'
 import { faunaIconName } from '../species-icons'
@@ -19,8 +21,15 @@ describe('FloraFaunaCard', () => {
 
   it('renders yields right-aligned in each species row', () => {
     render(<FloraFaunaCard biome={BIOME_ATLAS.biomes.Grassland} />)
-    const yields = screen.getByText('Beet, Beet Greens')
+    const yields = screen.getByText('Beet and Beet Greens')
     expect(yields).toHaveClass('ml-auto')
+  })
+
+  it('joins yields using the active locale list form', () => {
+    render(<FloraFaunaCard biome={BIOME_ATLAS.biomes.Grassland} />, {
+      wrapper: localeProvider('de-DE'),
+    })
+    expect(screen.getByText('Beet und Beet Greens')).toBeInTheDocument()
   })
 
   it('sorts wildlife by name', () => {

@@ -113,6 +113,35 @@ describe('useLocalization', () => {
     })
   })
 
+  describe('formatList', () => {
+    it('joins with the en-US conjunction form', () => {
+      const { result } = renderHook(() => useLocalization())
+      expect(result.current.formatList(['Iron Ore', 'Copper Ore', 'Gold Ore'])).toBe(
+        'Iron Ore, Copper Ore, and Gold Ore'
+      )
+      expect(result.current.formatList(['Iron Ore', 'Copper Ore'])).toBe('Iron Ore and Copper Ore')
+    })
+
+    it('handles empty and single-item lists without special-casing', () => {
+      const { result } = renderHook(() => useLocalization())
+      expect(result.current.formatList([])).toBe('')
+      expect(result.current.formatList(['Iron Ore'])).toBe('Iron Ore')
+    })
+
+    it('uses locale-specific separators and conjunctions', () => {
+      const cases: Array<[string, string]> = [
+        ['de-DE', 'A, B und C'],
+        ['fr-FR', 'A, B et C'],
+        ['ja', 'A、B、C'],
+        ['zh-Hans', 'A、B和C'],
+      ]
+      for (const [locale, expected] of cases) {
+        const { result } = renderHook(() => useLocalization(), { wrapper: localeProvider(locale) })
+        expect(result.current.formatList(['A', 'B', 'C'])).toBe(expected)
+      }
+    })
+  })
+
   describe('decimalSeparator', () => {
     it('is "." under the default en-US locale', () => {
       const { result } = renderHook(() => useLocalization())

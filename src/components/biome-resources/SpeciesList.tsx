@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
 import { EcoIcon } from '@/components/common/EcoIcon'
+import { useLocalization } from '@/hooks/use-localization'
 
 import type { BiomeSpecies } from './biome-resources-types'
 import { speciesIconName } from './species-icons'
@@ -14,6 +15,7 @@ interface Props {
 // neighbouring biomes.
 export function SpeciesList({ species }: Props) {
   const { t } = useTranslation()
+  const { formatList } = useLocalization()
 
   if (species.length === 0) {
     return (
@@ -51,7 +53,7 @@ export function SpeciesList({ species }: Props) {
             <span className="font-medium text-sm white-space-nowrap">{s.name}</span>
             {s.yields.length > 0 && (
               <span className="ml-auto text-xs text-color-secondary text-right">
-                {s.yields.join(', ')}
+                {formatList(s.yields)}
               </span>
             )}
           </div>

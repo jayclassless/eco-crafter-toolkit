@@ -6,6 +6,7 @@ const numberFormatterCache = new Map<string, Intl.NumberFormat>()
 const durationFormatterCache = new Map<string, Intl.DurationFormat>()
 const zeroDurationFormatterCache = new Map<string, Intl.DurationFormat>()
 const dateFormatterCache = new Map<string, Intl.DateTimeFormat>()
+const listFormatterCache = new Map<string, Intl.ListFormat>()
 const decimalSeparatorCache = new Map<string, string>()
 
 const DEFAULT_DATE_OPTIONS: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }
@@ -51,6 +52,18 @@ function getNumberFormatter(locale: string, options: Intl.NumberFormatOptions): 
   if (!fmt) {
     fmt = new Intl.NumberFormat(locale, options)
     numberFormatterCache.set(key, fmt)
+  }
+  return fmt
+}
+
+function getListFormatter(locale: string): Intl.ListFormat {
+  let fmt = listFormatterCache.get(locale)
+  if (!fmt) {
+    // 'long'/'conjunction' is the only form that stays correct across every
+    // locale the datasets ship: the compact 'narrow'/'unit' variants drop the
+    // separator entirely in ja, zh-Hans and ru ("A B C" or even "ABC").
+    fmt = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' })
+    listFormatterCache.set(locale, fmt)
   }
   return fmt
 }
@@ -117,6 +130,16 @@ interface Localization {
    */
   formatDate: (value: Date | number, options?: Intl.DateTimeFormatOptions) => string
   /**
+   * Join already-localized strings into a list phrase for the active locale —
+   * `'A, B, and C'` in en-US, `'A、B和C'` in zh-Hans, `'A وB وC'` in ar. Both
+   * the separator and the final conjunction are locale-dependent, so never
+   * `join(', ')` a user-visible list.
+   *
+   * An empty array formats as `''` and a single item as itself, so callers do
+   * not need to special-case either.
+   */
+  formatList: (values: readonly string[]) => string
+  /**
    * The active locale's decimal separator — `.` in en-US, `,` in de-DE/pt-BR.
    *
    * Editable numeric inputs need this to accept back what they display:
@@ -138,6 +161,7 @@ export function useLocalization(): Localization {
     const priceFmt = getPriceFormatter(i18n.language)
     const durationFmt = getDurationFormatter(i18n.language)
     const zeroDurationFmt = getZeroDurationFormatter(i18n.language)
+    const listFmt = getListFormatter(i18n.language)
     return {
       formatPrice: (value) => priceFmt.format(value),
       formatDuration: (minutes) => {
@@ -155,6 +179,7 @@ export function useLocalization(): Localization {
         const fmt = getNumberFormatter(i18n.language, options ?? DEFAULT_NUMBER_OPTIONS)
         return fmt.format(value)
       },
+      formatList: (values) => listFmt.format(values),
       decimalSeparator: getDecimalSeparator(i18n.language),
     }
   }, [i18n.language])
