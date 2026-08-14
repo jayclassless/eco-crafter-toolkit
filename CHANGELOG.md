@@ -1,6 +1,6 @@
 # Eco Crafter Toolkit Change Log
 
-## 0.8.0 (TBD)
+## 0.8.0 (2026-08-14)
 
 - The "Used in Recipes" tabs of item dialogs can now show recipes that aren't
   part of the active build.
