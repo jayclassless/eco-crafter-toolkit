@@ -1,5 +1,5 @@
 import { Button } from 'primereact/button'
-import { memo, type MouseEvent as ReactMouseEvent, useEffect, useState } from 'react'
+import { memo, useMemo, type MouseEvent as ReactMouseEvent, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Store } from 'tinybase'
 
@@ -31,25 +31,24 @@ export const ParentFavoriteStar = memo(function ParentFavoriteStar({
   onToggleAll,
 }: Props) {
   const { t } = useTranslation()
-  const [aggregate, setAggregate] = useState<AggregateState>(() =>
-    computeAggregate(buildStore, childUserRecipeIds)
-  )
 
-  useEffect(() => {
-    setAggregate(computeAggregate(buildStore, childUserRecipeIds))
-    const recompute = () => {
-      setAggregate((prev) => {
-        const next = computeAggregate(buildStore, childUserRecipeIds)
-        return prev === next ? prev : next
-      })
-    }
-    const listenerIds = childUserRecipeIds.map((id) =>
-      buildStore.addCellListener('userRecipes', id, 'favorite', recompute)
-    )
-    return () => {
-      for (const lid of listenerIds) buildStore.delListener(lid)
-    }
-  }, [buildStore, childUserRecipeIds])
+  // The aggregate is a scalar, so `useSyncExternalStore` bails out of the
+  // re-render whenever a per-child toggle leaves the tri-state unchanged.
+  const { subscribe, getSnapshot } = useMemo(
+    () => ({
+      subscribe: (onChange: () => void) => {
+        const listenerIds = childUserRecipeIds.map((id) =>
+          buildStore.addCellListener('userRecipes', id, 'favorite', onChange)
+        )
+        return () => {
+          for (const lid of listenerIds) buildStore.delListener(lid)
+        }
+      },
+      getSnapshot: () => computeAggregate(buildStore, childUserRecipeIds),
+    }),
+    [buildStore, childUserRecipeIds]
+  )
+  const aggregate = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   const handleClick = (e: ReactMouseEvent) => {
     e.stopPropagation()

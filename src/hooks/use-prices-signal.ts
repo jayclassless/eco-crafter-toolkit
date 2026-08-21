@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 
 import type { RecipeCostBreakdown } from '@/types/solver'
 
@@ -228,9 +228,10 @@ function createPriceSignal(): PriceSignal {
  * Callers push new prices via `signal.set(...)` from an effect.
  */
 export function usePriceSignal(): PriceSignal {
-  const ref = useRef<PriceSignal | null>(null)
-  if (!ref.current) ref.current = createPriceSignal()
-  return ref.current
+  // Lazy initializer runs exactly once; the setter is never called, so the
+  // returned signal is stable for the component's lifetime.
+  const [signal] = useState(createPriceSignal)
+  return signal
 }
 
 /**

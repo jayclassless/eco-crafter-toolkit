@@ -1,8 +1,8 @@
 import { Button } from 'primereact/button'
 import { SelectButton, type SelectButtonChangeEvent } from 'primereact/selectbutton'
-import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { useCellValue } from '@/hooks/use-store-revision'
 import { useStores } from '@/stores/providers'
 
 const THEME_COLORS = [
@@ -23,25 +23,12 @@ export function UiSettingsView() {
   const { t } = useTranslation()
   const { uiStore } = useStores()
 
-  const [themeMode, setThemeMode] = useState('auto')
-  const [themeColor, setThemeColor] = useState('blue')
-  const [uiScale, setUiScale] = useState(14)
-
-  const syncFromStore = useCallback(() => {
-    setThemeMode(uiStore.getCell('uiState', 'main', 'themeMode') as string)
-    setThemeColor(uiStore.getCell('uiState', 'main', 'themeColor') as string)
-    setUiScale(uiStore.getCell('uiState', 'main', 'uiScale') as number)
-  }, [uiStore])
-
-  useEffect(() => {
-    syncFromStore()
-    const listenerId = uiStore.addRowListener('uiState', 'main', () => {
-      syncFromStore()
-    })
-    return () => {
-      uiStore.delListener(listenerId)
-    }
-  }, [uiStore, syncFromStore])
+  // This view is a pure mirror of the store: every control writes straight to
+  // uiStore and reads back through these per-cell subscriptions, so there is no
+  // local copy that can drift out of sync.
+  const themeMode = useCellValue<string>(uiStore, 'uiState', 'main', 'themeMode') ?? 'auto'
+  const themeColor = useCellValue<string>(uiStore, 'uiState', 'main', 'themeColor') ?? 'blue'
+  const uiScale = useCellValue<number>(uiStore, 'uiState', 'main', 'uiScale') ?? 14
 
   const modeOptions = [
     { icon: 'pi pi-sun', value: 'light', title: t('settings.light') },

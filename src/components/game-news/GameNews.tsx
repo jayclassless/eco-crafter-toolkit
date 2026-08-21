@@ -20,10 +20,10 @@ export function GameNews() {
   const [loading, setLoading] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
 
+  // `loading` / `error` start in their pending state and are reset by the
+  // retry click that bumps `reloadKey`, so this effect only has to fetch.
   useEffect(() => {
     const controller = new AbortController()
-    setLoading(true)
-    setError(null)
     fetchSteamNews(5)
       .then((fetched) => {
         if (controller.signal.aborted) return
@@ -50,6 +50,8 @@ export function GameNews() {
   }, [navigate])
 
   const handleRetry = useCallback(() => {
+    setLoading(true)
+    setError(null)
     setReloadKey((k) => k + 1)
   }, [])
 

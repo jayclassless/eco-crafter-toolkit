@@ -17,8 +17,6 @@ interface Props {
   options: PlannerItemOption[]
   /** Called with the aggregated itemId -> quantity map whenever rows change. */
   onInventoryChange: (inventory: Record<string, number>) => void
-  /** Bump to reset the editor to a single empty row (e.g. on dialog open). */
-  resetSignal: number
 }
 
 function toInventory(rows: Row[]): Record<string, number> {
@@ -30,17 +28,15 @@ function toInventory(rows: Row[]): Record<string, number> {
   return inventory
 }
 
-export function PlannerInventoryEditor({ options, onInventoryChange, resetSignal }: Props) {
+/**
+ * Resetting the editor is done by the parent remounting it (`key`), so this
+ * component only ever grows/shrinks its own row list.
+ */
+export function PlannerInventoryEditor({ options, onInventoryChange }: Props) {
   const { t } = useTranslation()
-  const idRef = useRef(0)
+  const idRef = useRef(1)
   const newRow = (): Row => ({ key: `row-${idRef.current++}`, option: null, qty: null })
-  const [rows, setRows] = useState<Row[]>(() => [newRow()])
-
-  useEffect(() => {
-    idRef.current = 0
-    setRows([{ key: 'row-0', option: null, qty: null }])
-    idRef.current = 1
-  }, [resetSignal])
+  const [rows, setRows] = useState<Row[]>(() => [{ key: 'row-0', option: null, qty: null }])
 
   useEffect(() => {
     onInventoryChange(toInventory(rows))

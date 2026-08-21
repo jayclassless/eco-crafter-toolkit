@@ -1,7 +1,9 @@
 import { Button } from 'primereact/button'
 import { Sidebar } from 'primereact/sidebar'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { useResetOnChange } from '@/hooks/use-reset-on-change'
 
 import { SidebarMenuView } from './SidebarMenuView'
 import { UiSettingsView } from './UiSettingsView'
@@ -39,9 +41,9 @@ export function SettingsSidebar({
   const { t } = useTranslation()
   const [view, setView] = useState<View>('menu')
 
-  useEffect(() => {
+  useResetOnChange(visible, () => {
     if (visible) setView('menu')
-  }, [visible])
+  })
 
   const header =
     view === 'menu' ? (

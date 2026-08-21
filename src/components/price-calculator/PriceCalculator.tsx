@@ -60,12 +60,10 @@ export function PriceCalculator() {
     setGatheringVisible(true)
   }, [])
 
-  // Auto-close the drawer when crossing back to the desktop breakpoint
-  // (e.g. iPad rotation, window resize) so it doesn't reopen unexpectedly
-  // the next time the viewport shrinks.
-  useEffect(() => {
-    if (!isTablet) setConfigDrawerVisible(false)
-  }, [isTablet])
+  // Crossing back to the desktop breakpoint (e.g. iPad rotation, window
+  // resize) hides the drawer. Deriving it rather than clearing the state in an
+  // effect also means it stays closed if the viewport shrinks again.
+  const configDrawerOpen = isTablet && configDrawerVisible
 
   // URL is the source of truth. Stale or hand-edited segments are caught
   // here and redirected; the BuildRedirect / RootRedirect routes pick
@@ -84,11 +82,13 @@ export function PriceCalculator() {
   // build. The flag is persisted in uiStore so subsequent visits stay quiet.
   useEffect(() => {
     if (!buildValid) return
-    const seen = uiStore.getCell('uiState', 'main', 'hasSeenAboutDialog') as boolean
-    if (!seen) {
-      setAboutVisible(true)
-      uiStore.setCell('uiState', 'main', 'hasSeenAboutDialog', true)
-    }
+    if (uiStore.getCell('uiState', 'main', 'hasSeenAboutDialog') === true) return
+    uiStore.setCell('uiState', 'main', 'hasSeenAboutDialog', true)
+    // Deliberate: the trigger is a persisted uiStore flag, and reading it has
+    // to be paired with the write that clears it. Doing that pair during
+    // render would be a side effect in render, which is strictly worse.
+    // oxlint-disable-next-line react/set-state-in-effect
+    setAboutVisible(true)
   }, [buildValid, uiStore])
 
   // Trigger solver when build data changes. The snapshot build is expensive
@@ -239,7 +239,7 @@ export function PriceCalculator() {
         </div>
       </div>
       <ConfigPanelDrawer
-        visible={configDrawerVisible}
+        visible={configDrawerOpen}
         onHide={() => setConfigDrawerVisible(false)}
         buildId={buildId}
         datasetId={datasetId}

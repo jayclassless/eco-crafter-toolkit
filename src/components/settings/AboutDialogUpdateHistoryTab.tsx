@@ -20,10 +20,10 @@ function AboutDialogUpdateHistoryTabImpl() {
   const [loading, setLoading] = useState(true)
   const [reloadKey, setReloadKey] = useState(0)
 
+  // `loading` / `error` start in their pending state and are reset by the
+  // retry click that bumps `reloadKey`, so this effect only has to fetch.
   useEffect(() => {
     const controller = new AbortController()
-    setLoading(true)
-    setError(null)
     fetchGitHubReleases()
       .then((fetched) => {
         if (controller.signal.aborted) return
@@ -50,6 +50,8 @@ function AboutDialogUpdateHistoryTabImpl() {
   }, [uiStore, reloadKey])
 
   const handleRetry = useCallback(() => {
+    setLoading(true)
+    setError(null)
     setReloadKey((k) => k + 1)
   }, [])
 

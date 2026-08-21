@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useLocalization } from '@/hooks/use-localization'
+import { useResetOnChange } from '@/hooks/use-reset-on-change'
 import { estimateStorage, type StorageEstimate } from '@/lib/storage-quota'
 
 interface Props {
@@ -32,9 +33,12 @@ export function StorageUsageRow({ refreshKey }: Props) {
   const { formatNumber, formatPercent } = useLocalization()
   const [estimate, setEstimate] = useState<StorageEstimate | null | 'pending'>('pending')
 
+  // Drop back to 'pending' during render so a refresh never shows the previous
+  // dataset's numbers while the new estimate is in flight.
+  useResetOnChange(refreshKey, () => setEstimate('pending'))
+
   useEffect(() => {
     let cancelled = false
-    setEstimate('pending')
     void estimateStorage().then((est) => {
       if (!cancelled) setEstimate(est)
     })

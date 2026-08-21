@@ -2,11 +2,12 @@ import { Badge } from 'primereact/badge'
 import { Dialog } from 'primereact/dialog'
 import { TabPanel, TabView } from 'primereact/tabview'
 import { Tag } from 'primereact/tag'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useLocalization } from '@/hooks/use-localization'
 import { useReleasesBadgeCount } from '@/hooks/use-releases-badge'
+import { useResetOnChange } from '@/hooks/use-reset-on-change'
 
 import { AboutDialogUpdateHistoryTab } from './AboutDialogUpdateHistoryTab'
 
@@ -23,9 +24,9 @@ export function AboutDialog({ visible, onHide }: Props) {
   const releasesCount = useReleasesBadgeCount()
   const [activeIndex, setActiveIndex] = useState(0)
 
-  useEffect(() => {
+  useResetOnChange(visible, () => {
     if (visible) setActiveIndex(0)
-  }, [visible])
+  })
 
   const updateHistoryHeader = (
     <span className="inline-flex align-items-center gap-2">

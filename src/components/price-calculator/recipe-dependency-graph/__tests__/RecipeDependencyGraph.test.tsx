@@ -33,6 +33,9 @@ vi.mock('@xyflow/react', () => {
     onNodesChange?: (changes: unknown) => void
   }
   function MockReactFlow({ nodes, nodeTypes, children, onNodesChange }: MockReactFlowProps) {
+    // Test double, not a real component: the assignment exposes the handler to
+    // the test body so it can drive node changes.
+    // oxlint-disable-next-line react/immutability
     reactFlowState.onNodesChange = onNodesChange
     return (
       <div data-testid="react-flow">

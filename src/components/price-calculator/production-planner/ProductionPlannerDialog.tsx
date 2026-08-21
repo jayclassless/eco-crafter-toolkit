@@ -112,9 +112,9 @@ export function ProductionPlannerDialog({
         </div>
 
         <PlannerInventoryEditor
+          key={resetSignal}
           options={plannerData?.itemOptions ?? []}
           onInventoryChange={onInventoryChange}
-          resetSignal={resetSignal}
         />
 
         <PlannerResults

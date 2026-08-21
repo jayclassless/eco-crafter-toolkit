@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
+import { useResetOnChange } from '@/hooks/use-reset-on-change'
 import { defaultLocale } from '@/i18n/config'
 import {
   loadIndex,
@@ -44,13 +45,21 @@ export function useLocalizedName(
   )
   const [ready, setReady] = useState<boolean>(() => peekState(datasetId, locale).ready)
 
+  // The lazy initializers above only cover the first render. On a dataset or
+  // locale switch, re-peek during render so a warm cache paints the new names
+  // in the same commit — and a cold one blanks them rather than leaving the
+  // previous dataset's names on screen.
+  useResetOnChange(`${datasetId}\u0000${locale}`, () => {
+    const next = peekState(datasetId, locale)
+    setPrimary(next.primary)
+    setFallback(next.fallback)
+    setReady(next.ready)
+  })
+
   useEffect(() => {
-    if (!datasetId) {
-      setPrimary(EMPTY)
-      setFallback(EMPTY)
-      setReady(false)
-      return
-    }
+    // Without a dataset there is nothing to load; `getName` short-circuits on
+    // the same condition rather than us clearing the indexes into state.
+    if (!datasetId) return
 
     let cancelled = false
 
@@ -68,18 +77,13 @@ export function useLocalizedName(
       setReady(true)
     }
 
-    // Sync cache hit: update state directly (React bails on Object.is-equal
-    // values, so a hit-on-first-mount is a no-op) and skip the async path.
+    // A cache hit has already been applied during render (state initializer on
+    // mount, `useResetOnChange` on a switch), so only a miss needs the async
+    // path.
     const cachedPrimary = peekIndex(datasetId, locale)
     const cachedFallback =
       locale === defaultLocale ? cachedPrimary : peekIndex(datasetId, defaultLocale)
-    if (cachedPrimary && cachedFallback) {
-      setPrimary(cachedPrimary)
-      setFallback(cachedFallback)
-      setReady(true)
-    } else {
-      void reload()
-    }
+    if (!cachedPrimary || !cachedFallback) void reload()
 
     // Re-load when names are written for this dataset (e.g. a custom item
     // gets renamed). Without this the hook holds a stale snapshot until the
@@ -97,11 +101,12 @@ export function useLocalizedName(
 
   const getName = useCallback(
     (entityType: string, entityId: string): string => {
+      if (!datasetId) return ''
       const key = `${entityType}:${entityId}`
       return primary.get(key) ?? fallback.get(key) ?? ''
     },
-    [primary, fallback]
+    [datasetId, primary, fallback]
   )
 
-  return { getName, ready }
+  return { getName, ready: !!datasetId && ready }
 }

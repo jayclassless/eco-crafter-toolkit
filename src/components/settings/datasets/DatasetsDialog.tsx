@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useLocalization } from '@/hooks/use-localization'
+import { useResetOnChange } from '@/hooks/use-reset-on-change'
 import { countCustomEntities } from '@/lib/custom-entities'
 import { countBuildsByDataset, getDatasetIdsByBundledId } from '@/lib/dataset-utils'
 import { fetchDatasetManifest } from '@/lib/fetch-manifest'
@@ -37,14 +38,15 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
   const { gameDataStore, buildStore } = useStores()
 
   const [manifest, setManifest] = useState<DatasetManifest | null>(null)
-  const [loadState, setLoadState] = useState<LoadState>('idle')
+  // Starts at 'loading': the dialog fetches the manifest whenever it opens, and
+  // mounting already-visible has to show the spinner too.
+  const [loadState, setLoadState] = useState<LoadState>('loading')
   const [storeTick, setStoreTick] = useState(0)
   const [deleteTarget, setDeleteTarget] = useState<DatasetRow | null>(null)
   const [manageTarget, setManageTarget] = useState<DatasetRow | null>(null)
   const toastRef = useRef<Toast>(null)
 
-  const loadManifest = useCallback(() => {
-    setLoadState('loading')
+  const fetchManifest = useCallback(() => {
     fetchDatasetManifest()
       .then((m) => {
         setManifest(m)
@@ -53,9 +55,21 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
       .catch(() => setLoadState('error'))
   }, [])
 
+  // Retry button: the click is what starts the load, so it owns the spinner.
+  const retryLoadManifest = useCallback(() => {
+    setLoadState('loading')
+    fetchManifest()
+  }, [fetchManifest])
+
+  // Opening the dialog also re-fetches. Flipping to 'loading' during render
+  // means the spinner is already up on the first painted frame.
+  useResetOnChange(visible, () => {
+    if (visible) setLoadState('loading')
+  })
+
   useEffect(() => {
     if (!visible) return
-    loadManifest()
+    fetchManifest()
     const bump = () => setStoreTick((n) => n + 1)
     const dsListener = gameDataStore.addTableListener('datasets', bump)
     const itemsListener = gameDataStore.addTableListener('items', bump)
@@ -67,7 +81,7 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
       gameDataStore.delListener(recipesListener)
       buildStore.delListener(buildListener)
     }
-  }, [visible, gameDataStore, buildStore, loadManifest])
+  }, [visible, gameDataStore, buildStore, fetchManifest])
 
   const rows: DatasetRow[] = useMemo(() => {
     if (!manifest) return []
@@ -212,7 +226,7 @@ export function DatasetsDialog({ visible, onHide, activeDatasetId, onSwitch }: P
           <Button
             label={t('settings.datasets.retry')}
             icon="pi pi-refresh"
-            onClick={loadManifest}
+            onClick={retryLoadManifest}
           />
         </div>
       )}

@@ -3,9 +3,10 @@ import {
   type AutoCompleteChangeEvent,
   type AutoCompleteCompleteEvent,
 } from 'primereact/autocomplete'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { EcoIcon } from '@/components/common/EcoIcon'
+import { useResetOnChange } from '@/hooks/use-reset-on-change'
 
 interface GroupedSinglePickerItem {
   id: string
@@ -57,9 +58,7 @@ export function GroupedSinglePicker<T extends GroupedSinglePickerItem>({
   // blur-driven clear) to the parent. `forceSelection` reverts the input to the
   // committed value on blur if the user typed without selecting.
   const [internal, setInternal] = useState<T | string | null>(value)
-  useEffect(() => {
-    setInternal(value)
-  }, [value])
+  useResetOnChange(value, () => setInternal(value))
 
   return (
     <div className={`flex align-items-center gap-2 ${className ?? ''}`}>

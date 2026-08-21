@@ -1,6 +1,6 @@
 import { AutoComplete, type AutoCompleteCompleteEvent } from 'primereact/autocomplete'
 import { Dialog } from 'primereact/dialog'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { type RecipeOption, resolveRecipeSkillName } from '@/components/common/recipe-option'
@@ -9,6 +9,7 @@ import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import type { PriceSignal } from '@/hooks/use-prices-signal'
 import { buildRecipeProductItemIds, getRecipePrimaryProductRawName } from '@/hooks/use-products'
+import { useResetOnChange } from '@/hooks/use-reset-on-change'
 import type { SlotSelection } from '@/lib/module-slots'
 import { useStores } from '@/stores/providers'
 import type { ModuleSlot } from '@/types/game-data'
@@ -55,7 +56,7 @@ export function AdHocRecipeCalculatorDialog({
   const [ingredientPrices, setIngredientPrices] = useState<Record<string, number>>({})
 
   // Reset to a clean slate each time the dialog is opened.
-  useEffect(() => {
+  useResetOnChange(visible, () => {
     if (!visible) return
     setSelectedOption(undefined)
     setSelectedRecipeId('')
@@ -64,7 +65,7 @@ export function AdHocRecipeCalculatorDialog({
     setModuleIdsBySlot({})
     setTalentStates({})
     setIngredientPrices({})
-  }, [visible])
+  })
 
   const recipeOptions = useMemo<RecipeOption[]>(() => {
     const productIdsByRecipe = buildRecipeProductItemIds(gameDataStore)

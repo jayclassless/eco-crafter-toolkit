@@ -24,8 +24,13 @@ function DebouncedSearchInputImpl({
 }: Props) {
   const { t } = useTranslation()
   const [value, setValue] = useState('')
+  // Latest-callback ref: keeps the debounce timer from restarting when the
+  // parent hands us a new function identity. Assigned in an effect (not during
+  // render) so a render React throws away can't leave a stale value behind.
   const onChangeRef = useRef(onDebouncedChange)
-  onChangeRef.current = onDebouncedChange
+  useEffect(() => {
+    onChangeRef.current = onDebouncedChange
+  }, [onDebouncedChange])
 
   useEffect(() => {
     const id = setTimeout(() => onChangeRef.current(value), debounceMs)

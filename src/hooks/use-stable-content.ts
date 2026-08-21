@@ -10,6 +10,11 @@ import { useRef } from 'react'
  * so this is only worthwhile when the downstream cost (re-render of a large
  * DataTable, expensive memo) dominates the cost of the equality check.
  */
+// oxlint-disable react/refs -- Reading and writing the ref during render IS
+// this hook's contract: it must hand back the stable reference within the same
+// render pass. The `useState` equivalent would set state during render and
+// force React to re-run the component, which defeats the point of a hook whose
+// only job is to avoid downstream re-renders.
 export function useStableContent<T>(value: T, isEqual: (a: T, b: T) => boolean): T {
   const ref = useRef<T>(value)
   if (ref.current !== value && !isEqual(ref.current, value)) {
@@ -17,6 +22,7 @@ export function useStableContent<T>(value: T, isEqual: (a: T, b: T) => boolean):
   }
   return ref.current
 }
+// oxlint-enable react/refs
 
 export function mapEquals<K, V>(a: Map<K, V>, b: Map<K, V>): boolean {
   if (a === b) return true

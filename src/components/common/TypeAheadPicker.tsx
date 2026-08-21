@@ -3,9 +3,10 @@ import {
   type AutoCompleteChangeEvent,
   type AutoCompleteCompleteEvent,
 } from 'primereact/autocomplete'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { ItemIcon } from '@/components/common/ItemIcon'
+import { useResetOnChange } from '@/hooks/use-reset-on-change'
 
 interface TypeAheadPickerItem {
   id: string
@@ -55,9 +56,7 @@ export function TypeAheadPicker<T extends TypeAheadPickerItem>({
   // input reverts to the previously-committed value on blur if the user types
   // without selecting.
   const [internal, setInternal] = useState<T | string | null>(value)
-  useEffect(() => {
-    setInternal(value)
-  }, [value])
+  useResetOnChange(value, () => setInternal(value))
 
   const completeMethod = (event: AutoCompleteCompleteEvent) => {
     const query = event.query.trim().toLowerCase()

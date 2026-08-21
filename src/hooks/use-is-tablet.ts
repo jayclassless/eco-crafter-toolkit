@@ -1,23 +1,27 @@
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 
 const QUERY = '(max-width: 1279.98px)'
 
-function getInitial(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
+function supported(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+}
+
+function subscribe(onChange: () => void): () => void {
+  if (!supported()) return () => {}
+  const mql = window.matchMedia(QUERY)
+  mql.addEventListener('change', onChange)
+  return () => mql.removeEventListener('change', onChange)
+}
+
+function getSnapshot(): boolean {
+  if (!supported()) return false
   return window.matchMedia(QUERY).matches
 }
 
+function getServerSnapshot(): boolean {
+  return false
+}
+
 export function useIsTablet(): boolean {
-  const [isTablet, setIsTablet] = useState<boolean>(getInitial)
-
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return
-    const mql = window.matchMedia(QUERY)
-    const handler = (e: MediaQueryListEvent) => setIsTablet(e.matches)
-    setIsTablet(mql.matches)
-    mql.addEventListener('change', handler)
-    return () => mql.removeEventListener('change', handler)
-  }, [])
-
-  return isTablet
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 }
