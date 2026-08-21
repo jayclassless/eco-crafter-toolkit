@@ -256,6 +256,120 @@ describe('resolveRecipeModifiers', () => {
     expect(b.effects).toEqual([{ metric: 'ingredients', signedPercent: -14.3 }])
   })
 
+  // Mineral Baking: Masonry — a flat +1 Yield bonus on the Quicklime recipe's
+  // single product. Modelled here with the same rows the extractor emits for it.
+  it('adds a flat Additive Yield bonus to a product quantity', () => {
+    setSkill()
+    setRecipe()
+    game.setRow('talents', 't-baking', {
+      id: 't-baking',
+      datasetId: DS,
+      skillId: 'sk1',
+      name: 'MineralBaking',
+      talentGroupName: 'Crafting',
+      value: 0,
+      level: 6,
+    })
+    game.setRow('talentBonuses', 'tb-0', {
+      id: 'tb-0',
+      datasetId: DS,
+      talentId: 't-baking',
+      bonusIndex: 0,
+      action: 'Yield',
+      effectType: 'Additive',
+      value: 1,
+      cap: 0,
+      lowerIsBetter: false,
+    })
+    game.setRow('recipeElements', 're-p', {
+      id: 're-p',
+      datasetId: DS,
+      recipeId: 'r1',
+      itemOrTagId: 'quicklime',
+      baseQuantity: 1,
+      isProduct: true,
+      index: 0,
+    })
+    game.setRow('modifiers', 'mod-prod', {
+      id: 'mod-prod',
+      datasetId: DS,
+      targetType: 'elementQuantity',
+      targetId: 're-p',
+      dynamicType: 'Talent',
+      refName: 'MineralBaking:0',
+    })
+    build.setRow('userTalents', 'ut-baking', {
+      id: 'ut-baking',
+      buildId: BUILD,
+      talentId: 't-baking',
+      enabled: true,
+    })
+    setUserRecipe()
+
+    const result = resolve()!
+    // The multiplier channel stays at 1 — this is a flat +1, not a x2.
+    expect(result.elementMultipliers.get('re-p')).toBe(1)
+    expect(result.elementModifiedQuantities.get('re-p')).toBe(2)
+    expect(result.bonuses).toHaveLength(1)
+    // Displayed as a signed count, the way the game shows a flat bonus.
+    expect(result.bonuses[0].effects).toEqual([
+      { metric: 'products', signedPercent: 0, signedDelta: 1 },
+    ])
+  })
+
+  it('grows an ingredient quantity when an Additive bonus lands on it', () => {
+    // Ingredient quantities are stored NEGATED, so a flat "+1" has to make the
+    // magnitude larger (one more consumed), not smaller.
+    setSkill()
+    setRecipe()
+    game.setRow('talents', 't-add', {
+      id: 't-add',
+      datasetId: DS,
+      skillId: 'sk1',
+      name: 'Costly',
+      talentGroupName: 'Crafting',
+      value: 0,
+      level: 1,
+    })
+    game.setRow('talentBonuses', 'tb-0', {
+      id: 'tb-0',
+      datasetId: DS,
+      talentId: 't-add',
+      bonusIndex: 0,
+      action: 'ResourceCost',
+      effectType: 'Additive',
+      value: 1,
+      cap: 0,
+      lowerIsBetter: true,
+    })
+    game.setRow('recipeElements', 're-i', {
+      id: 're-i',
+      datasetId: DS,
+      recipeId: 'r1',
+      itemOrTagId: 'iron',
+      baseQuantity: -4,
+      isProduct: false,
+      index: 0,
+    })
+    game.setRow('modifiers', 'mod-elem', {
+      id: 'mod-elem',
+      datasetId: DS,
+      targetType: 'elementQuantity',
+      targetId: 're-i',
+      dynamicType: 'Talent',
+      refName: 'Costly:0',
+    })
+    build.setRow('userTalents', 'ut-add', {
+      id: 'ut-add',
+      buildId: BUILD,
+      talentId: 't-add',
+      enabled: true,
+    })
+    setUserRecipe()
+
+    expect(resolve()!.elementModifiedQuantities.get('re-i')).toBe(-5)
+  })
+
   it('applies a plugin module with matching skillPercent override', () => {
     setSkill()
     setRecipe()

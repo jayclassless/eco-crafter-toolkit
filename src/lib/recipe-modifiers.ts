@@ -7,6 +7,7 @@ import {
 } from '@/hooks/use-solver-snapshot'
 import type { Compare } from '@/lib/collator'
 import {
+  applyModifierEffect,
   applyRoundFactor,
   moduleFactor,
   resolveModifiers,
@@ -21,7 +22,13 @@ type MetricKind = 'labor' | 'craftTime' | 'ingredients' | 'products'
 
 export interface AppliedEffect {
   metric: MetricKind
+  /** The multiplicative part, as a signed percentage (-10 = a 10% reduction). */
   signedPercent: number
+  /** The additive part, as a flat signed delta in the metric's own units —
+   * "+1 products" for Mineral Baking. A bonus carrying both parts emits two
+   * entries for the metric, one of each kind, because a flat delta has no
+   * base-independent percentage. When this is set, `signedPercent` is 0. */
+  signedDelta?: number
 }
 
 type BonusIcon =
@@ -112,19 +119,23 @@ export function resolveRecipeModifiers(
   const elems = indexes.elementsByRecipeId.get(recipeId) ?? []
   for (const { id: reId, row: re } of elems) {
     const mods = indexes.getModifiers('elementQuantity', reId)
-    const multiplier = resolveModifiers(mods, context, 'resource')
-    elementMultipliers.set(reId, multiplier)
+    const effect = resolveModifiers(mods, context, 'resource')
+    elementMultipliers.set(reId, effect.multiplier)
     const base = re.baseQuantity as number
-    elementModifiedQuantities.set(reId, applyRoundFactor(base * multiplier, roundFactor))
+    elementModifiedQuantities.set(
+      reId,
+      applyRoundFactor(applyModifierEffect(base, effect), roundFactor)
+    )
   }
 
-  const craftMultiplier = resolveModifiers(solverRecipe.craftMinutesModifiers, context, 'speed')
+  const craftEffect = resolveModifiers(solverRecipe.craftMinutesModifiers, context, 'speed')
+  const craftMultiplier = craftEffect.multiplier
   // Labor mirrors solver.ts: the module factor is applied at the RECIPE level
   // (Rule A, scoped against the recipe's skill), because no dataset version
   // emits a `Module` modifier on a recipe's Labor value.
-  const laborMultiplier =
-    resolveModifiers(solverRecipe.laborModifiers, context, 'labor') *
-    moduleFactor(solverRecipe.moduleEffects, 'labor', solverRecipe.skillId)
+  const laborEffect = resolveModifiers(solverRecipe.laborModifiers, context, 'labor')
+  const laborModuleFactor = moduleFactor(solverRecipe.moduleEffects, 'labor', solverRecipe.skillId)
+  const laborMultiplier = laborEffect.multiplier * laborModuleFactor
 
   const skillId = solverRecipe.skillId
   const recipeRow = gameDataStore.getRow('recipes', recipeId)
@@ -231,10 +242,16 @@ export function resolveRecipeModifiers(
           uniqueMods.push(m)
         }
       }
-      const multiplier = resolveModifiers(uniqueMods, context, metricToTargetKind(metric))
-      const signedPercent = toSignedPercent(multiplier)
-      if (signedPercent === 0) continue
-      effects.push({ metric, signedPercent })
+      const effect = resolveModifiers(uniqueMods, context, metricToTargetKind(metric))
+      const signedPercent = toSignedPercent(effect.multiplier)
+      if (signedPercent !== 0) effects.push({ metric, signedPercent })
+      // A flat delta has no base-independent percentage (Mineral Baking's +1 is
+      // +100% on a base of 1 but +25% on a base of 4), so it gets its own entry
+      // rather than being folded into `signedPercent`. The game shows these the
+      // same way: a signed count for a flat bonus, a percentage for a scaling
+      // one.
+      if (effect.addend !== 0)
+        effects.push({ metric, signedPercent: 0, signedDelta: effect.addend })
     }
     if (effects.length === 0) continue
     effects.sort((a, b) => EFFECT_ORDER.indexOf(a.metric) - EFFECT_ORDER.indexOf(b.metric))
@@ -328,8 +345,13 @@ export function resolveRecipeModifiers(
     laborMultiplier,
     baseCraftTime: solverRecipe.baseCraftTime,
     baseLaborCost: solverRecipe.baseLaborCost,
-    modifiedCraftTime: solverRecipe.baseCraftTime * craftMultiplier,
-    modifiedLaborCost: solverRecipe.baseLaborCost * laborMultiplier,
+    // Mirrors solver.ts `prepareRecipe`: multiplicative effects (the module
+    // factor included) fold into the base first, then the additive channel.
+    modifiedCraftTime: applyModifierEffect(solverRecipe.baseCraftTime, craftEffect),
+    modifiedLaborCost: applyModifierEffect(
+      solverRecipe.baseLaborCost * laborModuleFactor,
+      laborEffect
+    ),
     bonuses,
   }
 }

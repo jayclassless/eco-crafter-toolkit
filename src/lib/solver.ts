@@ -8,7 +8,12 @@ import type {
   SolverError,
 } from '@/types/solver'
 
-import { moduleFactor, resolveModifiers, type ModifierContext } from './dynamic-values'
+import {
+  applyModifierEffect,
+  moduleFactor,
+  resolveModifiers,
+  type ModifierContext,
+} from './dynamic-values'
 import { applyMargin } from './margins'
 import { getEffectiveRecipeQuantities } from './recipe-quantities'
 
@@ -315,12 +320,15 @@ function prepareRecipe(recipe: SolverRecipe, calorieCost: number): PreparedRecip
   //
   // The two rules never collide: legacy modules produce no LaborCost effects at
   // all, so this multiplies by exactly 1 on every v11-v13 build.
-  const laborMultiplier =
-    resolveModifiers(recipe.laborModifiers, ctx, 'labor') *
-    moduleFactor(recipe.moduleEffects, 'labor', recipe.skillId)
-  const craftMultiplier = resolveModifiers(recipe.craftMinutesModifiers, ctx, 'speed')
-  const craftTime = recipe.baseCraftTime * craftMultiplier
-  const laborAmount = recipe.baseLaborCost * laborMultiplier
+  //
+  // The module factor is folded into the BASE before `applyModifierEffect` so
+  // that an additive labor effect lands after every multiplicative one — every
+  // scaling bonus applies before any flat one.
+  const laborEffect = resolveModifiers(recipe.laborModifiers, ctx, 'labor')
+  const laborModuleFactor = moduleFactor(recipe.moduleEffects, 'labor', recipe.skillId)
+  const craftEffect = resolveModifiers(recipe.craftMinutesModifiers, ctx, 'speed')
+  const craftTime = applyModifierEffect(recipe.baseCraftTime, craftEffect)
+  const laborAmount = applyModifierEffect(recipe.baseLaborCost * laborModuleFactor, laborEffect)
   const craftTimeCost = craftTime * recipe.costPerMinute
   const laborCost = (laborAmount * calorieCost) / 1000
   const fixedCost = laborCost + craftTimeCost

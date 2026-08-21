@@ -115,7 +115,7 @@ describe.each(BUNDLED)('bundled %s gathering data', (id) => {
 
   it('scales pickaxe damage flatly and axe damage by the tool curve', () => {
     // Pickaxes override damage with ConstantValue(tier); axes and bows use
-    // CreateDamageValue(), which ToolItem's damage curve scales with level.
+    // CreateDamageValue(), which the shared tool damage curve scales with level.
     const tools = data.GatheringTools ?? []
     for (const t of tools.filter((x) => x.Kind === 'Pickaxe')) {
       expect(t.DamageUsesToolCurve, t.Name).toBe(false)
@@ -143,11 +143,10 @@ describe.each(BUNDLED)('bundled %s gathering data', (id) => {
   })
 })
 
-// The crafting-table → module-slot wiring lives in the game's compiled
-// `ModuleSlotRegistry`, with no AutoGen source to read, so the module UI infers
-// a table's slots from the modules it accepts. That inference is only safe if
-// the shipped data actually supports it — hence these assertions rather than an
-// assumption in the component.
+// Nothing in the game's generated source states which slots a crafting table
+// has, so the module UI infers a table's slots from the modules it accepts.
+// That inference is only safe if the shipped data actually supports it — hence
+// these assertions rather than an assumption in the component.
 describe.each(BUNDLED)('bundled %s crafting-table module slots', (id) => {
   const data = load(id)
   const modulesByName = new Map(
@@ -320,5 +319,120 @@ describe('gathering data differs across versions', () => {
       const n = load(id).Items.filter((i) => i.ClothingCalorieRate != null).length
       expect(n, id).toBe(13)
     }
+  })
+})
+
+// Talent bonus scope. A bonus's scope clauses are RECIPE-LEVEL gates, ANDed
+// together; none of them picks which element inside a matched recipe the effect
+// lands on. `ItemTags` matches against the recipe's PRODUCTS. The extractor once
+// read it as an ingredient filter for ResourceCost and ignored it outright for
+// CraftTime/LaborCost, so a tag-only bonus leaked onto every recipe in the game.
+// These pin all three code paths against the shipped JSON, where a scope
+// regression is otherwise invisible.
+//
+// v11/v12 predate the bonus system entirely and carry no `Bonuses` at all.
+const BONUS_SYSTEM = ['eco-v13', 'eco-v14'] as const
+
+describe.each(BONUS_SYSTEM)('bundled %s talent bonus scope', (id) => {
+  const data = load(id)
+  const tagMembers = new Map(data.Tags.map((t) => [t.Name, new Set(t.AssociatedItems ?? [])]))
+  const recipeByName = new Map(data.Recipes.map((r) => [r.Name, r]))
+
+  /** Every recipe/element the synthetic modifier `refName` was attached to. */
+  const attachedTo = (refName: string) => {
+    const craftTime: string[] = []
+    const labor: string[] = []
+    const ingredients: string[] = []
+    const products: string[] = []
+    const has = (mods: { DynamicType: string; Item: string }[] | undefined) =>
+      (mods ?? []).some((m) => m.DynamicType === 'Talent' && m.Item === refName)
+    for (const r of data.Recipes) {
+      if (has(r.CraftMinutes.Modifiers)) craftTime.push(r.Name)
+      if (has(r.Labor.Modifiers)) labor.push(r.Name)
+      for (const e of r.Ingredients) {
+        if (has(e.Quantity.Modifiers)) ingredients.push(`${r.Name}/${e.ItemOrTag}`)
+      }
+      for (const e of r.Products) {
+        if (has(e.Quantity.Modifiers)) products.push(`${r.Name}/${e.ItemOrTag}`)
+      }
+    }
+    return { craftTime, labor, ingredients, products }
+  }
+
+  it('gates an ItemTags scope on products, not ingredients', () => {
+    // Set in Stone: Masonry — ResourceCost x0.9, ItemTags {Constructable},
+    // SkillTypes {Masonry}. Mortared Stone is made FROM Mortar and Rock, neither
+    // Constructable; the tag is on the block it produces. Reading the tag as an
+    // ingredient filter missed every recipe it should hit and instead hit the
+    // ~28 that merely consume mortared blocks (signs, benches, doors).
+    const hit = attachedTo('MasonrySetInStoneTalent:0')
+    expect(hit.craftTime).toEqual([])
+    expect(hit.labor).toEqual([])
+    expect(hit.products).toEqual([])
+
+    const constructable = tagMembers.get('Constructable')!
+    const expected = data.Recipes.filter(
+      (r) =>
+        r.RequiredSkill === 'MasonrySkill' && r.Products.some((p) => constructable.has(p.ItemOrTag))
+    ).map((r) => r.Name)
+    expect(expected).toContain('MortaredStoneRecipe')
+    expect(new Set(hit.ingredients.map((s) => s.split('/')[0]))).toEqual(new Set(expected))
+  })
+
+  it('does not leak a tag-only CraftTime bonus onto every recipe', () => {
+    // Homegrown: Baking — CraftTime x0.7, ItemTags {BakedVegetable} and NOTHING
+    // else. With the tag clause dropped, scope resolution fell through to "all
+    // recipes", so any build that took a Baking talent crafted the entire game
+    // 30% faster.
+    const hit = attachedTo('BakingHomegrownTalent:0')
+    expect(hit.ingredients).toEqual([])
+    expect(hit.products).toEqual([])
+    expect(hit.craftTime.length).toBeGreaterThan(0)
+    expect(hit.craftTime.length).toBeLessThan(data.Recipes.length / 10)
+
+    const baked = tagMembers.get('BakedVegetable')!
+    for (const name of hit.craftTime) {
+      const r = recipeByName.get(name)!
+      expect(r.Products.some((p) => baked.has(p.ItemOrTag))).toBe(true)
+    }
+  })
+
+  it('attaches an Additive Yield bonus to products', () => {
+    // Mineral Baking: Masonry — Yield +1 on the Quicklime recipe. `Yield` was
+    // absent from the extractor's action allowlist, so all six of the game's
+    // Yield bonuses were parsed into the dataset and then attached to nothing.
+    const hit = attachedTo('MasonryMineralBakingTalent:0')
+    expect(hit.products).toEqual(['QuicklimeRecipe/QuicklimeItem'])
+    expect(hit.ingredients).toEqual([])
+    expect(hit.craftTime).toEqual([])
+    expect(hit.labor).toEqual([])
+  })
+
+  it('emits a modifier for every price-relevant bonus whose scope resolves', () => {
+    // A bonus that resolves to a non-empty recipe set but attaches nothing means
+    // an action fell out of the allowlist, or a scope clause was silently
+    // dropped. Bonuses scoped on an empty tag are the deliberate exception:
+    // `Vehicles`, `Parts` and `Crafting Table` are declared as tags but never
+    // applied to any item, so nothing can match them and those talents do
+    // nothing in vanilla either.
+    const PRICE_RELEVANT = new Set(['ResourceCost', 'CraftTime', 'LaborCost', 'Yield'])
+    const orphans: string[] = []
+    for (const skill of data.Skills) {
+      for (const talent of skill.Talents) {
+        const bonuses = talent.Bonuses ?? []
+        for (let i = 0; i < bonuses.length; i++) {
+          const b = bonuses[i]
+          if (!PRICE_RELEVANT.has(b.Action)) continue
+          const tags = b.Scope?.ItemTags ?? []
+          if (tags.some((t) => (tagMembers.get(t)?.size ?? 0) === 0)) continue
+          const refName = `${talent.Name}:${i}`
+          const hit = attachedTo(refName)
+          const total =
+            hit.craftTime.length + hit.labor.length + hit.ingredients.length + hit.products.length
+          if (total === 0) orphans.push(`${refName} (${b.Action})`)
+        }
+      }
+    }
+    expect(orphans).toEqual([])
   })
 })

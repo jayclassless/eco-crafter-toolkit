@@ -46,6 +46,10 @@ export interface SolverRecipe {
 export interface SolverTalent {
   name: string
   value: number
+  /** True when the talent adds a flat amount rather than scaling: `value` is
+   * then a delta in the target metric's units (Mineral Baking's +1 Quicklime),
+   * not a multiplier. Applied after every scaling effect. */
+  isAdditive?: boolean
 }
 
 /** One module effect, already normalized out of whichever dataset version it

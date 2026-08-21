@@ -23,21 +23,28 @@ function BonusIconFor({ bonus }: { bonus: AppliedBonus }) {
 
 export function AppliedBonuses({ bonuses }: Props) {
   const { t } = useTranslation()
-  const { formatPercent } = useLocalization()
+  const { formatPercent, formatNumber } = useLocalization()
 
   if (bonuses.length === 0) return null
 
   const renderEffect = (e: AppliedEffect): string => {
+    const metric = t(`priceCalculator.recipe.metric.${e.metric}`)
+    // An additive bonus is a flat count, not a ratio — "+1 products", the way
+    // the game itself shows it.
+    if (e.signedDelta !== undefined) {
+      const amount = formatNumber(e.signedDelta, {
+        signDisplay: 'exceptZero',
+        maximumFractionDigits: 2,
+      })
+      return t('priceCalculator.recipe.bonusEffectFlat', { amount, metric })
+    }
     // `signedPercent` is already a percentage (-10 for a 10% reduction), so it
     // has to come back to a ratio for Intl's percent style.
     const percent = formatPercent(e.signedPercent / 100, {
       signDisplay: 'exceptZero',
       maximumFractionDigits: 1,
     })
-    return t('priceCalculator.recipe.bonusEffect', {
-      percent,
-      metric: t(`priceCalculator.recipe.metric.${e.metric}`),
-    })
+    return t('priceCalculator.recipe.bonusEffect', { percent, metric })
   }
 
   return (

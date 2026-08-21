@@ -1,5 +1,9 @@
 # Eco Crafter Toolkit Change Log
 
+## 0.9.0 (TBD)
+
+- Fixed a variety of issues with Talents not influencing the correct recipes.
+
 ## 0.8.0 (2026-08-14)
 
 - The "Used in Recipes" tabs of item dialogs can now show recipes that aren't

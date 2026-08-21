@@ -357,6 +357,7 @@ export function assembleSolverRecipe(
             activeTalents.push({
               name: `${t.name}:${b.bonusIndex}`,
               value: indexes.computeEffectiveValue(b, level),
+              ...(b.effectType === 'Additive' ? { isAdditive: true } : {}),
             })
           }
         } else if (state.enabled) {

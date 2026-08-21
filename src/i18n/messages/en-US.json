@@ -224,6 +224,7 @@
       "usedInEmptyAll": "No recipes use this recipe's primary product.",
       "bonusesApplied": "Bonuses Applied",
       "bonusEffect": "{percent} {metric}",
+      "bonusEffectFlat": "{amount} {metric}",
       "metric": {
         "labor": "labor",
         "craftTime": "craft time",
@@ -355,7 +356,7 @@
     "loading": "Loading…",
     "errorTitle": "Could not load news",
     "retry": "Retry",
-    "dateByAuthor": "{date} \u00b7 by {author}"
+    "dateByAuthor": "{date} · by {author}"
   },
   "settings": {
     "title": "Eco Crafter Toolkit",

@@ -204,8 +204,8 @@ interface RawItem {
   postHarvestingGrowth?: number
   pickableAtPercent?: number
   // Yield range of the species' *primary* resource (ResourceList[0]), which is
-  // what Plant.Ripe gates first-harvest on — not necessarily this item's own
-  // range (RoseBush's primary is PlantFibers, but the tracked item is Rose).
+  // what gates the first harvest — not necessarily this item's own range
+  // (RoseBush's primary is PlantFibers, but the tracked item is Rose).
   primaryResourceMin?: number
   primaryResourceMax?: number
   seedItemName?: string
@@ -282,7 +282,7 @@ interface RawPlant {
   speciesName: string
   displayName: string // the species' in-world name, e.g. "Oak", "Bolete Mushroom"
   // ResourceList entries in declaration order; index 0 is the species' primary
-  // resource, whose Range drives the ripeness gate (Species.ResourceRange).
+  // resource, whose Range drives the ripeness gate.
   resources: { name: string; min: number; max: number }[]
   isTree: boolean
   maturityAgeDays: number
@@ -302,7 +302,7 @@ interface RawGatheringTool {
   calorieSkill: string
   baseDamage: number
   /** True when the C# used CreateDamageValue() rather than ConstantValue(),
-   * meaning ToolItem's damage curve scales it with the skill's level. */
+   * meaning the shared tool damage curve scales it with the skill's level. */
   damageUsesToolCurve: boolean
   efficiencyTalent?: string
   strengthTalent?: string
@@ -334,7 +334,8 @@ interface RawAnimal {
 const rawAnimals: RawAnimal[] = []
 
 /** Trunk health from Organisms/Tree/<X>.cs, keyed by species stem ('Oak').
- * LogHealth is deliberately ignored — nothing in the game reads it. */
+ * The sibling LogHealth value is deliberately ignored: slicing a felled trunk
+ * is not damage-gated, so it has no bearing on how long felling takes. */
 interface RawTreeHealth {
   treeHealth: number
 }
@@ -1966,8 +1967,8 @@ async function main() {
     console.warn('[extract] TagDefinitions.cs missing:', (e as Error).message)
   }
 
-  // Pass 1d: recipe-derived display fallback for items whose class lives only
-  // in a compiled DLL (no .cs source anywhere — e.g. HomesteadClaimStakeItem).
+  // Pass 1d: recipe-derived display fallback for items that have no .cs source
+  // anywhere under the game files (e.g. HomesteadClaimStakeItem).
   // When a recipe `<X>Recipe` produces `<X>Item` and the item still has no
   // [LocDisplayName]-derived display, adopt the recipe's displayName.
   let recipeFallbackCount = 0
@@ -2096,13 +2097,42 @@ async function main() {
     set.add(tagName)
   }
 
-  const ingredientMatchesTags = (itemOrTag: string, tags: Set<string>): boolean => {
+  const itemOrTagMatchesTags = (itemOrTag: string, tags: Set<string>): boolean => {
     const owned = tagsByItemOrTag.get(itemOrTag)
     if (!owned) return false
     for (const t of tags) if (owned.has(t)) return true
     return false
   }
 
+  /** True when a product is a partial refund of one of the recipe's own
+   * ingredients — a mold handed back by a kiln recipe, say. A product counts as
+   * a refund when its item is an ingredient of the same recipe, either directly
+   * or as a member of a tag the recipe consumes.
+   *
+   * Refunds are excluded from yield bonuses, which is what stops a talent from
+   * returning more of an ingredient than the craft consumed. */
+  const isIngredientRefund = (r: RecipeJson, productItemOrTag: string): boolean =>
+    r.Ingredients.some(
+      (ing) =>
+        ing.ItemOrTag === productItemOrTag ||
+        itemOrTagMatchesTags(productItemOrTag, new Set([ing.ItemOrTag]))
+    )
+
+  /**
+   * Which recipes a bonus applies to.
+   *
+   * Every clause of a `CraftBonusCause` — `Recipes`, `SkillTypes`,
+   * `CraftStationTypes`, `ItemTags` — is a RECIPE-LEVEL gate, and they are ANDed
+   * together. None of them narrows the effect to a particular element inside a
+   * matched recipe.
+   *
+   * `ItemTags` in particular matches against the recipe's PRODUCTS: the recipe
+   * qualifies when something it makes carries one of the tags. Reading it as an
+   * ingredient filter is backwards — Set in Stone's "Constructable" tag sits on
+   * Mortared Stone, the block the recipe produces, not on the Mortar and Rock it
+   * is made from, so an ingredient reading would miss every recipe the talent is
+   * meant to discount and instead hit the ones that merely consume a tagged item.
+   */
   const resolveScopeRecipes = (bonus: RawBonus): RecipeJson[] => {
     // Start from the narrowest index we have. Recipes > CraftStationTypes >
     // SkillTypes > all. Then filter with the remaining scope clauses.
@@ -2144,7 +2174,34 @@ async function main() {
       const set = new Set(bonus.recipes)
       candidates = candidates.filter((r) => set.has(r.Name))
     }
+    if (bonus.itemTags.length > 0) {
+      const tags = new Set(bonus.itemTags)
+      candidates = candidates.filter((r) =>
+        r.Products.some((p) => itemOrTagMatchesTags(p.ItemOrTag, tags))
+      )
+    }
     return candidates
+  }
+
+  // Ingredients whose quantity is bonus-eligible, snapshotted BEFORE any
+  // synthetic modifier is attached.
+  //
+  // An ingredient declared without a skill or talent argument has a fixed
+  // quantity that no discount touches — Steel Bar's Quicklime and Crushed Coal,
+  // for instance, cost the same at every skill level. Non-empty `Modifiers` is
+  // the marker: `parseIngredientsFromBody` emits one entry per skill/talent
+  // argument and nothing otherwise, so an empty list means a fixed quantity.
+  // This mirrors the gate modules already go through — see `moduleFactor`, which
+  // skips any value carrying no `Module` modifier.
+  //
+  // The snapshot matters because `attachBonusToTalent` pushes into that same
+  // array: testing it live would let the first talent bonus turn a fixed
+  // ingredient into a discountable one for every talent processed afterwards.
+  const bonusEligibleIngredients = new WeakSet<ElementJson>()
+  for (const r of recipes) {
+    for (const ing of r.Ingredients) {
+      if (ing.Quantity.Modifiers.length > 0) bonusEligibleIngredients.add(ing)
+    }
   }
 
   // For each concrete talent with bonuses, emit synthetic modifier entries on
@@ -2158,7 +2215,12 @@ async function main() {
       out.push(toBonusJson(b))
 
       // Only price-relevant actions emit synthetic modifiers.
-      if (b.action !== 'ResourceCost' && b.action !== 'CraftTime' && b.action !== 'LaborCost') {
+      if (
+        b.action !== 'ResourceCost' &&
+        b.action !== 'CraftTime' &&
+        b.action !== 'LaborCost' &&
+        b.action !== 'Yield'
+      ) {
         continue
       }
       const refName = `${talentName}:${idx}`
@@ -2168,12 +2230,25 @@ async function main() {
         for (const r of matching) r.Labor.Modifiers.push(mod)
       } else if (b.action === 'CraftTime') {
         for (const r of matching) r.CraftMinutes.Modifiers.push(mod)
+      } else if (b.action === 'Yield') {
+        // Yield lands on PRODUCTS, and unlike ResourceCost it applies to every
+        // one of them regardless of how the quantity was declared. That matters
+        // because products are written as a bare `new CraftingElement<X>()`,
+        // which is always a fixed quantity — the eligibility rule used for
+        // ingredients just above would drop every yield bonus in the game.
+        for (const r of matching) {
+          for (const prod of r.Products) {
+            if (isIngredientRefund(r, prod.ItemOrTag)) continue
+            prod.Quantity.Modifiers.push(mod)
+          }
+        }
       } else {
-        // ResourceCost: only ingredients, never products (per Eco semantics).
-        const tagFilter = b.itemTags.length > 0 ? new Set(b.itemTags) : null
+        // ResourceCost lands on every bonus-eligible ingredient of a matched
+        // recipe. Scope — `ItemTags` included — was already resolved at recipe
+        // level by `resolveScopeRecipes`; there is no per-ingredient filter.
         for (const r of matching) {
           for (const ing of r.Ingredients) {
-            if (tagFilter && !ingredientMatchesTags(ing.ItemOrTag, tagFilter)) continue
+            if (!bonusEligibleIngredients.has(ing)) continue
             ing.Quantity.Modifiers.push(mod)
           }
         }

@@ -66,9 +66,9 @@ export function moduleFactor(
     // ⚠️ This looks like dead code if you only read v14 data — no v14 module
     // mixes scoped and unscoped effects for the same action, so the fallback
     // arm is always taken there. It is load-bearing on v11-v13, where 44 of 56
-    // modules carry BOTH a general percent and an own-skill percent, and the
-    // game's `getPluginModulePercent` returns the own-skill one INSTEAD of the
-    // general one. Removing it would silently apply both to every legacy build.
+    // modules carry BOTH a general percent and an own-skill percent, and only
+    // the own-skill one applies when the skill matches. Removing it would
+    // silently apply both to every legacy build.
     const scoped = group.filter(
       (e) => e.skillIds.length > 0 && scopeSkillId != null && e.skillIds.includes(scopeSkillId)
     )
@@ -88,12 +88,41 @@ export function moduleFactor(
   return (1 + additive) * multiplicative
 }
 
+/**
+ * The two channels a set of modifiers resolves into.
+ *
+ * Most bonuses scale a value (×0.9 for a 10% discount), but some add a flat
+ * amount instead — Mineral Baking's "+1 Quicklime". A flat delta has no
+ * base-independent multiplier, so the two cannot be collapsed into one number.
+ *
+ * Every scaling bonus applies before every flat one, making the result
+ * `base × multiplier + addend` and never `(base + addend) × multiplier`.
+ */
+export interface ModifierEffect {
+  multiplier: number
+  addend: number
+}
+
+/**
+ * Apply a resolved effect to a base value: scale first, then add.
+ *
+ * The addend is applied in the base's own sign direction. Quantities are
+ * bonused as positive amounts, but this codebase stores ingredient quantities
+ * NEGATED (see `import-dataset.ts`), so a flat "+1" on an ingredient has to grow
+ * its magnitude — a plain `base + addend` would shrink it instead.
+ */
+export function applyModifierEffect(base: number, effect: ModifierEffect): number {
+  const sign = base < 0 ? -1 : 1
+  return base * effect.multiplier + sign * effect.addend
+}
+
 export function resolveModifiers(
   modifiers: SolverModifier[],
   context: ModifierContext,
   targetKind: ModifierTargetKind = 'resource'
-): number {
+): ModifierEffect {
   let multiplier = 1
+  let addend = 0
 
   // `Module` modifiers are DEFERRED rather than multiplied inline. Their meaning
   // changed: a Module row no longer says "apply module.percent", it says "this
@@ -121,7 +150,12 @@ export function resolveModifiers(
       case 'Talent': {
         const talent = context.activeTalents.find((t) => t.name === mod.refName)
         if (talent) {
-          multiplier *= talent.value
+          // Only `Yield` bonuses are additive today (all six in v14 are), but
+          // the channel is metric-agnostic so a future additive
+          // ResourceCost/CraftTime lands correctly instead of being silently
+          // multiplied.
+          if (talent.isAdditive) addend += talent.value
+          else multiplier *= talent.value
         }
         break
       }
@@ -144,7 +178,7 @@ export function resolveModifiers(
     multiplier *= moduleFactor(context.moduleEffects, targetKind, moduleScopeSkillId)
   }
 
-  return multiplier
+  return { multiplier, addend }
 }
 
 export function applyRoundFactor(value: number, roundFactor: number): number {

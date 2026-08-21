@@ -1,6 +1,11 @@
 import type { SolverRecipe } from '@/types/solver'
 
-import { applyRoundFactor, resolveModifiers, type ModifierContext } from './dynamic-values'
+import {
+  applyModifierEffect,
+  applyRoundFactor,
+  resolveModifiers,
+  type ModifierContext,
+} from './dynamic-values'
 
 interface EffectiveElement {
   itemOrTagId: string
@@ -45,7 +50,7 @@ export function getEffectiveRecipeQuantities(recipe: SolverRecipe): EffectiveRec
     ingredients[i] = {
       itemOrTagId: ing.itemOrTagId,
       qty: applyRoundFactor(
-        ing.baseQuantity * resolveModifiers(ing.modifiers, ctx),
+        applyModifierEffect(ing.baseQuantity, resolveModifiers(ing.modifiers, ctx)),
         recipe.roundFactor
       ),
     }
@@ -59,7 +64,7 @@ export function getEffectiveRecipeQuantities(recipe: SolverRecipe): EffectiveRec
     products[i] = {
       itemOrTagId: prod.itemOrTagId,
       qty: applyRoundFactor(
-        prod.baseQuantity * resolveModifiers(prod.modifiers, ctx),
+        applyModifierEffect(prod.baseQuantity, resolveModifiers(prod.modifiers, ctx)),
         recipe.roundFactor
       ),
       share: prod.share,

@@ -2,7 +2,12 @@ import { describe, it, expect } from 'vitest'
 
 import type { SolverModifier, SolverTalent, SolverModuleEffect } from '@/types/solver'
 
-import { moduleFactor, resolveModifiers, applyRoundFactor } from '../dynamic-values'
+import {
+  applyModifierEffect,
+  applyRoundFactor,
+  moduleFactor,
+  resolveModifiers,
+} from '../dynamic-values'
 
 /** Build one module's effects. `skillIds: []` means unscoped. */
 function fx(
@@ -24,41 +29,41 @@ describe('resolveModifiers', () => {
   }
 
   it('returns 1 for empty modifiers', () => {
-    expect(resolveModifiers([], baseContext)).toBe(1)
+    expect(resolveModifiers([], baseContext).multiplier).toBe(1)
   })
 
   it('applies skill level modifier', () => {
     const modifiers: SolverModifier[] = [{ dynamicType: 'Skill', refName: 'CookingSkill' }]
-    expect(resolveModifiers(modifiers, baseContext)).toBeCloseTo(0.7)
+    expect(resolveModifiers(modifiers, baseContext).multiplier).toBeCloseTo(0.7)
   })
 
   it('clamps to last value if level exceeds array', () => {
     const ctx = { ...baseContext, skillLevel: 99 }
     const modifiers: SolverModifier[] = [{ dynamicType: 'Skill', refName: 'CookingSkill' }]
-    expect(resolveModifiers(modifiers, ctx)).toBeCloseTo(0.5)
+    expect(resolveModifiers(modifiers, ctx).multiplier).toBeCloseTo(0.5)
   })
 
   it('skips the skill modifier (no NaN) when laborReducePercent is empty', () => {
     const ctx = { ...baseContext, laborReducePercent: [] }
     const modifiers: SolverModifier[] = [{ dynamicType: 'Skill', refName: 'CookingSkill' }]
-    expect(resolveModifiers(modifiers, ctx)).toBe(1)
+    expect(resolveModifiers(modifiers, ctx).multiplier).toBe(1)
   })
 
   it('clamps a negative skill level to the first value instead of indexing from the end', () => {
     const ctx = { ...baseContext, skillLevel: -1 }
     const modifiers: SolverModifier[] = [{ dynamicType: 'Skill', refName: 'CookingSkill' }]
-    expect(resolveModifiers(modifiers, ctx)).toBeCloseTo(1.0)
+    expect(resolveModifiers(modifiers, ctx).multiplier).toBeCloseTo(1.0)
   })
 
   it('applies talent modifier when talent is active', () => {
     const ctx = { ...baseContext, activeTalents: [{ name: 'CookingFocusedTalent', value: 0.85 }] }
     const modifiers: SolverModifier[] = [{ dynamicType: 'Talent', refName: 'CookingFocusedTalent' }]
-    expect(resolveModifiers(modifiers, ctx)).toBeCloseTo(0.85)
+    expect(resolveModifiers(modifiers, ctx).multiplier).toBeCloseTo(0.85)
   })
 
   it('ignores talent modifier when talent is not active', () => {
     const modifiers: SolverModifier[] = [{ dynamicType: 'Talent', refName: 'CookingFocusedTalent' }]
-    expect(resolveModifiers(modifiers, baseContext)).toBe(1)
+    expect(resolveModifiers(modifiers, baseContext).multiplier).toBe(1)
   })
 
   it('multiplies multiple modifiers together', () => {
@@ -71,7 +76,70 @@ describe('resolveModifiers', () => {
       { dynamicType: 'Module', refName: 'CookingSkill' },
       { dynamicType: 'Talent', refName: 'CookingLavishTalent' },
     ]
-    expect(resolveModifiers(modifiers, ctx)).toBeCloseTo(0.765)
+    expect(resolveModifiers(modifiers, ctx).multiplier).toBeCloseTo(0.765)
+  })
+
+  it('routes an additive talent into `addend`, not `multiplier`', () => {
+    // Mineral Baking: +1 Quicklime — a flat delta, not a multiplier.
+    const ctx = {
+      ...baseContext,
+      activeTalents: [{ name: 'MasonryMineralBakingTalent:0', value: 1, isAdditive: true }],
+    }
+    const modifiers: SolverModifier[] = [
+      { dynamicType: 'Talent', refName: 'MasonryMineralBakingTalent:0' },
+    ]
+    expect(resolveModifiers(modifiers, ctx)).toEqual({ multiplier: 1, addend: 1 })
+  })
+
+  it('accumulates several additive talents', () => {
+    const ctx = {
+      ...baseContext,
+      activeTalents: [
+        { name: 'A:0', value: 1, isAdditive: true },
+        { name: 'B:0', value: 3, isAdditive: true },
+      ],
+    }
+    const modifiers: SolverModifier[] = [
+      { dynamicType: 'Talent', refName: 'A:0' },
+      { dynamicType: 'Talent', refName: 'B:0' },
+    ]
+    expect(resolveModifiers(modifiers, ctx).addend).toBe(4)
+  })
+
+  it('keeps the additive and multiplicative channels independent', () => {
+    const ctx = {
+      ...baseContext,
+      activeTalents: [
+        { name: 'Mult:0', value: 0.5 },
+        { name: 'Add:0', value: 2, isAdditive: true },
+      ],
+    }
+    const modifiers: SolverModifier[] = [
+      { dynamicType: 'Talent', refName: 'Mult:0' },
+      { dynamicType: 'Talent', refName: 'Add:0' },
+    ]
+    expect(resolveModifiers(modifiers, ctx)).toEqual({ multiplier: 0.5, addend: 2 })
+  })
+})
+
+describe('applyModifierEffect', () => {
+  it('multiplies before adding, since scaling applies before flat deltas', () => {
+    // 10 x 0.5 + 2 = 7, NOT (10 + 2) x 0.5 = 6.
+    expect(applyModifierEffect(10, { multiplier: 0.5, addend: 2 })).toBe(7)
+  })
+
+  it('grows an ingredient magnitude, since ingredients are stored negated', () => {
+    // A "+1" on an ingredient means one MORE consumed. Naive `base + addend`
+    // would give -3 (one fewer) instead.
+    expect(applyModifierEffect(-4, { multiplier: 1, addend: 1 })).toBe(-5)
+  })
+
+  it('treats a zero base as positive so the addend is not lost to sign(0)', () => {
+    expect(applyModifierEffect(0, { multiplier: 1, addend: 1 })).toBe(1)
+  })
+
+  it('is a no-op for the identity effect', () => {
+    expect(applyModifierEffect(7.5, { multiplier: 1, addend: 0 })).toBe(7.5)
   })
 })
 
