@@ -16,7 +16,8 @@
     "calculator": "Price Calculator",
     "crops": "Crop Tracker",
     "resources": "Biome Resources",
-    "toolSwitcher": "Switch tool"
+    "toolSwitcher": "Switch tool",
+    "housing": "Housing Score"
   },
   "dataset": {
     "selector": {
@@ -601,5 +602,37 @@
       "caloriesPerItemHeader": "Cal / {name}",
       "species": "Species"
     }
+  },
+  "housingScore": {
+    "title": "Housing Score",
+    "viewSwitcher": "Switch housing view",
+    "view": {
+      "furnishings": "Furnishings",
+      "materials": "Building Materials"
+    },
+    "columns": {
+      "item": "Item",
+      "category": "Room Category",
+      "type": "Furniture Type",
+      "baseValue": "Value",
+      "repeatReduction": "Repeat Penalty",
+      "skill": "Skill",
+      "tier": "Tier",
+      "softCap": "Score Soft Cap",
+      "hardCap": "Score Hard Cap"
+    },
+    "filters": {
+      "category": "Room category",
+      "type": "Furniture type",
+      "skill": "Skill",
+      "categoryPlaceholder": "Categories",
+      "typePlaceholder": "Types",
+      "skillPlaceholder": "Skills",
+      "reset": "Reset filters"
+    },
+    "none": "—",
+    "noSkill": "—",
+    "empty": "This dataset has no housing data. Update the dataset to enable the Housing Score browsers.",
+    "emptyFiltered": "No items match the selected filters."
   }
 }

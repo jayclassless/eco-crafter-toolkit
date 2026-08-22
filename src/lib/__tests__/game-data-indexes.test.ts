@@ -364,3 +364,135 @@ describe('craftingTableModules', () => {
     expect(craftingTableModules(store, 'ds1', 'ct9')[0].slot).toBe('Specialty')
   })
 })
+
+describe('skillIdsByItemId', () => {
+  function seedRecipe(recipeId: string, skillId: string, productId: string, ingredientId?: string) {
+    store.setRow('recipes', recipeId, { id: recipeId, datasetId: 'ds', skillId })
+    store.setRow('recipeElements', `${recipeId}p`, {
+      id: `${recipeId}p`,
+      datasetId: 'ds',
+      recipeId,
+      itemOrTagId: productId,
+      baseQuantity: 1,
+      isProduct: true,
+      index: 0,
+    })
+    if (ingredientId) {
+      store.setRow('recipeElements', `${recipeId}i`, {
+        id: `${recipeId}i`,
+        datasetId: 'ds',
+        recipeId,
+        itemOrTagId: ingredientId,
+        baseQuantity: -1,
+        isProduct: false,
+        index: 0,
+      })
+    }
+  }
+
+  it('reports every distinct skill that produces the item', () => {
+    // Glass is the real multi-skill case: Glassworking and Recycling both make it.
+    seedRecipe('r1', 'glassworking', 'glass')
+    seedRecipe('r2', 'recycling', 'glass')
+    seedRecipe('r3', 'glassworking', 'glass') // duplicate skill, deduped
+    const map = getGameDataIndexes(store).skillIdsByItemId
+    expect(map.get('glass')).toEqual(['glassworking', 'recycling'])
+  })
+
+  it('omits recipes that also consume the item', () => {
+    // Reprocessing is not a way to obtain the item.
+    seedRecipe('r1', 'smelting', 'ingot', 'ingot')
+    expect(getGameDataIndexes(store).skillIdsByItemId.get('ingot')).toBeUndefined()
+  })
+
+  it('omits unskilled recipes and items nothing produces', () => {
+    seedRecipe('r1', '', 'campfire')
+    const map = getGameDataIndexes(store).skillIdsByItemId
+    expect(map.get('campfire')).toBeUndefined()
+    expect(map.get('never-made')).toBeUndefined()
+  })
+})
+
+describe('housing indexes', () => {
+  it('buckets furnishings and materials by dataset, keeping tier 0 materials', () => {
+    store.setRow('items', 'chair', {
+      id: 'chair',
+      datasetId: 'ds1',
+      name: 'ChairItem',
+      housingCategory: 'Seating',
+    })
+    store.setRow('items', 'chair2', {
+      id: 'chair2',
+      datasetId: 'ds2',
+      name: 'ChairItem',
+      housingCategory: 'Seating',
+    })
+    store.setRow('items', 'basalt', {
+      id: 'basalt',
+      datasetId: 'ds1',
+      name: 'MortaredBasaltItem',
+      isBuildingMaterial: true,
+      buildingBlockTier: 0,
+    })
+    store.setRow('items', 'plain', { id: 'plain', datasetId: 'ds1', name: 'WoodItem' })
+    const indexes = getGameDataIndexes(store)
+    expect(indexes.housingItemIdsByDatasetId.get('ds1')).toEqual(['chair'])
+    expect(indexes.housingItemIdsByDatasetId.get('ds2')).toEqual(['chair2'])
+    expect(indexes.buildingMaterialItemIdsByDatasetId.get('ds1')).toEqual(['basalt'])
+  })
+
+  it('rehydrates the JSON-encoded category columns and orders by declaration index', () => {
+    store.setRow('roomCategories', 'c1', {
+      id: 'c1',
+      datasetId: 'ds1',
+      name: 'Bedroom',
+      color: '#00B4A5',
+      index: 1,
+      supportingRoomCategoryNames: JSON.stringify(['Living Room', 'Seating']),
+      maxSupportPercentOfPrimaryPerCategory: JSON.stringify({ Outdoor: 1 }),
+      affectsPropertyTypes: JSON.stringify(['Residence']),
+    })
+    store.setRow('roomCategories', 'c0', {
+      id: 'c0',
+      datasetId: 'ds1',
+      name: 'Living Room',
+      color: '#DB48C5',
+      index: 0,
+    })
+    store.setRow('roomCategories', 'other', { id: 'other', datasetId: 'ds2', name: 'Kitchen' })
+    const list = getGameDataIndexes(store).roomCategoriesByDatasetId.get('ds1')!
+    expect(list.map((c) => c.name)).toEqual(['Living Room', 'Bedroom'])
+    expect(list[1].supportingRoomCategoryNames).toEqual(['Living Room', 'Seating'])
+    expect(list[1].maxSupportPercentOfPrimaryPerCategory).toEqual({ Outdoor: 1 })
+    expect(list[1].affectsPropertyTypes).toEqual(['Residence'])
+    // Defaults survive for a row that never set the JSON columns.
+    expect(list[0].supportingRoomCategoryNames).toEqual([])
+  })
+
+  it('orders room tiers by tier value and scopes them to their dataset', () => {
+    store.setRow('roomTiers', 't3', {
+      id: 't3',
+      datasetId: 'ds1',
+      tierVal: 3,
+      softCap: 15,
+      hardCap: 30,
+    })
+    store.setRow('roomTiers', 't0', {
+      id: 't0',
+      datasetId: 'ds1',
+      tierVal: 0,
+      softCap: 2,
+      hardCap: 4,
+    })
+    store.setRow('roomTiers', 'x', {
+      id: 'x',
+      datasetId: 'ds2',
+      tierVal: 5,
+      softCap: 25,
+      hardCap: 50,
+    })
+    const tiers = getGameDataIndexes(store).roomTiersByDatasetId.get('ds1')!
+    expect(tiers.map((t) => t.tierVal)).toEqual([0, 3])
+    expect(getGameDataIndexes(store).roomTiersByDatasetId.get('ds2')!).toHaveLength(1)
+  })
+})

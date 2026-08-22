@@ -436,3 +436,132 @@ describe.each(BONUS_SYSTEM)('bundled %s talent bonus scope', (id) => {
     expect(orphans).toEqual([])
   })
 })
+
+// Housing data feeds the Housing Score browsers. Same rationale as the
+// gathering block above: these assertions are the review of a multi-MB
+// re-extraction, so they pin the exact counts and the two parser rules that
+// are easiest to break silently.
+describe.each(BUNDLED)('bundled %s housing data', (id) => {
+  const data = load(id)
+  const items = data.Items
+  const categories = data.RoomCategories ?? []
+  const tiers = data.RoomTiers ?? []
+  const byName = new Map(items.map((i) => [i.Name, i]))
+
+  it('ships the full room category and tier tables', () => {
+    expect(categories).toHaveLength(10)
+    expect(tiers.map((t) => t.Tier)).toEqual([0, 1, 2, 3, 4, 5])
+    for (const tier of tiers) {
+      expect(tier.SoftCap).toBeLessThan(tier.HardCap)
+      expect(tier.DiminishingReturnPercent).toBeGreaterThan(0)
+      expect(tier.DiminishingReturnPercent).toBeLessThan(1)
+    }
+  })
+
+  it('has exactly one negating category and three support-only categories', () => {
+    expect(categories.filter((c) => c.NegatesValue).map((c) => c.Name)).toEqual(['Industrial'])
+    expect(
+      categories
+        .filter((c) => !c.CanBeRoomCategory)
+        .map((c) => c.Name)
+        .sort()
+    ).toEqual(['Decoration', 'Lighting', 'Seating'])
+  })
+
+  it('parses a literal color where the game has one, and leaves the rest empty', () => {
+    for (const cat of categories) {
+      if (cat.Color !== '') expect(cat.Color).toMatch(/^#[0-9A-F]{6}$/)
+    }
+    // Cultural is the one category with no color of its own; the UI falls
+    // back to the default text color for it.
+    expect(categories.filter((c) => c.Color === '').map((c) => c.Name)).toEqual(['Cultural'])
+  })
+
+  it('ships a plausible number of furnishings, all with a known category', () => {
+    const housing = items.filter((i) => i.HousingCategory)
+    // v11 has the smallest set (396 after excluding hidden/QA objects).
+    expect(housing.length).toBeGreaterThanOrEqual(390)
+    const names = new Set(categories.map((c) => c.Name))
+    for (const item of housing) {
+      expect(names.has(item.HousingCategory!)).toBe(true)
+      // 0 is real (the plaques); 1 means no penalty. Outside [0,1] would
+      // amplify repeats instead of diminishing them.
+      for (const m of [
+        item.HousingDiminishingReturnMultiplier,
+        item.HousingDiminishingMultiplierAcrossFullProperty,
+      ]) {
+        expect(m).toBeGreaterThanOrEqual(0)
+        expect(m).toBeLessThanOrEqual(1)
+      }
+    }
+  })
+
+  it('excludes the hidden QA housing probes', () => {
+    // These are [Category("Hidden")]/[Tag("NotInBrowser")] test objects that a
+    // player can never obtain; shipping them would inflate every category.
+    for (const name of ['BathroomItem', 'BedroomItem', 'KitchenroomItem', 'LivingroomItem']) {
+      expect(byName.get(name)?.HousingCategory).toBeUndefined()
+    }
+  })
+
+  it('ships exactly 46 room materials with a stable tier distribution', () => {
+    const materials = items.filter((i) => i.BuildingBlockTier != null)
+    expect(materials).toHaveLength(46)
+    const histogram: Record<number, number> = {}
+    for (const m of materials)
+      histogram[m.BuildingBlockTier!] = (histogram[m.BuildingBlockTier!] ?? 0) + 1
+    // Identical across all four game versions — any drift is a parser change.
+    expect(histogram).toEqual({ 0: 5, 1: 1, 2: 7, 3: 6, 4: 2, 5: 25 })
+  })
+
+  it('takes the highest tier across a material’s block forms', () => {
+    // Curtains: one untiered base block in AutoGen/Block plus 16 tier-5 wall
+    // forms in AutoGen/Forms. Max is what a player actually builds with.
+    for (const name of ['CottonCurtainsItem', 'NylonCurtainsItem', 'WoolCurtainsItem']) {
+      expect(byName.get(name)?.BuildingBlockTier).toBe(5)
+    }
+    // The converse: these have no Forms file at all, one untiered block each,
+    // so tier 0 is real game data rather than a failed parse.
+    for (const name of ['MortaredBasaltItem', 'MortaredGneissItem', 'MortaredShaleItem']) {
+      expect(byName.get(name)?.BuildingBlockTier).toBe(0)
+    }
+  })
+
+  it('reads the block tier, not the item’s tech tier', () => {
+    // 7 room materials carry no [Tier] attribute at all, so an extractor that
+    // read the tech tier would silently report 0 for them.
+    expect(byName.get('BrickItem')?.BuildingBlockTier).toBe(3)
+    expect(byName.get('AdobeItem')?.BuildingBlockTier).toBe(1)
+    expect(byName.get('GardenGravelItem')?.BuildingBlockTier).toBe(0)
+    expect(byName.get('ZenGardenItem')?.BuildingBlockTier).toBe(0)
+  })
+})
+
+// The whole reason housing data ships per dataset rather than as app constants.
+// If these ever collapse to one value, someone has hardcoded v14's numbers.
+describe('housing data differs across versions', () => {
+  const tierRate = (id: string) => load(id).RoomTiers![0].DiminishingReturnPercent
+  const decorationSupport = (id: string) =>
+    load(id).RoomCategories!.find((c) => c.Name === 'Decoration')!.MaxSupportPercentOfPrimary
+
+  it('changed the room tier diminishing rate in v12 and again in v13', () => {
+    expect(tierRate('eco-v11')).toBeCloseTo(0.5)
+    expect(tierRate('eco-v12')).toBeCloseTo(0.35)
+    expect(tierRate('eco-v13')).toBeCloseTo(0.65)
+    expect(tierRate('eco-v14')).toBeCloseTo(0.65)
+  })
+
+  it('raised how much Decoration can support a room in v12', () => {
+    expect(decorationSupport('eco-v11')).toBeCloseTo(0.2)
+    expect(decorationSupport('eco-v12')).toBeCloseTo(0.5)
+    expect(decorationSupport('eco-v14')).toBeCloseTo(0.5)
+  })
+
+  it('added furnishings in later versions', () => {
+    const count = (id: string) => load(id).Items.filter((i) => i.HousingCategory).length
+    expect(count('eco-v11')).toBe(396)
+    expect(count('eco-v12')).toBe(478)
+    expect(count('eco-v13')).toBe(478)
+    expect(count('eco-v14')).toBe(486)
+  })
+})

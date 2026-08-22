@@ -124,12 +124,13 @@ describe('NavBar', () => {
     expect(screen.getByText('Eco vTest')).toBeInTheDocument()
   })
 
-  it('renders the tool switcher with all three tools', () => {
+  it('renders the tool switcher with every tool', () => {
     renderNav(makeStores())
     // The switcher is icon-only; tool names are exposed via aria-label/title.
     expect(screen.getByLabelText('Price Calculator')).toBeInTheDocument()
     expect(screen.getByLabelText('Crop Tracker')).toBeInTheDocument()
     expect(screen.getByLabelText('Biome Resources')).toBeInTheDocument()
+    expect(screen.getByLabelText('Housing Score')).toBeInTheDocument()
   })
 
   it('navigates to the build-less resources route when resources is selected', () => {
@@ -157,6 +158,35 @@ describe('NavBar', () => {
     )
     fireEvent.click(screen.getByLabelText('Biome Resources'))
     expect(screen.getByTestId('location')).toHaveTextContent('/ds1/resources')
+  })
+
+  it('drops the active build when switching into the dataset-scoped housing tool', () => {
+    // /:datasetId/housing/:buildId has no route; carrying the build here would
+    // fall through to the catch-all redirect and bounce the user to /.
+    render(
+      <StoreContext.Provider
+        value={{
+          ...makeStores(),
+          gameDataPersister: stubPersister(),
+          buildPersister: stubPersister(),
+          uiPersister: stubPersister(),
+        }}
+      >
+        <MemoryRouter initialEntries={['/ds1/calculator/b1']}>
+          <NavBar
+            tool="calculator"
+            datasetId="ds1"
+            buildId="b1"
+            onSelectBuild={() => {}}
+            onDeletedBuild={() => {}}
+            onOpenSettings={() => {}}
+          />
+          <LocationProbe />
+        </MemoryRouter>
+      </StoreContext.Provider>
+    )
+    fireEvent.click(screen.getByLabelText('Housing Score'))
+    expect(screen.getByTestId('location')).toHaveTextContent('/ds1/housing')
   })
 
   it('hides the build selector when no build props are passed', () => {

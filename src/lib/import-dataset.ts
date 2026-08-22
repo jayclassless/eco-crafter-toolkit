@@ -18,6 +18,8 @@ import type {
   RecipeUnlock,
   LocalizedName,
   GatheringTool,
+  RoomCategory,
+  RoomTier,
   TreeSpecies,
 } from '@/types/game-data'
 
@@ -177,6 +179,107 @@ export function validateDatasetJson(data: unknown): ValidationResult {
     }
   }
 
+  // ---- Housing ----
+  // Also optional. Categories reference each other (and are referenced by
+  // items) *by name*, so these checks are what stands in for the referential
+  // integrity that resolving to row ids would otherwise provide.
+  const roomCategories = typed.RoomCategories ?? []
+  const categoryNames = new Set<string>()
+  for (const cat of roomCategories) {
+    if (!cat.Name) {
+      errors.push('Room category has an empty Name')
+      continue
+    }
+    if (categoryNames.has(cat.Name)) {
+      errors.push(`Duplicate room category "${cat.Name}"`)
+    }
+    categoryNames.add(cat.Name)
+    // An empty color is expected and fine — the UI falls back to its default
+    // text color. Only a malformed non-empty value is an error.
+    if (cat.Color && !/^#[0-9A-Fa-f]{6}$/.test(cat.Color)) {
+      errors.push(`Room category "${cat.Name}" has malformed color "${cat.Color}"`)
+    }
+  }
+  for (const cat of roomCategories) {
+    for (const supporting of cat.SupportingRoomCategoryNames ?? []) {
+      if (!categoryNames.has(supporting)) {
+        errors.push(
+          `Room category "${cat.Name}" references non-existent supporting category "${supporting}"`
+        )
+      }
+    }
+    for (const primary of Object.keys(cat.MaxSupportPercentOfPrimaryPerCategory ?? {})) {
+      if (!categoryNames.has(primary)) {
+        errors.push(
+          `Room category "${cat.Name}" has a support override for non-existent category "${primary}"`
+        )
+      }
+    }
+  }
+
+  const tierValues = new Set<number>()
+  for (const tier of typed.RoomTiers ?? []) {
+    if (!Number.isInteger(tier.Tier)) {
+      errors.push(`Room tier "${tier.Tier}" is not an integer`)
+    } else if (tierValues.has(tier.Tier)) {
+      errors.push(`Duplicate room tier ${tier.Tier}`)
+    }
+    tierValues.add(tier.Tier)
+    if (!(tier.SoftCap < tier.HardCap)) {
+      errors.push(`Room tier ${tier.Tier} has SoftCap ${tier.SoftCap} >= HardCap ${tier.HardCap}`)
+    }
+    // 0 or 1 collapses the soft-cap curve (no cap, or an instant one), so
+    // neither can be a real value.
+    if (!(tier.DiminishingReturnPercent > 0 && tier.DiminishingReturnPercent < 1)) {
+      errors.push(
+        `Room tier ${tier.Tier} has DiminishingReturnPercent ${tier.DiminishingReturnPercent} outside (0, 1)`
+      )
+    }
+  }
+
+  let housingItemCount = 0
+  for (const item of typed.Items) {
+    if (item.HousingCategory) {
+      housingItemCount++
+      if (roomCategories.length > 0 && !categoryNames.has(item.HousingCategory)) {
+        errors.push(
+          `Item "${item.Name}" references non-existent room category "${item.HousingCategory}"`
+        )
+      }
+      for (const [field, value] of [
+        ['HousingDiminishingReturnMultiplier', item.HousingDiminishingReturnMultiplier],
+        [
+          'HousingDiminishingMultiplierAcrossFullProperty',
+          item.HousingDiminishingMultiplierAcrossFullProperty,
+        ],
+      ] as const) {
+        // 0 is real (the plaques), 1 is "no penalty"; anything outside would
+        // amplify rather than diminish.
+        if (value != null && !(value >= 0 && value <= 1)) {
+          errors.push(`Item "${item.Name}" has ${field} ${value} outside [0, 1]`)
+        }
+      }
+      if (item.HousingBaseValue != null && !Number.isFinite(item.HousingBaseValue)) {
+        errors.push(`Item "${item.Name}" has a non-finite HousingBaseValue`)
+      }
+    }
+    // Tiers outside 0-5 are clamped when looked up, so an out-of-range value
+    // would silently resolve to the wrong caps rather than failing.
+    if (
+      item.BuildingBlockTier != null &&
+      (!Number.isInteger(item.BuildingBlockTier) ||
+        item.BuildingBlockTier < 0 ||
+        item.BuildingBlockTier > 5)
+    ) {
+      errors.push(`Item "${item.Name}" has BuildingBlockTier ${item.BuildingBlockTier} outside 0-5`)
+    }
+  }
+  // Catches a half-extracted dataset: furnishings present but the category
+  // table missing would leave every row uncategorized and uncolored.
+  if (housingItemCount > 0 && roomCategories.length === 0) {
+    errors.push(`Dataset has ${housingItemCount} housing item(s) but no RoomCategories`)
+  }
+
   return { valid: errors.length === 0, errors }
 }
 
@@ -199,6 +302,8 @@ export interface ParsedDataset {
   recipeUnlocks: RecipeUnlock[]
   gatheringTools: GatheringTool[]
   treeSpecies: TreeSpecies[]
+  roomCategories: RoomCategory[]
+  roomTiers: RoomTier[]
   localizedNames: LocalizedName[]
 }
 
@@ -221,6 +326,8 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
   const recipeUnlocks: RecipeUnlock[] = []
   const gatheringTools: GatheringTool[] = []
   const treeSpecies: TreeSpecies[] = []
+  const roomCategories: RoomCategory[] = []
+  const roomTiers: RoomTier[] = []
   const localizedNames: LocalizedName[] = []
 
   const skillIdByName = new Map<string, string>()
@@ -352,6 +459,21 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
       if (i.AnimalName) addLocalizedNames(localizedNames, 'animal', itemId, i.AnimalName)
     }
     if (i.ClothingCalorieRate != null) item.clothingCalorieRate = i.ClothingCalorieRate
+    if (i.HousingCategory) {
+      item.housingCategory = i.HousingCategory
+      item.housingBaseValue = i.HousingBaseValue ?? 0
+      item.housingTypeForRoomLimit = i.HousingTypeForRoomLimit ?? ''
+      // 1 means no penalty, which is the right default — 0 would instead
+      // zero every repeat.
+      item.housingDiminishingReturnMultiplier = i.HousingDiminishingReturnMultiplier ?? 1
+      item.housingPropertyDiminishingMultiplier =
+        i.HousingDiminishingMultiplierAcrossFullProperty ?? 1
+    }
+    // Tier 0 is a real tier, so presence is a separate boolean.
+    if (i.BuildingBlockTier != null) {
+      item.isBuildingMaterial = true
+      item.buildingBlockTier = i.BuildingBlockTier
+    }
     items.push(item)
     addLocalizedNames(localizedNames, 'item', itemId, i.LocalizedName)
 
@@ -648,6 +770,44 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
     addLocalizedNames(localizedNames, 'treeSpecies', speciesId, ts.LocalizedName)
   }
 
+  // Housing reference data. Category links (item → category, and category →
+  // supporting category) stay as names on purpose: the game itself keys
+  // categories by name, and resolving only some of those edges to row ids would
+  // leave two keying schemes in one graph. validateDatasetJson enforces that
+  // every name resolves.
+  for (const rc of data.RoomCategories ?? []) {
+    const categoryId = generateId()
+    roomCategories.push({
+      id: categoryId,
+      datasetId,
+      name: rc.Name,
+      color: rc.Color ?? '',
+      index: rc.Index ?? 0,
+      affectsPropertyTypes: rc.AffectsPropertyTypes ?? [],
+      supportingRoomCategoryNames: rc.SupportingRoomCategoryNames ?? [],
+      maxSupportPercentOfPrimary: rc.MaxSupportPercentOfPrimary ?? 1,
+      maxSupportPercentOfPrimaryPerCategory: rc.MaxSupportPercentOfPrimaryPerCategory ?? {},
+      capToPercentOfRestOfProperty: rc.CapToPercentOfRestOfProperty ?? 0,
+      canBeRoomCategory: rc.CanBeRoomCategory ?? true,
+      supportForAnyRoomType: rc.SupportForAnyRoomType ?? false,
+      shouldCapFromRoomMaterials: rc.ShouldCapFromRoomMaterials ?? true,
+      canAutoChooseCategory: rc.CanAutoChooseCategory ?? true,
+      negatesValue: rc.NegatesValue ?? false,
+    })
+    // A distinct entity type, so a category named like an item can't shadow it.
+    addLocalizedNames(localizedNames, 'roomCategory', categoryId, rc.LocalizedName)
+  }
+  for (const rt of data.RoomTiers ?? []) {
+    roomTiers.push({
+      id: generateId(),
+      datasetId,
+      tierVal: rt.Tier,
+      softCap: rt.SoftCap,
+      hardCap: rt.HardCap,
+      diminishingReturnPercent: rt.DiminishingReturnPercent,
+    })
+  }
+
   return {
     skills,
     talents,
@@ -667,6 +827,8 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
     recipeUnlocks,
     gatheringTools,
     treeSpecies,
+    roomCategories,
+    roomTiers,
     localizedNames,
   }
 }

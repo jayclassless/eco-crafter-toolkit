@@ -342,3 +342,30 @@ describe('purgeData', () => {
     expect(kept.get('item:iron')).toBe('Iron (ds2)')
   })
 })
+
+describe('purging housing reference tables', () => {
+  it('removes only the selected dataset’s room categories and tiers', async () => {
+    const f = makeFixture()
+    for (const datasetId of ['ds1', 'ds2']) {
+      f.gameDataStore.setRow('roomCategories', `${datasetId}-cat`, {
+        id: `${datasetId}-cat`,
+        datasetId,
+        name: 'Seating',
+      })
+      f.gameDataStore.setRow('roomTiers', `${datasetId}-tier`, {
+        id: `${datasetId}-tier`,
+        datasetId,
+        tierVal: 0,
+      })
+    }
+
+    await purgeData(
+      { datasetIds: ['ds1'], purgeAllBuilds: false },
+      { gameDataStore: f.gameDataStore, buildStore: f.buildStore, uiStore: f.uiStore },
+      f.persisters
+    )
+
+    expect(f.gameDataStore.getRowIds('roomCategories')).toEqual(['ds2-cat'])
+    expect(f.gameDataStore.getRowIds('roomTiers')).toEqual(['ds2-tier'])
+  })
+})

@@ -35,6 +35,10 @@ describe('createUIStore', () => {
       hasSeenAboutDialog: false,
       cropSortField: 'name',
       cropSortDir: 'asc',
+      housingFurnishingSortField: 'baseValue',
+      housingFurnishingSortDir: 'desc',
+      housingMaterialSortField: 'tier',
+      housingMaterialSortDir: 'asc',
     })
   })
 

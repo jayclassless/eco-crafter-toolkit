@@ -52,6 +52,8 @@ export function createGameDataOps(gameDataStore: Store) {
           'recipeUnlocks',
           'gatheringTools',
           'treeSpecies',
+          'roomCategories',
+          'roomTiers',
         ] as const) {
           for (const rowId of gameDataStore.getRowIds(table)) {
             if (gameDataStore.getCell(table, rowId, 'datasetId') === datasetId) {
@@ -141,6 +143,20 @@ export function createGameDataOps(gameDataStore: Store) {
       for (const ts of parsed.treeSpecies) {
         gameDataStore.setRow('treeSpecies', ts.id, { ...ts, datasetId })
       }
+      for (const rc of parsed.roomCategories) {
+        gameDataStore.setRow('roomCategories', rc.id, {
+          ...rc,
+          datasetId,
+          affectsPropertyTypes: JSON.stringify(rc.affectsPropertyTypes),
+          supportingRoomCategoryNames: JSON.stringify(rc.supportingRoomCategoryNames),
+          maxSupportPercentOfPrimaryPerCategory: JSON.stringify(
+            rc.maxSupportPercentOfPrimaryPerCategory
+          ),
+        })
+      }
+      for (const rt of parsed.roomTiers) {
+        gameDataStore.setRow('roomTiers', rt.id, { ...rt, datasetId })
+      }
     })
 
     try {
@@ -176,6 +192,8 @@ export function createGameDataOps(gameDataStore: Store) {
       'recipeUnlocks',
       'gatheringTools',
       'treeSpecies',
+      'roomCategories',
+      'roomTiers',
     ] as const
 
     gameDataStore.transaction(() => {

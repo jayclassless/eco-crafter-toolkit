@@ -63,6 +63,70 @@ function makeMinimalDataset(): DatasetJson {
         PlantName: { 'en-US': 'Oak' },
         IsTree: true,
       },
+      {
+        Name: 'ChairItem',
+        LocalizedName: { 'en-US': 'Chair' },
+        HousingCategory: 'Seating',
+        HousingBaseValue: 3,
+        HousingTypeForRoomLimit: 'Chair',
+        HousingDiminishingReturnMultiplier: 0.6,
+        HousingDiminishingMultiplierAcrossFullProperty: 1,
+      },
+      {
+        Name: 'MachineItem',
+        LocalizedName: { 'en-US': 'Machine' },
+        HousingCategory: 'Industrial',
+        HousingBaseValue: 0,
+        HousingTypeForRoomLimit: '',
+      },
+      {
+        Name: 'BrickItem',
+        LocalizedName: { 'en-US': 'Brick' },
+        BuildingBlockTier: 3,
+      },
+      {
+        // Tier 0 is a real material tier, not "absent".
+        Name: 'MortaredBasaltItem',
+        LocalizedName: { 'en-US': 'Mortared Basalt' },
+        BuildingBlockTier: 0,
+      },
+    ],
+    RoomCategories: [
+      {
+        Name: 'Seating',
+        LocalizedName: { 'en-US': 'Seating' },
+        Color: '#E5956E',
+        Index: 0,
+        AffectsPropertyTypes: ['Residence', 'Cultural'],
+        SupportingRoomCategoryNames: [],
+        MaxSupportPercentOfPrimary: 0.3,
+        CapToPercentOfRestOfProperty: 0,
+        CanBeRoomCategory: false,
+        SupportForAnyRoomType: false,
+        ShouldCapFromRoomMaterials: true,
+        CanAutoChooseCategory: true,
+        NegatesValue: false,
+      },
+      {
+        // A category with no color of its own must stay valid.
+        Name: 'Industrial',
+        LocalizedName: { 'en-US': 'Industrial' },
+        Color: '',
+        Index: 1,
+        AffectsPropertyTypes: ['Residence'],
+        SupportingRoomCategoryNames: ['Seating'],
+        MaxSupportPercentOfPrimary: 1,
+        CapToPercentOfRestOfProperty: 0,
+        CanBeRoomCategory: true,
+        SupportForAnyRoomType: false,
+        ShouldCapFromRoomMaterials: true,
+        CanAutoChooseCategory: true,
+        NegatesValue: true,
+      },
+    ],
+    RoomTiers: [
+      { Tier: 0, SoftCap: 2, HardCap: 4, DiminishingReturnPercent: 0.65 },
+      { Tier: 3, SoftCap: 15, HardCap: 30, DiminishingReturnPercent: 0.65 },
     ],
     Tags: [
       {
@@ -485,5 +549,150 @@ describe('computeMaxTalentLevel', () => {
 
   it('clamps to 20 when the cap is never reached within the search window', () => {
     expect(computeMaxTalentLevel(0.9999, 0.5)).toBe(20)
+  })
+})
+
+describe('validateDatasetJson — housing', () => {
+  it('accepts a dataset with no housing sections at all (pre-housing extracts)', () => {
+    const data = makeMinimalDataset()
+    delete data.RoomCategories
+    delete data.RoomTiers
+    for (const item of data.Items) {
+      delete item.HousingCategory
+      delete item.BuildingBlockTier
+    }
+    expect(validateDatasetJson(data).valid).toBe(true)
+  })
+
+  it('accepts a category with no literal color', () => {
+    const data = makeMinimalDataset()
+    expect(data.RoomCategories!.some((c) => c.Color === '')).toBe(true)
+    expect(validateDatasetJson(data).valid).toBe(true)
+  })
+
+  it('rejects a malformed non-empty color', () => {
+    const data = makeMinimalDataset()
+    data.RoomCategories![0].Color = 'E5956E'
+    const result = validateDatasetJson(data)
+    expect(result.valid).toBe(false)
+    expect(result.errors.join()).toMatch(/malformed color/)
+  })
+
+  it('rejects an item referencing an unknown room category', () => {
+    const data = makeMinimalDataset()
+    data.Items.find((i) => i.Name === 'ChairItem')!.HousingCategory = 'Nonexistent'
+    const result = validateDatasetJson(data)
+    expect(result.valid).toBe(false)
+    expect(result.errors.join()).toMatch(/non-existent room category/)
+  })
+
+  it('rejects a dangling supporting-category reference', () => {
+    const data = makeMinimalDataset()
+    data.RoomCategories![0].SupportingRoomCategoryNames = ['Ghost']
+    const result = validateDatasetJson(data)
+    expect(result.valid).toBe(false)
+    expect(result.errors.join()).toMatch(/non-existent supporting category/)
+  })
+
+  it('rejects duplicate room categories and duplicate tiers', () => {
+    const dupCat = makeMinimalDataset()
+    dupCat.RoomCategories!.push({ ...dupCat.RoomCategories![0] })
+    expect(validateDatasetJson(dupCat).errors.join()).toMatch(/Duplicate room category/)
+
+    const dupTier = makeMinimalDataset()
+    dupTier.RoomTiers!.push({ ...dupTier.RoomTiers![0] })
+    expect(validateDatasetJson(dupTier).errors.join()).toMatch(/Duplicate room tier/)
+  })
+
+  it('rejects a tier whose soft cap is not below its hard cap', () => {
+    const data = makeMinimalDataset()
+    data.RoomTiers![0].SoftCap = 99
+    expect(validateDatasetJson(data).errors.join()).toMatch(/SoftCap 99 >= HardCap/)
+  })
+
+  it('rejects a degenerate diminishing rate', () => {
+    // 0 or 1 makes the game's soft-cap curve collapse.
+    for (const rate of [0, 1]) {
+      const data = makeMinimalDataset()
+      data.RoomTiers![0].DiminishingReturnPercent = rate
+      expect(validateDatasetJson(data).errors.join()).toMatch(/outside \(0, 1\)/)
+    }
+  })
+
+  it('rejects a building block tier outside the 0-5 range the game clamps to', () => {
+    const data = makeMinimalDataset()
+    data.Items.find((i) => i.Name === 'BrickItem')!.BuildingBlockTier = 6
+    expect(validateDatasetJson(data).errors.join()).toMatch(/BuildingBlockTier 6 outside 0-5/)
+  })
+
+  it('rejects a repeat multiplier outside [0, 1]', () => {
+    const data = makeMinimalDataset()
+    data.Items.find((i) => i.Name === 'ChairItem')!.HousingDiminishingReturnMultiplier = 1.5
+    expect(validateDatasetJson(data).errors.join()).toMatch(/outside \[0, 1\]/)
+  })
+
+  it('rejects housing items shipped without any room categories', () => {
+    // The half-extracted case: rows would render uncategorized and uncolored.
+    const data = makeMinimalDataset()
+    data.RoomCategories = []
+    expect(validateDatasetJson(data).errors.join()).toMatch(
+      /housing item\(s\) but no RoomCategories/
+    )
+  })
+})
+
+describe('parseDataset — housing', () => {
+  it('copies furnishing fields onto the item and records the category by name', () => {
+    const parsed = parseDataset(makeMinimalDataset(), 'ds1')
+    const chair = parsed.items.find((i) => i.name === 'ChairItem')!
+    expect(chair).toMatchObject({
+      housingCategory: 'Seating',
+      housingBaseValue: 3,
+      housingTypeForRoomLimit: 'Chair',
+      housingDiminishingReturnMultiplier: 0.6,
+      housingPropertyDiminishingMultiplier: 1,
+    })
+  })
+
+  it('defaults absent repeat multipliers to 1, not 0', () => {
+    // 0 would zero every repeat instead of leaving it unpenalized.
+    const data = makeMinimalDataset()
+    const machine = data.Items.find((i) => i.Name === 'MachineItem')!
+    delete machine.HousingDiminishingReturnMultiplier
+    delete machine.HousingDiminishingMultiplierAcrossFullProperty
+    const parsed = parseDataset(data, 'ds1')
+    expect(parsed.items.find((i) => i.name === 'MachineItem')).toMatchObject({
+      housingDiminishingReturnMultiplier: 1,
+      housingPropertyDiminishingMultiplier: 1,
+    })
+  })
+
+  it('flags building materials with a separate boolean so tier 0 survives', () => {
+    const parsed = parseDataset(makeMinimalDataset(), 'ds1')
+    const basalt = parsed.items.find((i) => i.name === 'MortaredBasaltItem')!
+    expect(basalt.isBuildingMaterial).toBe(true)
+    expect(basalt.buildingBlockTier).toBe(0)
+    // A plain item is not a material.
+    expect(parsed.items.find((i) => i.name === 'WoodItem')!.isBuildingMaterial).toBeUndefined()
+  })
+
+  it('imports room categories and tiers, localizing category names separately', () => {
+    const parsed = parseDataset(makeMinimalDataset(), 'ds1')
+    expect(parsed.roomCategories.map((c) => c.name)).toEqual(['Seating', 'Industrial'])
+    expect(parsed.roomCategories[1].negatesValue).toBe(true)
+    expect(parsed.roomTiers.map((t) => t.tierVal)).toEqual([0, 3])
+    const seatingId = parsed.roomCategories[0].id
+    expect(
+      parsed.localizedNames.some(
+        (n) => n.entityType === 'roomCategory' && n.entityId === seatingId && n.name === 'Seating'
+      )
+    ).toBe(true)
+  })
+
+  it('leaves non-housing items without housing fields', () => {
+    const parsed = parseDataset(makeMinimalDataset(), 'ds1')
+    const wood = parsed.items.find((i) => i.name === 'WoodItem')!
+    expect(wood.housingCategory).toBeUndefined()
+    expect(wood.buildingBlockTier).toBeUndefined()
   })
 })

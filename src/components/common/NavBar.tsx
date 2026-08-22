@@ -12,7 +12,12 @@ import { useLocalization } from '@/hooks/use-localization'
 import { useReleasesBadgeCount } from '@/hooks/use-releases-badge'
 import { useStores } from '@/stores/providers'
 
-type ToolName = 'calculator' | 'crops' | 'resources'
+type ToolName = 'calculator' | 'crops' | 'resources' | 'housing'
+
+// Tools scoped to a dataset only. They have no :buildId segment, so switching
+// into one must not carry the active build into the URL — there is no such
+// route, and it would fall through to the catch-all redirect.
+const DATASET_SCOPED = new Set<ToolName>(['resources', 'housing'])
 
 interface Props {
   tool: ToolName
@@ -54,6 +59,7 @@ export function NavBar({
     { value: 'calculator' as ToolName, label: t('nav.calculator'), icon: 'pi pi-calculator' },
     { value: 'crops' as ToolName, label: t('nav.crops'), icon: '' },
     { value: 'resources' as ToolName, label: t('nav.resources'), icon: 'pi pi-map' },
+    { value: 'housing' as ToolName, label: t('nav.housing'), icon: 'pi pi-home' },
   ]
 
   return (
@@ -92,7 +98,7 @@ export function NavBar({
         onChange={(e) => {
           const next = e.value as ToolName | null
           if (!next || next === tool) return
-          if (next === 'resources') navigate(`/${datasetId}/resources`)
+          if (DATASET_SCOPED.has(next)) navigate(`/${datasetId}/${next}`)
           else if (buildId) navigate(`/${datasetId}/${next}/${buildId}`)
           else navigate(`/${datasetId}/${next}`)
         }}

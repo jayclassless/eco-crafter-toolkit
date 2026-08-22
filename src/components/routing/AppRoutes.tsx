@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { BiomeResources } from '@/components/biome-resources/BiomeResources'
 import { CropTracker } from '@/components/crop-tracker/CropTracker'
 import { GameNews } from '@/components/game-news/GameNews'
+import { HousingScore } from '@/components/housing-score/HousingScore'
 import { PriceCalculator } from '@/components/price-calculator/PriceCalculator'
 
 import { BuildRedirect } from './BuildRedirect'
@@ -19,6 +20,7 @@ export function AppRoutes() {
       <Route path="/:datasetId/crops" element={<CropsRedirect />} />
       <Route path="/:datasetId/crops/:buildId" element={<CropTracker />} />
       <Route path="/:datasetId/resources" element={<BiomeResources />} />
+      <Route path="/:datasetId/housing" element={<HousingScore />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

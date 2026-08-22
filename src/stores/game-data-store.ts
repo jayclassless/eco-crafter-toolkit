@@ -82,6 +82,20 @@ export function createGameDataStore() {
       animalHealth: { type: 'number', default: 0 },
       // Clothing only: UserStatType.CalorieRate, a negative per-action modifier.
       clothingCalorieRate: { type: 'number', default: 0 },
+      // Housing furnishing value. The multiplier defaults are 1, not 0: an
+      // absent multiplier means "no repeat penalty", and a 0 default would
+      // instead zero every repeat.
+      housingCategory: { type: 'string', default: '' },
+      housingBaseValue: { type: 'number', default: 0 },
+      housingTypeForRoomLimit: { type: 'string', default: '' },
+      housingDiminishingReturnMultiplier: { type: 'number', default: 1 },
+      housingPropertyDiminishingMultiplier: { type: 'number', default: 1 },
+      // Tier 0 is a REAL material tier (Mortared Basalt), so no numeric
+      // sentinel is available — this boolean is the presence gate. Never
+      // replace it with `buildingBlockTier === 0`, or every item in the game
+      // becomes a tier-0 building material.
+      isBuildingMaterial: { type: 'boolean', default: false },
+      buildingBlockTier: { type: 'number', default: 0 },
     },
     // World-gathering tools (pickaxe/shovel/axe/bow/drill). Talent and skill
     // references are row ids, or '' when the name resolves to nothing — which
@@ -114,6 +128,35 @@ export function createGameDataStore() {
       treeHealth: { type: 'number', default: 0 },
       logsPerTreeMin: { type: 'number', default: 0 },
       logsPerTreeMax: { type: 'number', default: 0 },
+    },
+    // Housing reference data. Per-dataset because the game's own values move
+    // between versions (room tiers diminish at .5 in v11, .35 in v12, .65 in
+    // v13+). The three collection columns are JSON-encoded, following
+    // skills.laborReducePercent and pluginModuleBonuses.skillIds.
+    roomCategories: {
+      id: { type: 'string' },
+      datasetId: { type: 'string' },
+      name: { type: 'string' },
+      color: { type: 'string', default: '' }, // '' when the category has no color
+      index: { type: 'number', default: 0 },
+      affectsPropertyTypes: { type: 'string', default: '[]' },
+      supportingRoomCategoryNames: { type: 'string', default: '[]' },
+      maxSupportPercentOfPrimary: { type: 'number', default: 1 },
+      maxSupportPercentOfPrimaryPerCategory: { type: 'string', default: '{}' },
+      capToPercentOfRestOfProperty: { type: 'number', default: 0 },
+      canBeRoomCategory: { type: 'boolean', default: true },
+      supportForAnyRoomType: { type: 'boolean', default: false },
+      shouldCapFromRoomMaterials: { type: 'boolean', default: true },
+      canAutoChooseCategory: { type: 'boolean', default: true },
+      negatesValue: { type: 'boolean', default: false },
+    },
+    roomTiers: {
+      id: { type: 'string' },
+      datasetId: { type: 'string' },
+      tierVal: { type: 'number', default: 0 },
+      softCap: { type: 'number', default: 0 },
+      hardCap: { type: 'number', default: 0 },
+      diminishingReturnPercent: { type: 'number', default: 0 },
     },
     itemParts: {
       id: { type: 'string' },

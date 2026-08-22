@@ -13,7 +13,7 @@ import {
   type TalentIndexEntry,
 } from '@/hooks/use-solver-snapshot'
 import { compareKeys } from '@/lib/collator'
-import type { ModuleSlot } from '@/types/game-data'
+import type { ModuleSlot, RoomCategory, RoomTier } from '@/types/game-data'
 
 /** A module a crafting table accepts, in the shape the module UI needs. Names
  * are raw (non-localized) game names — callers localize via `useLocalizedName`. */
@@ -86,6 +86,22 @@ interface GameDataIndexes {
   /** A recipe's explicit `GarbageOutputs` — literal quantities, NOT ratio
    * scaled. Empty on v11–v13. */
   garbageByRecipeId: Map<string, GarbageQuantityRow[]>
+  /** Distinct skills that can craft an item — the non-empty `recipes.skillId`
+   * of every recipe that OUTPUTS it, minus recipes that also consume it
+   * (reprocessing, not production). Built from all products rather than just
+   * the primary one: Glass is produced by both Glassworking and Recycling, and
+   * both are worth showing. Items with no producing recipe are absent. */
+  skillIdsByItemId: Map<string, string[]>
+  /** Housing furnishings and room-material items, per dataset. Dataset-keyed
+   * deliberately — unlike `primaryRecipeIdsByItemId`, which is not filtered —
+   * because these drive what a page renders and the app keeps several datasets
+   * installed side by side. */
+  housingItemIdsByDatasetId: Map<string, string[]>
+  buildingMaterialItemIdsByDatasetId: Map<string, string[]>
+  /** Room categories in the game's own declaration order, and the tier table,
+   * per dataset, with the JSON-encoded columns already rehydrated. */
+  roomCategoriesByDatasetId: Map<string, RoomCategory[]>
+  roomTiersByDatasetId: Map<string, RoomTier[]>
 }
 
 /** An `(item, quantity)` pair from either garbage table. */
@@ -254,6 +270,130 @@ function buildGatherableItemIds(store: Store): Set<string> {
   return out
 }
 
+function buildSkillIdsByItemId(
+  store: Store,
+  productItemIdsByRecipeId: Map<string, string[]>,
+  ingredientItemIdsByRecipeId: Map<string, Set<string>>
+): Map<string, string[]> {
+  const sets = new Map<string, Set<string>>()
+  for (const [recipeId, productIds] of productItemIdsByRecipeId) {
+    const skillId = (store.getCell('recipes', recipeId, 'skillId') as string) ?? ''
+    if (!skillId) continue
+    const ingredients = ingredientItemIdsByRecipeId.get(recipeId)
+    for (const itemId of productIds) {
+      // A recipe that consumes what it produces is reprocessing it, not a way
+      // to obtain it — same exclusion MaterialDialog's "Produced by" applies.
+      if (ingredients?.has(itemId)) continue
+      let set = sets.get(itemId)
+      if (!set) {
+        set = new Set()
+        sets.set(itemId, set)
+      }
+      set.add(skillId)
+    }
+  }
+  const map = new Map<string, string[]>()
+  for (const [itemId, set] of sets) map.set(itemId, [...set].sort(compareKeys))
+  return map
+}
+
+/** Split the housing items of every dataset into furnishings and room
+ * materials in one pass over `items`. */
+function buildHousingItemIds(store: Store): {
+  housing: Map<string, string[]>
+  materials: Map<string, string[]>
+} {
+  const housing = new Map<string, string[]>()
+  const materials = new Map<string, string[]>()
+  const push = (map: Map<string, string[]>, datasetId: string, itemId: string) => {
+    let list = map.get(datasetId)
+    if (!list) {
+      list = []
+      map.set(datasetId, list)
+    }
+    list.push(itemId)
+  }
+  for (const itemId of store.getRowIds('items')) {
+    const row = store.getRow('items', itemId)
+    const datasetId = (row.datasetId as string) ?? ''
+    if (!datasetId) continue
+    if (row.housingCategory) push(housing, datasetId, itemId)
+    // Presence is the boolean, never `buildingBlockTier > 0` — tier 0 is real.
+    if (row.isBuildingMaterial === true) push(materials, datasetId, itemId)
+  }
+  return { housing, materials }
+}
+
+function parseJsonCell<T>(raw: unknown, fallback: T): T {
+  if (typeof raw !== 'string' || raw === '') return fallback
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    return fallback
+  }
+}
+
+function buildRoomCategoriesByDatasetId(store: Store): Map<string, RoomCategory[]> {
+  const map = new Map<string, RoomCategory[]>()
+  for (const rowId of store.getRowIds('roomCategories')) {
+    const row = store.getRow('roomCategories', rowId)
+    const datasetId = (row.datasetId as string) ?? ''
+    if (!datasetId) continue
+    let list = map.get(datasetId)
+    if (!list) {
+      list = []
+      map.set(datasetId, list)
+    }
+    list.push({
+      id: rowId,
+      datasetId,
+      name: (row.name as string) ?? '',
+      color: (row.color as string) ?? '',
+      index: (row.index as number) ?? 0,
+      affectsPropertyTypes: parseJsonCell<string[]>(row.affectsPropertyTypes, []),
+      supportingRoomCategoryNames: parseJsonCell<string[]>(row.supportingRoomCategoryNames, []),
+      maxSupportPercentOfPrimary: (row.maxSupportPercentOfPrimary as number) ?? 1,
+      maxSupportPercentOfPrimaryPerCategory: parseJsonCell<Record<string, number>>(
+        row.maxSupportPercentOfPrimaryPerCategory,
+        {}
+      ),
+      capToPercentOfRestOfProperty: (row.capToPercentOfRestOfProperty as number) ?? 0,
+      canBeRoomCategory: row.canBeRoomCategory !== false,
+      supportForAnyRoomType: row.supportForAnyRoomType === true,
+      shouldCapFromRoomMaterials: row.shouldCapFromRoomMaterials !== false,
+      canAutoChooseCategory: row.canAutoChooseCategory !== false,
+      negatesValue: row.negatesValue === true,
+    })
+  }
+  // The game's declaration order, so the UI groups the way the game does.
+  for (const list of map.values()) list.sort((a, b) => a.index - b.index)
+  return map
+}
+
+function buildRoomTiersByDatasetId(store: Store): Map<string, RoomTier[]> {
+  const map = new Map<string, RoomTier[]>()
+  for (const rowId of store.getRowIds('roomTiers')) {
+    const row = store.getRow('roomTiers', rowId)
+    const datasetId = (row.datasetId as string) ?? ''
+    if (!datasetId) continue
+    let list = map.get(datasetId)
+    if (!list) {
+      list = []
+      map.set(datasetId, list)
+    }
+    list.push({
+      id: rowId,
+      datasetId,
+      tierVal: (row.tierVal as number) ?? 0,
+      softCap: (row.softCap as number) ?? 0,
+      hardCap: (row.hardCap as number) ?? 0,
+      diminishingReturnPercent: (row.diminishingReturnPercent as number) ?? 0,
+    })
+  }
+  for (const list of map.values()) list.sort((a, b) => a.tierVal - b.tierVal)
+  return map
+}
+
 /**
  * Bucket the `craftingTablePluginModules` join by crafting table.
  *
@@ -334,6 +474,7 @@ function build(store: Store): GameDataIndexes {
   const recipeIndexes = buildRecipeIndexes(store)
   const productItemIdsByRecipeId = buildRecipeProductItemIds(store)
   const ingredientItemIdsByRecipeId = buildRecipeIngredientItemIds(store)
+  const housingItemIds = buildHousingItemIds(store)
   return {
     productItemIdsByRecipeId,
     ingredientItemIdsByRecipeId,
@@ -358,6 +499,15 @@ function build(store: Store): GameDataIndexes {
     modulesByCraftingTableId: buildModulesByCraftingTableId(store),
     salvageByItemId: buildGarbageIndex(store, 'itemSalvage', 'itemId'),
     garbageByRecipeId: buildGarbageIndex(store, 'recipeGarbage', 'recipeId'),
+    skillIdsByItemId: buildSkillIdsByItemId(
+      store,
+      productItemIdsByRecipeId,
+      ingredientItemIdsByRecipeId
+    ),
+    housingItemIdsByDatasetId: housingItemIds.housing,
+    buildingMaterialItemIdsByDatasetId: housingItemIds.materials,
+    roomCategoriesByDatasetId: buildRoomCategoriesByDatasetId(store),
+    roomTiersByDatasetId: buildRoomTiersByDatasetId(store),
   }
 }
 

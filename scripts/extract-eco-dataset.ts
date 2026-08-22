@@ -41,6 +41,8 @@ import type {
   LocalizedNames,
   ModifierJson,
   RecipeJson,
+  RoomCategoryJson,
+  RoomTierJson,
   SkillJson,
   TagJson,
   TalentBonusJson,
@@ -221,6 +223,24 @@ interface RawItem {
   animalHealth?: number
   animalDisplay?: string // in-world species name, e.g. "Deer" (vs "Deer Carcass")
   clothingCalorieRate?: number
+  /** `new HomeFurnishingValue() { … }` from the item's own class body. Present
+   * only on placeable housing objects (497 of them in v14). */
+  housing?: RawHousingValue
+  /** Highest `[BlockTier(N)]` across the blocks this item places that are marked
+   * `BuildRoomMaterialOption`. Merged after pass 1 from rawBlockTiers.
+   * Tier 0 is a real tier, so presence must be tested with `!= null`. */
+  buildingBlockTier?: number
+}
+/** A furnishing's contribution to a room's housing value. An absent field is
+ * meaningful rather than missing: it means the game's own default applies, so
+ * each default below is part of the data, not a fallback. */
+interface RawHousingValue {
+  /** The game's own category key, i.e. the GetRoomCategory("…") argument. */
+  category: string
+  baseValue: number // default 0
+  typeForRoomLimit: string // default ''; groups repeats within a room
+  diminishingReturnMultiplier: number // default 1 (no in-room repeat penalty)
+  propertyMultiplier: number // default 1 (no property-wide repeat penalty)
 }
 interface RawTagDef {
   name: string
@@ -322,8 +342,50 @@ const rawRubble = new Map<string, RawRubble>()
 
 /** `[Minable(N)]` hardness, keyed by block class name. */
 const rawMinables = new Map<string, number>()
-/** `RepresentedItemType`, mapping a block class name to its item class name. */
+/** `RepresentedItemType`, mapping a block class name to its item class name.
+ * Only populated inside the `[Minable(N)]` branch, so this covers ore blocks —
+ * construction blocks resolve their own item link into rawBlockTiers. */
 const blockToItem = new Map<string, string>()
+
+/** Item class name → the highest `[BlockTier(N)]` among the blocks it places
+ * that carry `BuildRoomMaterialOption`, the attribute marking a block as usable
+ * to build a room.
+ *
+ * Max, not min or first, because a material's base block in AutoGen/Block/*.cs
+ * frequently carries no [BlockTier] at all (= tier 0) while its shape variants
+ * in AutoGen/Forms/*.cs are tiered — the three curtain items are 16 blocks at
+ * tier 5 plus one untiered base. They are the same inventory item, and a player
+ * building a wall places the tiered wall forms, so the max is the tier the item
+ * actually achieves. The converse case is real too: MortaredBasalt/Gneiss/Shale
+ * have no Forms file at all, one untiered block each, and correctly land on 0. */
+const rawBlockTiers = new Map<string, number>()
+
+/** Room material tiers and room categories from Systems/HousingValues.cs. Both
+ * vary by game version (v11's tiers diminish at .5, v12's at .35, v13+ at .65),
+ * which is why they ship per dataset rather than being hardcoded in the app. */
+interface RawRoomTier {
+  tierVal: number
+  softCap: number
+  hardCap: number
+  diminishingReturnPercent: number
+}
+const rawRoomTiers: RawRoomTier[] = []
+interface RawRoomCategory {
+  name: string
+  /** '#RRGGBB', or '' when the color is not written as a literal. */
+  color: string
+  affectsPropertyTypes: string[]
+  supportingRoomCategoryNames: string[]
+  maxSupportPercentOfPrimary: number
+  maxSupportPercentOfPrimaryPerCategory: Record<string, number>
+  capToPercentOfRestOfProperty: number
+  canBeRoomCategory: boolean
+  supportForAnyRoomType: boolean
+  shouldCapFromRoomMaterials: boolean
+  canAutoChooseCategory: boolean
+  negatesValue: boolean
+}
+const rawRoomCategories: RawRoomCategory[] = []
 
 /** An AnimalSpecies. Its ResourceList[0] is the carcass it drops. */
 interface RawAnimal {
@@ -698,6 +760,168 @@ function parseTagDefinitionsFile(src: string) {
     const body = m[2] ?? ''
     const display = /PluralName\s*=\s*Localizer\.DoStr\("([^"]+)"\)/.exec(body)?.[1]
     tagDefs.push({ name, display })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Housing (Systems/HousingValues.cs + per-item HomeFurnishingValue initializers)
+
+/** Read `<field> = <number>` out of an object-initializer body. */
+function readNumField(body: string, field: string): number | undefined {
+  const m = new RegExp(`\\b${field}\\s*=\\s*(-?[0-9.]+f?)`).exec(body)
+  if (!m) return undefined
+  const n = parseFloatLit(m[1])
+  return Number.isFinite(n) ? n : undefined
+}
+function readBoolField(body: string, field: string): boolean | undefined {
+  const m = new RegExp(`\\b${field}\\s*=\\s*(true|false)\\b`).exec(body)
+  return m ? m[1] === 'true' : undefined
+}
+function readLocStrField(body: string, field: string): string | undefined {
+  return new RegExp(`\\b${field}\\s*=\\s*Localizer\\.DoStr\\("([^"]*)"\\)`).exec(body)?.[1]
+}
+/** `<field> = new[] { "A", "B" }` → ['A', 'B']. */
+function readStringArrayField(body: string, field: string): string[] | undefined {
+  const m = new RegExp(`\\b${field}\\s*=\\s*new\\[\\]\\s*\\{`).exec(body)
+  if (!m) return undefined
+  const end = matchBrace(body, m.index + m[0].length - 1)
+  if (end < 0) return undefined
+  return extractStringLits(body.slice(m.index, end))
+}
+/** `<field> = new[] { PropertyType.Residence }` → ['Residence']. */
+function readEnumArrayField(body: string, field: string, enumName: string): string[] | undefined {
+  const m = new RegExp(`\\b${field}\\s*=\\s*new\\[\\]\\s*\\{`).exec(body)
+  if (!m) return undefined
+  const end = matchBrace(body, m.index + m[0].length - 1)
+  if (end < 0) return undefined
+  const slice = body.slice(m.index, end)
+  const out: string[] = []
+  const re = new RegExp(`${enumName}\\.(\\w+)`, 'g')
+  let mm: RegExpExecArray | null
+  while ((mm = re.exec(slice))) out.push(mm[1])
+  return out
+}
+/** `<field> = new() { {"Outdoor", 1f} }` → { Outdoor: 1 }. */
+function readPercentMapField(body: string, field: string): Record<string, number> | undefined {
+  const m = new RegExp(`\\b${field}\\s*=\\s*new\\s*\\(\\s*\\)\\s*\\{`).exec(body)
+  if (!m) return undefined
+  const end = matchBrace(body, m.index + m[0].length - 1)
+  if (end < 0) return undefined
+  const out: Record<string, number> = {}
+  const re = /\{\s*"([^"]+)"\s*,\s*(-?[0-9.]+f?)\s*\}/g
+  let mm: RegExpExecArray | null
+  while ((mm = re.exec(body.slice(m.index, end)))) out[mm[1]] = parseFloatLit(mm[2])
+  return out
+}
+
+/** Iterate `new <TypeName>() { … }` initializers inside `block`, yielding each body. */
+function eachInitializer(block: string, typeName: string): string[] {
+  const out: string[] = []
+  const re = new RegExp(`new\\s+${typeName}\\s*(?:\\(\\s*\\))?\\s*\\{`, 'g')
+  let m: RegExpExecArray | null
+  while ((m = re.exec(block))) {
+    const open = m.index + m[0].length - 1
+    const end = matchBrace(block, open)
+    if (end < 0) continue
+    out.push(block.slice(open + 1, end - 1))
+    re.lastIndex = end
+  }
+  return out
+}
+
+/** Slice the `new[] { … }` array literal passed to `HousingConfig.<call>`. */
+function findConfigArray(src: string, call: string): string | null {
+  const anchor = src.indexOf(`HousingConfig.${call}`)
+  if (anchor < 0) return null
+  const open = src.indexOf('{', anchor)
+  if (open < 0) return null
+  const end = matchBrace(src, open)
+  return end < 0 ? null : src.slice(open + 1, end - 1)
+}
+
+/** Parse `__core__/Systems/HousingValues.cs` (room material tiers + categories). */
+function parseHousingValuesFile(src: string) {
+  const tierBlock = findConfigArray(src, 'SetRoomTiers')
+  if (tierBlock) {
+    for (const body of eachInitializer(tierBlock, 'RoomTier')) {
+      const tierVal = readNumField(body, 'TierVal')
+      const softCap = readNumField(body, 'SoftCap')
+      const hardCap = readNumField(body, 'HardCap')
+      const diminishingReturnPercent = readNumField(body, 'DiminishingReturnPercent')
+      if (
+        tierVal == null ||
+        softCap == null ||
+        hardCap == null ||
+        diminishingReturnPercent == null
+      ) {
+        throw new Error(`[extract] incomplete RoomTier initializer: ${body.trim()}`)
+      }
+      rawRoomTiers.push({ tierVal, softCap, hardCap, diminishingReturnPercent })
+    }
+  }
+
+  const catBlock = findConfigArray(src, 'SetRoomCategories')
+  if (catBlock) {
+    for (const body of eachInitializer(catBlock, 'RoomCategory')) {
+      const name = readLocStrField(body, 'DisplayName')
+      if (!name) throw new Error(`[extract] RoomCategory without DisplayName: ${body.trim()}`)
+      // Only literal colors are read. Nine of the ten categories are written
+      // as new Color("DB48C5"); Cultural names a shared constant instead, so it
+      // stays '' and the UI falls back to the default text color. The optional
+      // trailing pair absorbs the RRGGBBAA form.
+      const colorHex = /\bColor\s*=\s*new\s+Color\("([0-9A-Fa-f]{6})(?:[0-9A-Fa-f]{2})?"\)/.exec(
+        body
+      )?.[1]
+      rawRoomCategories.push({
+        name,
+        color: colorHex ? `#${colorHex.toUpperCase()}` : '',
+        // An omitted field means the game's default applies, so these values
+        // are part of the data rather than a fallback for missing input.
+        affectsPropertyTypes: readEnumArrayField(body, 'AffectsPropertyTypes', 'PropertyType') ?? [
+          'Residence',
+          'Cultural',
+        ],
+        supportingRoomCategoryNames:
+          readStringArrayField(body, 'SupportingRoomCategoryNames') ?? [],
+        maxSupportPercentOfPrimary: readNumField(body, 'MaxSupportPercentOfPrimary') ?? 1,
+        maxSupportPercentOfPrimaryPerCategory:
+          readPercentMapField(body, 'MaxSupportPercentOfPrimaryPerCategory') ?? {},
+        capToPercentOfRestOfProperty: readNumField(body, 'CapToPercentOfRestOfProperty') ?? 0,
+        canBeRoomCategory: readBoolField(body, 'CanBeRoomCategory') ?? true,
+        supportForAnyRoomType: readBoolField(body, 'SupportForAnyRoomType') ?? false,
+        shouldCapFromRoomMaterials: readBoolField(body, 'ShouldCapFromRoomMaterials') ?? true,
+        canAutoChooseCategory: readBoolField(body, 'CanAutoChooseCategory') ?? true,
+        negatesValue: readBoolField(body, 'NegatesValue') ?? false,
+      })
+    }
+  }
+
+  if (rawRoomTiers.length === 0 || rawRoomCategories.length === 0) {
+    throw new Error(
+      `[extract] HousingValues.cs parsed to ${rawRoomTiers.length} tier(s) and ` +
+        `${rawRoomCategories.length} categor(ies) — the initializer format moved.`
+    )
+  }
+}
+
+/** Parse the `new HomeFurnishingValue() { … }` initializer out of an item class
+ * body. Returns null when the class has none. */
+function parseHomeFurnishingValue(classBody: string): RawHousingValue | null {
+  const bodies = eachInitializer(classBody, 'HomeFurnishingValue')
+  if (bodies.length === 0) return null
+  const body = bodies[0]
+  const category = /\bCategory\s*=\s*HousingConfig\.GetRoomCategory\("([^"]+)"\)/.exec(body)?.[1]
+  // Every one of the 497 v14 initializers sets Category; a miss means the format
+  // moved, and silently dropping the item would understate the browser.
+  if (!category) {
+    throw new Error(`[extract] HomeFurnishingValue without a Category: ${body.trim()}`)
+  }
+  return {
+    category,
+    baseValue: readNumField(body, 'BaseValue') ?? 0,
+    typeForRoomLimit: readLocStrField(body, 'TypeForRoomLimit') ?? '',
+    diminishingReturnMultiplier: readNumField(body, 'DiminishingReturnMultiplier') ?? 1,
+    propertyMultiplier: readNumField(body, 'DiminishingMultiplierAcrossFullProperty') ?? 1,
   }
 }
 
@@ -1114,6 +1338,9 @@ function parseItemAndRecipeFile(src: string) {
   // items with plain `public class` (e.g. SoilSamplerItem, DirtItem).
   const itemClassRe =
     /public\s+(?:partial\s+)?class\s+(\w+(?:Item|Object|Block|Book|Scroll))\s*:\s*([^\s{]+)/g
+  // Cheap gate so the brace-matching housing scan below never runs over the
+  // ~40k item classes that have no HomeFurnishingValue (497 files do, in v14).
+  const hasHousing = src.includes('new HomeFurnishingValue()')
   let m: RegExpExecArray | null
   while ((m = itemClassRe.exec(src))) {
     const name = m[1]
@@ -1193,6 +1420,49 @@ function parseItemAndRecipeFile(src: string) {
       if (represented) blockToItem.set(name, represented[1])
     }
     if (/\[RequiresTool\(typeof\(ShovelItem\)\)\]/.test(attrs)) it.requiresShovel = true
+
+    // Housing furnishing value. Declared as a static readonly field in the
+    // *Item* class body (the sibling *Object class only references it), and
+    // there is exactly one per file, so the enclosing class is unambiguous.
+    // QA probes and abstract bases are not obtainable in normal play; they are
+    // marked with a combined `[Category("Hidden"), Tag("NotInBrowser")]`, so
+    // match on the token rather than anchoring on the brackets.
+    if (hasHousing && name.endsWith('Item')) {
+      const isHidden = /\bCategory\("Hidden"\)/.test(attrs) || /\bTag\("NotInBrowser"\)/.test(attrs)
+      if (!isHidden) {
+        const open = src.indexOf('{', m.index + m[0].length)
+        const close = open >= 0 ? matchBrace(src, open) : -1
+        if (close > 0) {
+          const housing = parseHomeFurnishingValue(src.slice(open, close))
+          if (housing) it.housing = housing
+        }
+      }
+    }
+
+    // Room material tier. `BuildRoomMaterialOption` marks a block as usable to
+    // build a room; `[BlockTier(N)]` is the tier a room averages over its wall
+    // blocks.
+    //
+    // TRAP: do NOT read the item's `[Tier(N)]` instead — that is the tech tier.
+    // It happens to agree for all 46 room materials today, but 7 of them carry
+    // no [Tier] at all (the three curtains, GardenGravel, ZenGarden, and
+    // MortaredBasalt/Gneiss/Shale), so [Tier] would silently yield 0.
+    if (name.endsWith('Block') && /\bBuildRoomMaterialOption\b/.test(attrs)) {
+      const tier = Number(/\[BlockTier\((\d+)\)\]/.exec(attrs)?.[1] ?? 0)
+      // The Forms/*.cs shape variants usually have an empty class body and no
+      // RepresentedItemType, so [IsForm] is the primary link.
+      const itemName =
+        /IsForm\(typeof\(\w+\)\s*,\s*typeof\((\w+Item)\)\)/.exec(attrs)?.[1] ??
+        /RepresentedItemType\s*\{[^}]*typeof\((\w+Item)\)/.exec(
+          src.slice(m.index, m.index + 2000)
+        )?.[1]
+      // ~2500 rotated variants (AshlarShaleRampA90Block, …) carry the marker but
+      // no item link at all. They are covered by their base form at the same
+      // tier, so skipping them is correct rather than a parse failure.
+      if (itemName) {
+        rawBlockTiers.set(itemName, Math.max(rawBlockTiers.get(itemName) ?? 0, tier))
+      }
+    }
 
     // Crafting table plugin module detection from [AllowPluginModules] attribute.
     // The attribute can appear on *Object classes (checked via attrs or nearby source)
@@ -1967,6 +2237,41 @@ async function main() {
     console.warn('[extract] TagDefinitions.cs missing:', (e as Error).message)
   }
 
+  // Housing: room material tiers and room categories. Every supported version
+  // ships this file, so a read failure is a bug rather than a degradation —
+  // parseHousingValuesFile throws if either array comes back empty.
+  const housingSrc = await fs.readFile(path.join(coreRoot, 'Systems', 'HousingValues.cs'), 'utf8')
+  parseHousingValuesFile(housingSrc)
+  console.log(
+    `[extract] parsed ${rawRoomTiers.length} room tier(s), ` +
+      `${rawRoomCategories.length} room categor(ies)`
+  )
+
+  // Merge room material tier onto the item each block places. Mirrors the
+  // minable/rubble join above: the attribute lives on the block class, the
+  // item is usually declared in a different file.
+  let blockTierCount = 0
+  for (const [itemName, tier] of rawBlockTiers) {
+    const it = items.get(itemName)
+    if (!it) continue
+    it.buildingBlockTier = tier
+    blockTierCount++
+  }
+  const housingCount = [...items.values()].filter((i) => i.housing).length
+  console.log(
+    `[extract] merged room material tier onto ${blockTierCount} item(s); ` +
+      `${housingCount} housing furnishing(s)`
+  )
+  // Floors, not exact counts: v11 has the fewest furnishings (407) and every
+  // version has exactly 46 room materials. A collapse here means a template
+  // moved, which is otherwise invisible in a multi-MB JSON diff.
+  if (blockTierCount < 40) {
+    throw new Error(`[extract] only ${blockTierCount} room material item(s) found (expected 46)`)
+  }
+  if (housingCount < 380) {
+    throw new Error(`[extract] only ${housingCount} housing furnishing(s) found (expected 400+)`)
+  }
+
   // Pass 1d: recipe-derived display fallback for items that have no .cs source
   // anywhere under the game files (e.g. HomesteadClaimStakeItem).
   // When a recipe `<X>Recipe` produces `<X>Item` and the item still has no
@@ -2385,6 +2690,16 @@ async function main() {
       if (it.animalDisplay) j.AnimalName = mergeLocalized(it.animalDisplay, translations)
     }
     if (it.clothingCalorieRate != null) j.ClothingCalorieRate = it.clothingCalorieRate
+    if (it.housing) {
+      j.HousingCategory = it.housing.category
+      j.HousingBaseValue = it.housing.baseValue
+      j.HousingTypeForRoomLimit = it.housing.typeForRoomLimit
+      j.HousingDiminishingReturnMultiplier = it.housing.diminishingReturnMultiplier
+      j.HousingDiminishingMultiplierAcrossFullProperty = it.housing.propertyMultiplier
+    }
+    // Tier 0 is a real material tier (Mortared Basalt), so this must be a
+    // presence test, never a truthiness test.
+    if (it.buildingBlockTier != null) j.BuildingBlockTier = it.buildingBlockTier
     itemJsons.push(j)
   }
   const keptItemNames = new Set(itemJsons.map((j) => j.Name))
@@ -2459,6 +2774,41 @@ async function main() {
       LogsPerTreeMax: s.max,
     }))
 
+  // 3h) Housing sections. Declaration order is preserved in `Index` so the UI
+  // can present categories the way the game declares them (residence rooms,
+  // then special types, then support-only categories).
+  const roomCategoryJsons: RoomCategoryJson[] = rawRoomCategories.map((c, index) => {
+    const j: RoomCategoryJson = {
+      Name: c.name,
+      // DisplayName is both the key and the English label — GetRoomCategory()
+      // looks categories up by this exact string.
+      LocalizedName: mergeLocalized(c.name, translations),
+      Color: c.color,
+      Index: index,
+      AffectsPropertyTypes: c.affectsPropertyTypes,
+      SupportingRoomCategoryNames: c.supportingRoomCategoryNames,
+      MaxSupportPercentOfPrimary: c.maxSupportPercentOfPrimary,
+      CapToPercentOfRestOfProperty: c.capToPercentOfRestOfProperty,
+      CanBeRoomCategory: c.canBeRoomCategory,
+      SupportForAnyRoomType: c.supportForAnyRoomType,
+      ShouldCapFromRoomMaterials: c.shouldCapFromRoomMaterials,
+      CanAutoChooseCategory: c.canAutoChooseCategory,
+      NegatesValue: c.negatesValue,
+    }
+    if (Object.keys(c.maxSupportPercentOfPrimaryPerCategory).length > 0) {
+      j.MaxSupportPercentOfPrimaryPerCategory = c.maxSupportPercentOfPrimaryPerCategory
+    }
+    return j
+  })
+  const roomTierJsons: RoomTierJson[] = [...rawRoomTiers]
+    .sort((a, b) => a.tierVal - b.tierVal)
+    .map((t) => ({
+      Tier: t.tierVal,
+      SoftCap: t.softCap,
+      HardCap: t.hardCap,
+      DiminishingReturnPercent: t.diminishingReturnPercent,
+    }))
+
   const dataset: DatasetJson = {
     Version: args.version,
     Skills: [...skillByName.values()].sort((a, b) => a.Name.localeCompare(b.Name)),
@@ -2467,6 +2817,8 @@ async function main() {
     Recipes: recipeJsons.sort((a, b) => a.Name.localeCompare(b.Name)),
     GatheringTools: gatheringToolJsons,
     TreeSpecies: treeSpeciesJsons,
+    RoomCategories: roomCategoryJsons,
+    RoomTiers: roomTierJsons,
   }
 
   const validation = validateDatasetJson(dataset)
@@ -2488,11 +2840,20 @@ async function main() {
   if (args.compare) {
     try {
       const existing = JSON.parse(await fs.readFile(args.compare, 'utf8')) as DatasetJson
+      const countHousing = (d: DatasetJson) => d.Items.filter((i) => i.HousingCategory).length
+      const countMaterials = (d: DatasetJson) =>
+        d.Items.filter((i) => i.BuildingBlockTier != null).length
       const rows = [
         ['Skills', existing.Skills.length, dataset.Skills.length],
         ['Items', existing.Items.length, dataset.Items.length],
         ['Tags', existing.Tags.length, dataset.Tags.length],
         ['Recipes', existing.Recipes.length, dataset.Recipes.length],
+        // Housing entities have no Name of their own, so they get counts only —
+        // diffNames below needs a {Name}-bearing list.
+        ['Housing', countHousing(existing), countHousing(dataset)],
+        ['Materials', countMaterials(existing), countMaterials(dataset)],
+        ['RoomCats', existing.RoomCategories?.length ?? 0, dataset.RoomCategories?.length ?? 0],
+        ['RoomTiers', existing.RoomTiers?.length ?? 0, dataset.RoomTiers?.length ?? 0],
       ] as const
       console.log(`\n[compare] vs ${args.compare}`)
       console.log(

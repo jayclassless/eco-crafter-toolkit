@@ -92,4 +92,20 @@ describe('AppRoutes', () => {
     renderAt(stores, '/ds1/resources')
     expect(screen.getByText('Below the Surface')).toBeInTheDocument()
   })
+
+  it('mounts the housing score page for /:datasetId/housing', () => {
+    const stores = makeStores()
+    stores.gameDataStore.setRow('datasets', 'ds1', {
+      id: 'ds1',
+      name: 'Eco vTest',
+      version: 1,
+      bundledId: 'eco-vtest',
+      installedRevision: 1,
+      importedAt: '2026-01-01',
+      updatedAt: '2026-01-01',
+      isCustom: false,
+    })
+    renderAt(stores, '/ds1/housing')
+    expect(screen.getByText('Building Materials')).toBeInTheDocument()
+  })
 })

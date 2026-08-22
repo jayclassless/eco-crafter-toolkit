@@ -66,6 +66,8 @@ const DATASET_SCOPED_TABLES = [
   'recipeUnlocks',
   'gatheringTools',
   'treeSpecies',
+  'roomCategories',
+  'roomTiers',
 ] as const
 
 /**

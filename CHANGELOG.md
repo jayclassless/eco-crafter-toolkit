@@ -2,6 +2,10 @@
 
 ## 0.9.0 (TBD)
 
+- Added a Housing Score section with two browsers: Furnishings (every item that
+  contributes housing value, with its room category, furniture type, base value
+  and repeat penalty) and Building Materials (the blocks rooms can be built
+  from, with the tier caps they impose).
 - Fixed a variety of issues with Talents not influencing the correct recipes.
 
 ## 0.8.0 (2026-08-14)

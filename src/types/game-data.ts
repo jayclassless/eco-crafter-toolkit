@@ -63,6 +63,18 @@ export interface Item {
   requiresShovel?: boolean // shovel: one block, one item, one swing
   animalHealth?: number // bow: health of the species dropping this carcass
   clothingCalorieRate?: number // clothing: UserStatType.CalorieRate, e.g. -0.3
+  // Housing furnishing value. `housingCategory` is the presence gate and holds
+  // a RoomCategory.name (categories reference each other by name, so the link
+  // is deliberately not resolved to a row id).
+  housingCategory?: string
+  housingBaseValue?: number
+  housingTypeForRoomLimit?: string
+  housingDiminishingReturnMultiplier?: number // 1 = no in-room repeat penalty
+  housingPropertyDiminishingMultiplier?: number // 1 = no property-wide penalty
+  /** Presence gate for buildingBlockTier — tier 0 is a real tier, so there is
+   * no usable numeric sentinel. */
+  isBuildingMaterial?: boolean
+  buildingBlockTier?: number
 }
 
 /** A world-gathering tool. See `GatheringToolJson` for field semantics — the
@@ -93,6 +105,38 @@ export interface TreeSpecies {
   treeHealth: number
   logsPerTreeMin: number
   logsPerTreeMax: number
+}
+
+/** A room category. Categories reference each other by `name`, which is also
+ * the key items use in `Item.housingCategory`. */
+export interface RoomCategory {
+  id: string
+  datasetId: string
+  name: string
+  /** '#RRGGBB', or '' when the category has no color of its own. */
+  color: string
+  index: number // the game's own category ordering
+  affectsPropertyTypes: string[]
+  supportingRoomCategoryNames: string[]
+  maxSupportPercentOfPrimary: number
+  maxSupportPercentOfPrimaryPerCategory: Record<string, number>
+  capToPercentOfRestOfProperty: number
+  canBeRoomCategory: boolean
+  supportForAnyRoomType: boolean
+  shouldCapFromRoomMaterials: boolean
+  canAutoChooseCategory: boolean
+  /** True for Industrial: one such object zeroes its whole room. */
+  negatesValue: boolean
+}
+
+/** Soft/hard housing-value caps imposed by a room's material tier. */
+export interface RoomTier {
+  id: string
+  datasetId: string
+  tierVal: number
+  softCap: number
+  hardCap: number
+  diminishingReturnPercent: number
 }
 
 export interface ItemPart {

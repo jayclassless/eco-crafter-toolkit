@@ -9,6 +9,52 @@ export interface DatasetJson {
   // calculator degrades to an "update your dataset" state.
   GatheringTools?: GatheringToolJson[]
   TreeSpecies?: TreeSpeciesJson[]
+  // Housing data (see the Housing Score tool). Optional for the same reason:
+  // datasets extracted before housing support omit them, and the browser shows
+  // an "update your dataset" state. Both vary by game version — v11's room
+  // tiers diminish at .5, v12's at .35, v13+ at .65 — so they ship per dataset
+  // rather than being constants in the app.
+  RoomCategories?: RoomCategoryJson[]
+  RoomTiers?: RoomTierJson[]
+}
+
+/** A room category. Categories reference each other by `Name`, which is also
+ * the key an item's `HousingCategory` points at. */
+export interface RoomCategoryJson {
+  Name: string
+  LocalizedName: LocalizedNames
+  /** '#RRGGBB', or '' when the category has no color of its own. Consumers
+   * must tolerate the empty case and fall back to their default text color. */
+  Color: string
+  /** The game's own category ordering — residence rooms, special types, then
+   * support-only categories — so the UI can group the same way. */
+  Index: number
+  AffectsPropertyTypes: string[]
+  /** Categories whose furniture may lend value to a room of this category. */
+  SupportingRoomCategoryNames: string[]
+  /** When this category acts as a *supporter*, the fraction of the primary
+   * category's total it may contribute. */
+  MaxSupportPercentOfPrimary: number
+  /** Per-primary overrides of the above, e.g. Cultural gives 100% into Outdoor. */
+  MaxSupportPercentOfPrimaryPerCategory?: Record<string, number>
+  /** 0 = uncapped. Bathrooms are 0.33 of the rest of the property. */
+  CapToPercentOfRestOfProperty: number
+  /** False for support-only categories (Seating, Decoration, Lighting). */
+  CanBeRoomCategory: boolean
+  SupportForAnyRoomType: boolean
+  ShouldCapFromRoomMaterials: boolean
+  CanAutoChooseCategory: boolean
+  /** True for Industrial: one such object zeroes its whole room. */
+  NegatesValue: boolean
+}
+
+/** A room material tier. A room's value below `SoftCap` is untouched; above it
+ * the excess diminishes toward `HardCap` without ever reaching it. */
+export interface RoomTierJson {
+  Tier: number
+  SoftCap: number
+  HardCap: number
+  DiminishingReturnPercent: number
 }
 
 /** A tool that gathers a raw material from the world. Kinds map 1:1 onto the
@@ -175,6 +221,22 @@ export interface ItemJson {
   AnimalName?: LocalizedNames // the in-world species name, mirroring PlantName
   /** `flatStats[UserStatType.CalorieRate]`, e.g. -0.3. Clothing only. */
   ClothingCalorieRate?: number
+  // Housing furnishing value, from the item's own `new HomeFurnishingValue()`.
+  // Present together or not at all; `HousingCategory` is the presence gate and
+  // names a `RoomCategories[].Name`.
+  HousingCategory?: string
+  HousingBaseValue?: number
+  /** Groups repeats within a room ("Chair", "Bed"). '' = ungrouped. */
+  HousingTypeForRoomLimit?: string
+  /** Each additional copy of the same type in one room is worth this multiple
+   * of the previous one. 1 = no penalty. */
+  HousingDiminishingReturnMultiplier?: number
+  /** Same, but counted across the whole property. 1 = no penalty. */
+  HousingDiminishingMultiplierAcrossFullProperty?: number
+  /** Highest `[BlockTier(N)]` among the room-material blocks this item places.
+   * **Tier 0 is a real tier** (Mortared Basalt), so test presence with
+   * `!= null`, never truthiness. */
+  BuildingBlockTier?: number
 }
 
 export interface TagJson {
