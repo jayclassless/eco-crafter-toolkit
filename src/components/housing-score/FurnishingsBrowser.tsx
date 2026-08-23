@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useCellValue, useStoreRevision } from '@/hooks/use-store-revision'
+import { collectSkillOptions } from '@/lib/skill-options'
 import { useStores } from '@/stores/providers'
 
 import { FurnishingFilters } from './FurnishingFilters'
@@ -66,6 +67,14 @@ export function FurnishingsBrowser({ datasetId }: Props) {
     () => collectFurnishingFilterOptions(allRows, categories, compare),
     [allRows, categories, compare]
   )
+  const skills = useMemo(
+    () =>
+      collectSkillOptions(allRows, gameDataStore, datasetId, getName, compare, {
+        unskilled: t('common.unskilled'),
+        otherProfession: t('common.otherProfession'),
+      }),
+    [allRows, gameDataStore, datasetId, getName, compare, t]
+  )
   const rows = useMemo(
     () => sortFurnishings(applyFurnishingFilters(allRows, filters), sortField, sortDir, compare),
     [allRows, filters, sortField, sortDir, compare]
@@ -87,7 +96,7 @@ export function FurnishingsBrowser({ datasetId }: Props) {
 
   return (
     <div className="flex flex-column flex-1" style={{ minHeight: 0 }}>
-      <FurnishingFilters options={options} value={filters} onChange={setFilters} />
+      <FurnishingFilters options={options} skills={skills} value={filters} onChange={setFilters} />
       <FurnishingsTable
         rows={rows}
         sortField={sortField}

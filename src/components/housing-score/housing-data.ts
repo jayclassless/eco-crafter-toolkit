@@ -2,6 +2,7 @@ import type { Store } from 'tinybase'
 
 import type { Compare } from '@/lib/collator'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
+import { UNSKILLED_SKILL_ID } from '@/lib/skill-options'
 
 import type {
   FurnishingFilterState,
@@ -131,11 +132,12 @@ export function buildMaterialRows(
 export interface FurnishingFilterOptions {
   categories: RoomCategoryView[]
   types: string[]
-  skills: { id: string; name: string; rawName: string }[]
 }
 
-/** The option lists for the three filters, derived from the unfiltered rows so
- * they never offer a value that matches nothing. */
+/** The category and furniture-type option lists, derived from the unfiltered
+ * rows so they never offer a value that matches nothing. The skill list is
+ * `collectSkillOptions`' job — it is shared with the optimizer, and needs the
+ * store for profession grouping. */
 export function collectFurnishingFilterOptions(
   rows: FurnishingRow[],
   categories: RoomCategoryView[],
@@ -143,22 +145,15 @@ export function collectFurnishingFilterOptions(
 ): FurnishingFilterOptions {
   const usedCategories = new Set(rows.map((r) => r.categoryName))
   const types = new Set<string>()
-  const skills = new Map<string, { id: string; name: string; rawName: string }>()
   for (const row of rows) {
     // Ungrouped furnishings have an empty type; offering "" as a choice would
     // read as a blank row in the dropdown.
     if (row.typeForRoomLimit) types.add(row.typeForRoomLimit)
-    row.skillIds.forEach((id, i) => {
-      if (!skills.has(id)) {
-        skills.set(id, { id, name: row.skillNames[i], rawName: row.skillRawNames[i] })
-      }
-    })
   }
   return {
-    // Keep the game's declaration order for categories; the others collate.
+    // Keep the game's declaration order for categories; the types collate.
     categories: categories.filter((c) => usedCategories.has(c.name)),
     types: [...types].sort(compare),
-    skills: [...skills.values()].sort((a, b) => compare(a.name, b.name)),
   }
 }
 
@@ -174,7 +169,16 @@ export function applyFurnishingFilters(
   return rows.filter((row) => {
     if (catSet && !catSet.has(row.categoryName)) return false
     if (typeSet && !typeSet.has(row.typeForRoomLimit)) return false
-    if (skillSet && !row.skillIds.some((id) => skillSet.has(id))) return false
+    if (skillSet) {
+      // A row nothing crafts matches only the synthetic Unskilled entry —
+      // without it such rows would vanish the moment any skill was deselected,
+      // with nothing in the dropdown to bring them back.
+      const matched =
+        row.skillIds.length === 0
+          ? skillSet.has(UNSKILLED_SKILL_ID)
+          : row.skillIds.some((id) => skillSet.has(id))
+      if (!matched) return false
+    }
     return true
   })
 }

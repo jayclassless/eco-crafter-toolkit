@@ -10,8 +10,8 @@
 // table's virtual-scrolled row type.
 import type { Store } from 'tinybase'
 
-import type { Compare } from '@/lib/collator'
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
+import { type SkillSelectOption, UNSKILLED_SKILL_ID } from '@/lib/skill-options'
 
 import {
   type CandidateFurnishing,
@@ -20,7 +20,6 @@ import {
   type OptimizerInput,
   POWER_TYPES,
   type PowerType,
-  UNSKILLED_SKILL_ID,
 } from './housing-optimizer-types'
 
 /** Resolves an entity id to its localized name (the `useLocalizedName` hook's
@@ -74,49 +73,6 @@ export function buildOptimizerCatalog(
   }
 }
 
-export interface SkillOption {
-  id: string
-  name: string
-  rawName: string
-  /** How many candidate furnishings this skill unlocks, so the user can see
-   * what a selection is worth. */
-  count: number
-}
-
-/** Skills that craft at least one furnishing, plus the synthetic Unskilled
- * entry when anything is craftable by nothing. */
-export function collectOptimizerSkillOptions(
-  catalog: OptimizerCatalog,
-  store: Store,
-  getName: GetName,
-  compare: Compare,
-  unskilledLabel: string
-): SkillOption[] {
-  const counts = new Map<string, number>()
-  let unskilled = 0
-  for (const f of catalog.furnishings) {
-    if (f.skillIds.length === 0) {
-      unskilled++
-      continue
-    }
-    for (const id of f.skillIds) counts.set(id, (counts.get(id) ?? 0) + 1)
-  }
-  const options: SkillOption[] = [...counts].map(([id, count]) => {
-    const rawName = (store.getCell('skills', id, 'name') as string) ?? ''
-    return { id, name: getName('skill', id) || rawName, rawName, count }
-  })
-  options.sort((a, b) => compare(a.name, b.name))
-  if (unskilled > 0) {
-    options.unshift({
-      id: UNSKILLED_SKILL_ID,
-      name: unskilledLabel,
-      rawName: '',
-      count: unskilled,
-    })
-  }
-  return options
-}
-
 /** TinyBase cells hold scalars only, so the power selection round-trips through
  * a comma-joined string. '' means "no power available" and must never decode to
  * "all" — an empty grid is a legitimate, meaningful choice. */
@@ -143,7 +99,7 @@ const ALL_SKILLS = '*'
  */
 export function serializeSkillSelection(
   skillIds: string[] | null,
-  options: readonly SkillOption[]
+  options: readonly SkillSelectOption[]
 ): string {
   if (skillIds === null) return ALL_SKILLS
   const nameById = new Map(options.map((o) => [o.id, o.rawName || o.id]))
@@ -153,7 +109,10 @@ export function serializeSkillSelection(
     .join(',')
 }
 
-export function parseSkillSelection(raw: string, options: readonly SkillOption[]): string[] | null {
+export function parseSkillSelection(
+  raw: string,
+  options: readonly SkillSelectOption[]
+): string[] | null {
   if (raw === ALL_SKILLS) return null
   if (raw === '') return []
   const wanted = new Set(raw.split(','))

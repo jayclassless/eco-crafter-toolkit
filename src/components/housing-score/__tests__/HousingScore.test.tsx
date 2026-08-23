@@ -115,6 +115,63 @@ describe('HousingScore', () => {
     expect(screen.queryByText('Score Soft Cap')).not.toBeInTheDocument()
   })
 
+  it('offers Unskilled and profession-grouped skills in the furnishings skill filter', () => {
+    const stores = createTestStores()
+    seedDataset(stores)
+    // A crafted furnishing alongside the uncrafted chair, so both the skill
+    // group and the Unskilled bucket have something in them.
+    const { gameDataStore } = stores
+    gameDataStore.setRow('skills', 'carpenter', {
+      id: 'carpenter',
+      datasetId: 'ds1',
+      name: 'CarpenterSkill',
+    })
+    gameDataStore.setRow('skills', 'carpentry', {
+      id: 'carpentry',
+      datasetId: 'ds1',
+      name: 'CarpentrySkill',
+      profession: 'CarpenterSkill',
+    })
+    gameDataStore.setRow('items', 'table', {
+      id: 'table',
+      datasetId: 'ds1',
+      name: 'TableItem',
+      isTag: false,
+      housingCategory: 'Seating',
+      housingBaseValue: 3,
+      housingTypeForRoomLimit: 'Table',
+    })
+    gameDataStore.setRow('recipes', 'r1', {
+      id: 'r1',
+      datasetId: 'ds1',
+      name: 'TableRecipe',
+      skillId: 'carpentry',
+    })
+    gameDataStore.setRow('recipeElements', 'e1', {
+      id: 'e1',
+      datasetId: 'ds1',
+      recipeId: 'r1',
+      itemOrTagId: 'table',
+      isProduct: true,
+      baseQuantity: 1,
+      index: 0,
+    })
+    clearGameDataIndexesCache(gameDataStore)
+    const { container } = renderAt(stores, '/ds1/housing')
+
+    fireEvent.click(container.querySelector('[aria-label="Skill"]') as HTMLElement)
+    expect(
+      [...document.querySelectorAll('.p-multiselect-item-group')].map((el) => el.textContent)
+    ).toEqual(['CarpenterSkill', 'Other'])
+    expect(screen.getByText('Unskilled (1)')).toBeInTheDocument()
+    expect(screen.getByText('CarpentrySkill (1)')).toBeInTheDocument()
+
+    // Deselecting Unskilled drops the chair, which no recipe produces.
+    fireEvent.click(screen.getByText('Unskilled (1)'))
+    expect(screen.queryByText('ChairItem')).not.toBeInTheDocument()
+    expect(screen.getByText('TableItem')).toBeInTheDocument()
+  })
+
   it('switches to the building materials browser', () => {
     const stores = createTestStores()
     seedDataset(stores)

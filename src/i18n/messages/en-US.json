@@ -2,6 +2,8 @@
   "common": {
     "title": "Eco Crafter Toolkit",
     "otherProfession": "Other",
+    "unskilled": "Unskilled",
+    "skillOption": "{name} ({items, number})",
     "labeledValue": "{label}: {value}",
     "lessThan": "<{duration}",
     "none": "None",
@@ -642,8 +644,6 @@
         "tierOption": "Tier {tier, number} — caps {soft, number} / {hard, number}",
         "skills": "Unlocked Skills",
         "skillsPlaceholder": "Skills",
-        "unskilled": "Unskilled",
-        "skillOption": "{name} ({items, number})",
         "maxRepeats": "Max Copies Per Furnishing",
         "minContribution": "Min Furnishing Value",
         "residents": "Residents",

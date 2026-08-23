@@ -1,26 +1,19 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { getCompare } from '@/lib/collator'
 import { clearGameDataIndexesCache } from '@/lib/game-data-indexes'
+import { OTHER_PROFESSION, type SkillSelectOption, UNSKILLED_SKILL_ID } from '@/lib/skill-options'
 import { createGameDataStore } from '@/stores/game-data-store'
 
 import {
   buildOptimizerCatalog,
-  collectOptimizerSkillOptions,
   parsePowerTypes,
   parseSkillSelection,
   serializePowerTypes,
   serializeSkillSelection,
-  type SkillOption,
   toOptimizerInput,
 } from '../housing-optimizer-data'
-import {
-  DEFAULT_OPTIMIZER_CONFIG,
-  type OptimizerCatalog,
-  UNSKILLED_SKILL_ID,
-} from '../housing-optimizer-types'
+import { DEFAULT_OPTIMIZER_CONFIG, type OptimizerCatalog } from '../housing-optimizer-types'
 
-const compare = getCompare('en-US')
 const getName = (entityType: string, entityId: string) => `${entityType}:${entityId}`
 
 let store: ReturnType<typeof createGameDataStore>
@@ -176,30 +169,6 @@ describe('buildOptimizerCatalog', () => {
   })
 })
 
-describe('collectOptimizerSkillOptions', () => {
-  it('lists crafting skills with counts, and leads with the Unskilled bucket', () => {
-    seed()
-    const catalog = buildOptimizerCatalog(store, 'ds1', getName)
-    const options = collectOptimizerSkillOptions(catalog, store, getName, compare, 'Unskilled')
-    expect(options[0]).toMatchObject({ id: UNSKILLED_SKILL_ID, name: 'Unskilled', count: 2 })
-    expect(options.find((o) => o.id === 's1')).toMatchObject({
-      name: 'skill:s1',
-      rawName: 'CarpentrySkill',
-      count: 1,
-    })
-  })
-
-  it('omits the Unskilled entry when everything is craftable', () => {
-    seed()
-    store.delRow('items', 'i2')
-    store.delRow('items', 'i3')
-    clearGameDataIndexesCache(store)
-    const catalog = buildOptimizerCatalog(store, 'ds1', getName)
-    const options = collectOptimizerSkillOptions(catalog, store, getName, compare, 'Unskilled')
-    expect(options.map((o) => o.id)).toEqual(['s1'])
-  })
-})
-
 describe('power encoding', () => {
   it('round-trips a selection', () => {
     expect(parsePowerTypes(serializePowerTypes(['Heat', 'Mechanical']))).toEqual([
@@ -219,10 +188,31 @@ describe('power encoding', () => {
 })
 
 describe('skill selection encoding', () => {
-  const options: SkillOption[] = [
-    { id: UNSKILLED_SKILL_ID, name: 'Unskilled', rawName: '', count: 4 },
-    { id: 'uuid-carpentry', name: 'Carpentry', rawName: 'CarpentrySkill', count: 12 },
-    { id: 'uuid-masonry', name: 'Masonry', rawName: 'MasonrySkill', count: 8 },
+  const options: SkillSelectOption[] = [
+    {
+      id: UNSKILLED_SKILL_ID,
+      name: 'Unskilled',
+      rawName: '',
+      professionRawName: OTHER_PROFESSION,
+      professionName: 'Other',
+      count: 4,
+    },
+    {
+      id: 'uuid-carpentry',
+      name: 'Carpentry',
+      rawName: 'CarpentrySkill',
+      professionRawName: 'CarpenterSkill',
+      professionName: 'Carpenter',
+      count: 12,
+    },
+    {
+      id: 'uuid-masonry',
+      name: 'Masonry',
+      rawName: 'MasonrySkill',
+      professionRawName: 'MasonSkill',
+      professionName: 'Mason',
+      count: 8,
+    },
   ]
 
   it('round-trips a selection through skill names, not row ids', () => {

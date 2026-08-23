@@ -14,16 +14,6 @@ export type PowerType = 'Heat' | 'Mechanical' | 'Electric'
 /** Declaration order, which is also display order in the config panel. */
 export const POWER_TYPES: readonly PowerType[] = ['Heat', 'Mechanical', 'Electric']
 
-/**
- * Stands in for "furnishings nothing crafts" in the unlocked-skills selection —
- * flowers, torch stands, stump furniture, trophies. They need no skill to
- * obtain, but leaving them permanently in would make the skill filter quietly
- * incomplete, so the user gets an explicit entry to toggle.
- *
- * Skill row ids are UUIDv4, so the '!' prefix cannot collide with one.
- */
-export const UNSKILLED_SKILL_ID = '!unskilled'
-
 /** One placeable furnishing, reduced to what the solver needs plus the two
  * display fields the result table renders. `optimizeHousing` must never read
  * `name`/`rawName` — keeping them here is what lets the result render without a

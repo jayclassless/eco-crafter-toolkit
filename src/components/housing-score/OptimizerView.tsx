@@ -4,13 +4,13 @@ import { useTranslation } from 'react-i18next'
 import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useCellValue, useStoreRevision } from '@/hooks/use-store-revision'
+import { collectSkillOptions } from '@/lib/skill-options'
 import { useStores } from '@/stores/providers'
 
 import type { DonutDatum } from './housing-donut-layout'
 import { optimizeHousing } from './housing-optimize'
 import {
   buildOptimizerCatalog,
-  collectOptimizerSkillOptions,
   parsePowerTypes,
   parseSkillSelection,
   serializePowerTypes,
@@ -70,14 +70,11 @@ export function OptimizerView({ datasetId }: Props) {
 
   const skills = useMemo(
     () =>
-      collectOptimizerSkillOptions(
-        catalog,
-        gameDataStore,
-        getName,
-        compare,
-        t('housingScore.optimizer.config.unskilled')
-      ),
-    [catalog, gameDataStore, getName, compare, t]
+      collectSkillOptions(catalog.furnishings, gameDataStore, datasetId, getName, compare, {
+        unskilled: t('common.unskilled'),
+        otherProfession: t('common.otherProfession'),
+      }),
+    [catalog.furnishings, gameDataStore, datasetId, getName, compare, t]
   )
 
   // Both of these are memoized on their scalar fields on purpose. The solver is

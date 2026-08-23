@@ -1,14 +1,14 @@
 import { Button } from 'primereact/button'
 import { Dropdown } from 'primereact/dropdown'
 import { MultiSelect } from 'primereact/multiselect'
-import { memo, useMemo } from 'react'
+import { memo, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { NumericField } from '@/components/common/NumericField'
-import { SkillIcon } from '@/components/common/SkillIcon'
+import { SkillMultiSelect } from '@/components/common/SkillMultiSelect'
+import type { SkillSelectOption } from '@/lib/skill-options'
 import type { RoomTier } from '@/types/game-data'
 
-import type { SkillOption } from './housing-optimizer-data'
 import {
   DEFAULT_OPTIMIZER_CONFIG,
   type OptimizerConfig,
@@ -19,14 +19,10 @@ import { OptimizerField } from './OptimizerField'
 
 interface Props {
   config: OptimizerConfig
-  skills: SkillOption[]
+  skills: SkillSelectOption[]
   tiers: RoomTier[]
   onChange: (patch: Partial<OptimizerConfig>) => void
 }
-
-// Selecting every skill is the same as no filter, so normalize back to null —
-// otherwise the selection would pin a stale set of ids when the dataset changes.
-const normalize = <T,>(next: T[], all: number): T[] | null => (next.length === all ? null : next)
 
 // The optimizer's input constraints.
 //
@@ -48,10 +44,6 @@ function OptimizerConfigPanelImpl({ config, skills, tiers, onChange }: Props) {
       })),
     [tiers, t]
   )
-
-  // Memoized so PrimeReact's MultiSelect sees a stable `value` array.
-  const allSkillIds = useMemo(() => skills.map((s) => s.id), [skills])
-  const selectedSkills = config.skillIds ?? allSkillIds
 
   const powerOptions = useMemo(
     () =>
@@ -77,15 +69,10 @@ function OptimizerConfigPanelImpl({ config, skills, tiers, onChange }: Props) {
     [config]
   )
 
-  const skillTemplate = (opt: SkillOption) =>
-    opt ? (
-      <span className="flex align-items-center gap-2">
-        {opt.rawName ? <SkillIcon skill={{ name: opt.rawName }} /> : <i className="pi pi-ban" />}
-        <span>
-          {t('housingScore.optimizer.config.skillOption', { name: opt.name, items: opt.count })}
-        </span>
-      </span>
-    ) : null
+  const onSkillsChange = useCallback(
+    (skillIds: string[] | null) => onChange({ skillIds }),
+    [onChange]
+  )
 
   // A null/blank commit means the user cleared the field; keep the last good
   // value rather than pushing NaN into the solver.
@@ -108,20 +95,12 @@ function OptimizerConfigPanelImpl({ config, skills, tiers, onChange }: Props) {
       </OptimizerField>
 
       <OptimizerField label={t('housingScore.optimizer.config.skills')}>
-        <MultiSelect
-          value={selectedSkills}
+        <SkillMultiSelect
           options={skills}
-          optionLabel="name"
-          optionValue="id"
-          itemTemplate={skillTemplate}
-          onChange={(e) => onChange({ skillIds: normalize(e.value as string[], skills.length) })}
+          value={config.skillIds}
+          onChange={onSkillsChange}
           placeholder={t('housingScore.optimizer.config.skillsPlaceholder')}
-          aria-label={t('housingScore.optimizer.config.skills')}
-          filter
-          // 0 means "never list the selection" — the list runs to 40 entries,
-          // so a summary would resize the control on every change.
-          maxSelectedLabels={0}
-          selectedItemsLabel={t('housingScore.optimizer.config.skillsPlaceholder')}
+          ariaLabel={t('housingScore.optimizer.config.skills')}
           style={{ width: '13rem' }}
         />
       </OptimizerField>

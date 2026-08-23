@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { getCompare } from '@/lib/collator'
 import { clearGameDataIndexesCache } from '@/lib/game-data-indexes'
+import { UNSKILLED_SKILL_ID } from '@/lib/skill-options'
 import { createGameDataStore } from '@/stores/game-data-store'
 
 import {
@@ -338,5 +339,49 @@ describe('collectFurnishingFilterOptions and applyFurnishingFilters', () => {
   it('treats an empty selection as matching nothing', () => {
     const { rows: r } = rows()
     expect(applyFurnishingFilters(r, { ...ALL_SELECTED, categories: [] })).toEqual([])
+  })
+
+  it('matches rows nothing crafts against the synthetic Unskilled entry', () => {
+    const { rows: r } = rows()
+    // Neither fixture row has a producing recipe, so both are unskilled.
+    expect(
+      applyFurnishingFilters(r, { ...ALL_SELECTED, skillIds: [UNSKILLED_SKILL_ID] }).map(
+        (x) => x.itemId
+      )
+    ).toEqual(['chair', 'plaque'])
+  })
+
+  it('hides rows nothing crafts once Unskilled is deselected', () => {
+    const { rows: r } = rows()
+    expect(applyFurnishingFilters(r, { ...ALL_SELECTED, skillIds: ['s1'] })).toEqual([])
+  })
+
+  it('keeps a crafted row out of the Unskilled bucket', () => {
+    store.setRow('skills', 's1', { id: 's1', datasetId: 'ds1', name: 'CarpentrySkill' })
+    store.setRow('recipes', 'r1', {
+      id: 'r1',
+      datasetId: 'ds1',
+      name: 'ChairRecipe',
+      skillId: 's1',
+    })
+    store.setRow('recipeElements', 'e1', {
+      id: 'e1',
+      datasetId: 'ds1',
+      recipeId: 'r1',
+      itemOrTagId: 'chair',
+      isProduct: true,
+      baseQuantity: 1,
+      index: 0,
+    })
+    clearGameDataIndexesCache(store)
+    const { rows: r } = rows()
+    expect(
+      applyFurnishingFilters(r, { ...ALL_SELECTED, skillIds: [UNSKILLED_SKILL_ID] }).map(
+        (x) => x.itemId
+      )
+    ).toEqual(['plaque'])
+    expect(
+      applyFurnishingFilters(r, { ...ALL_SELECTED, skillIds: ['s1'] }).map((x) => x.itemId)
+    ).toEqual(['chair'])
   })
 })
