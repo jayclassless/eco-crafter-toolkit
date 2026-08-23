@@ -127,6 +127,32 @@ describe('HousingScore', () => {
     expect(screen.getByText('30')).toBeInTheDocument()
   })
 
+  it('switches to the optimizer', () => {
+    const stores = createTestStores()
+    seedDataset(stores)
+    renderAt(stores, '/ds1/housing')
+    fireEvent.click(screen.getByText('Optimizer'))
+    expect(screen.getByText('Wall Material Tier')).toBeInTheDocument()
+    // Seating cannot be a room category on its own, so the seeded chair has no
+    // room to live in and the optimizer says so rather than showing a zero.
+    expect(screen.getByText(/no rooms scored/i)).toBeInTheDocument()
+    // The browsers' columns are gone.
+    expect(screen.queryByText('Room Category')).not.toBeInTheDocument()
+  })
+
+  it('persists the selected view and reopens on it', () => {
+    const stores = createTestStores()
+    seedDataset(stores)
+    const first = renderAt(stores, '/ds1/housing')
+    fireEvent.click(screen.getByText('Building Materials'))
+    expect(stores.uiStore.getCell('uiState', 'main', 'housingView')).toBe('materials')
+
+    // A fresh mount against the same ui store reopens where it was left.
+    first.unmount()
+    renderAt(stores, '/ds1/housing')
+    expect(screen.getByText('Score Soft Cap')).toBeInTheDocument()
+  })
+
   it('shows the update-your-dataset state when the dataset has no housing data', () => {
     const stores = createTestStores()
     stores.gameDataStore.setRow('datasets', 'ds1', {

@@ -26,6 +26,11 @@ import type {
 import { generateId } from './ids'
 import { normalizeModuleBonuses } from './normalize-module-bonuses'
 
+// The power grids a furnishing can draw from. Kept as a validation-time
+// allowlist so a dataset naming a grid the app doesn't model fails loudly
+// instead of that furnishing quietly bypassing the optimizer's power filter.
+const HOUSING_POWER_TYPES = new Set(['Heat', 'Mechanical', 'Electric'])
+
 // For a CappedMultiplicative bonus, returns the first level at which applying
 // another factor of `value` reaches `cap`. v12-style fixed talents (value=0
 // or value=1) and non-capped bonuses return 0.
@@ -262,6 +267,17 @@ export function validateDatasetJson(data: unknown): ValidationResult {
       if (item.HousingBaseValue != null && !Number.isFinite(item.HousingBaseValue)) {
         errors.push(`Item "${item.Name}" has a non-finite HousingBaseValue`)
       }
+      // An unrecognized grid would be dropped by the optimizer's power filter,
+      // silently making the furnishing look freely available.
+      if (item.HousingPowerType != null && !HOUSING_POWER_TYPES.has(item.HousingPowerType)) {
+        errors.push(`Item "${item.Name}" has unknown HousingPowerType "${item.HousingPowerType}"`)
+      }
+      if (
+        item.HousingPowerWatts != null &&
+        (!Number.isFinite(item.HousingPowerWatts) || item.HousingPowerWatts < 0)
+      ) {
+        errors.push(`Item "${item.Name}" has an invalid HousingPowerWatts`)
+      }
     }
     // Tiers outside 0-5 are clamped when looked up, so an out-of-range value
     // would silently resolve to the wrong caps rather than failing.
@@ -468,6 +484,10 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
       item.housingDiminishingReturnMultiplier = i.HousingDiminishingReturnMultiplier ?? 1
       item.housingPropertyDiminishingMultiplier =
         i.HousingDiminishingMultiplierAcrossFullProperty ?? 1
+      if (i.HousingPowerType) {
+        item.housingPowerType = i.HousingPowerType
+        item.housingPowerWatts = i.HousingPowerWatts ?? 0
+      }
     }
     // Tier 0 is a real tier, so presence is a separate boolean.
     if (i.BuildingBlockTier != null) {

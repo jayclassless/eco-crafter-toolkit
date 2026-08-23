@@ -16,6 +16,7 @@ export function HousingViewSelector({ value, onChange }: Props) {
   const options = [
     { value: 'furnishings' as HousingView, label: t('housingScore.view.furnishings') },
     { value: 'materials' as HousingView, label: t('housingScore.view.materials') },
+    { value: 'optimizer' as HousingView, label: t('housingScore.view.optimizer') },
   ]
 
   return (

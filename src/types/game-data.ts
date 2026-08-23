@@ -71,6 +71,10 @@ export interface Item {
   housingTypeForRoomLimit?: string
   housingDiminishingReturnMultiplier?: number // 1 = no in-room repeat penalty
   housingPropertyDiminishingMultiplier?: number // 1 = no property-wide penalty
+  /** Which power grid the furnishing needs, or '' when it needs none. This, not
+   * `housingPowerWatts`, is the presence gate — wattages are fractional. */
+  housingPowerType?: string
+  housingPowerWatts?: number
   /** Presence gate for buildingBlockTier — tier 0 is a real tier, so there is
    * no usable numeric sentinel. */
   isBuildingMaterial?: boolean

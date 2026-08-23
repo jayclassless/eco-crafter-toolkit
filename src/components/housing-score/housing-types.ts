@@ -1,8 +1,8 @@
 // Shared types for the Housing Score section.
 
-/** Which browser the section is showing. A third view (the score calculator)
- * will join this union. */
-export type HousingView = 'furnishings' | 'materials'
+/** Which view the section is showing: the two reference browsers, or the
+ * optimizer that builds a best-scoring house from them. */
+export type HousingView = 'furnishings' | 'materials' | 'optimizer'
 
 export type HousingSortDir = 'asc' | 'desc'
 

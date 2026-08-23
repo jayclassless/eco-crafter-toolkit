@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 
 import { NavBar } from '@/components/common/NavBar'
@@ -6,22 +6,33 @@ import { AboutDialog } from '@/components/settings/AboutDialog'
 import { CustomEntitiesDialog } from '@/components/settings/datasets/CustomEntitiesDialog'
 import { DatasetsDialog } from '@/components/settings/datasets/DatasetsDialog'
 import { SettingsSidebar } from '@/components/settings/SettingsSidebar'
+import { useCellValue } from '@/hooks/use-store-revision'
 import { useStores } from '@/stores/providers'
 
 import { FurnishingsBrowser } from './FurnishingsBrowser'
 import type { HousingView } from './housing-types'
 import { HousingViewSelector } from './HousingViewSelector'
 import { MaterialsBrowser } from './MaterialsBrowser'
+import { OptimizerView } from './OptimizerView'
 
 // Housing Score: reference browsers for the data behind Eco's housing value
-// (which is XP per day for a property's residents). Dataset-scoped (no build),
-// nothing here is user state yet.
+// (which is XP per day for a property's residents), plus an optimizer that
+// builds the best-scoring house out of them. Dataset-scoped (no build) — the
+// optimizer's assumptions persist in uiStore, not per-build state.
 export function HousingScore() {
   const { datasetId } = useParams<{ datasetId: string }>()
   const navigate = useNavigate()
   const { gameDataStore, uiStore } = useStores()
 
-  const [view, setView] = useState<HousingView>('furnishings')
+  // Persisted, like the browsers' sort fields: a stable enum that stays
+  // meaningful across a dataset switch, so the tool reopens where it was left.
+  const view =
+    (useCellValue<string>(uiStore, 'uiState', 'main', 'housingView') as HousingView | undefined) ??
+    'furnishings'
+  const setView = useCallback(
+    (next: HousingView) => uiStore.setCell('uiState', 'main', 'housingView', next),
+    [uiStore]
+  )
   const [settingsVisible, setSettingsVisible] = useState(false)
   const [datasetsDialogVisible, setDatasetsDialogVisible] = useState(false)
   const [customEntitiesVisible, setCustomEntitiesVisible] = useState(false)
@@ -46,11 +57,7 @@ export function HousingScore() {
       </NavBar>
 
       <div className="flex flex-column flex-1 p-3" style={{ minHeight: 0 }}>
-        {view === 'furnishings' ? (
-          <FurnishingsBrowser datasetId={datasetId} />
-        ) : (
-          <MaterialsBrowser datasetId={datasetId} />
-        )}
+        {renderHousingView(view, datasetId)}
       </div>
 
       <SettingsSidebar
@@ -78,4 +85,17 @@ export function HousingScore() {
       <AboutDialog visible={aboutVisible} onHide={() => setAboutVisible(false)} />
     </div>
   )
+}
+
+// Not a component — a plain switch, so the file still defines exactly one.
+// Exhaustive over HousingView: adding a view fails to compile until handled.
+function renderHousingView(view: HousingView, datasetId: string) {
+  switch (view) {
+    case 'furnishings':
+      return <FurnishingsBrowser datasetId={datasetId} />
+    case 'materials':
+      return <MaterialsBrowser datasetId={datasetId} />
+    case 'optimizer':
+      return <OptimizerView datasetId={datasetId} />
+  }
 }

@@ -2,10 +2,11 @@
 
 ## 0.9.0 (TBD)
 
-- Added a Housing Score section with two browsers: Furnishings (every item that
-  contributes housing value, with its room category, furniture type, base value
-  and repeat penalty) and Building Materials (the blocks rooms can be built
-  from, with the tier caps they impose).
+- Added a Housing Score section with two browsers that let you see all the
+  Furnishings you can use in your house, as well as all the block types you
+  can use to build it. There's also an Optimizer tool that _attempts_ to
+  calculate what the best set of Furnishings you can place for the highest
+  score, given the constraints you define.
 - Fixed a variety of issues with Talents not influencing the correct recipes.
 
 ## 0.8.0 (2026-08-14)

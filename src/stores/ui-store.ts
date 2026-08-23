@@ -29,6 +29,28 @@ export function createUIStore() {
       housingFurnishingSortDir: { type: 'string', default: 'desc' },
       housingMaterialSortField: { type: 'string', default: 'tier' },
       housingMaterialSortDir: { type: 'string', default: 'asc' },
+      // Housing Score optimizer assumptions. Persisted for the same reason as
+      // the sort fields above: stable scalars that stay meaningful across a
+      // dataset switch. The unlocked-skill selection is deliberately NOT here —
+      // it holds dataset-scoped skill ids, which would silently exclude every
+      // furnishing after switching datasets.
+      housingOptimizerTier: { type: 'number', default: 5 },
+      housingOptimizerMaxFurnishingRepeats: { type: 'number', default: 3 },
+      housingOptimizerMinFurnishingContribution: { type: 'number', default: 0.2 },
+      housingOptimizerResidents: { type: 'number', default: 1 },
+      housingOptimizerMaxRoomRepeat: { type: 'number', default: 2 },
+      housingOptimizerMinRoomContribution: { type: 'number', default: 2 },
+      // Comma-joined PowerType names. '' means "no power available" and must
+      // never be read back as "all".
+      housingOptimizerPower: { type: 'string', default: 'Heat,Mechanical' },
+      // Unlocked-skill selection, stored as the game's own skill NAMES rather
+      // than row ids. Ids are per-dataset uuids, so storing those would silently
+      // exclude every furnishing after a dataset switch; names are stable across
+      // versions. '*' means "all", '' means "none".
+      housingOptimizerSkills: { type: 'string', default: '*' },
+      // Which Housing Score view is open. A stable enum, so it survives a
+      // dataset switch like the sort fields do.
+      housingView: { type: 'string', default: 'furnishings' },
     },
     // Per-dataset memory of the build the user last viewed. Row id = datasetId.
     // BuildRedirect uses this to land on the last-viewed build instead of the

@@ -241,7 +241,17 @@ interface RawHousingValue {
   typeForRoomLimit: string // default ''; groups repeats within a room
   diminishingReturnMultiplier: number // default 1 (no in-room repeat penalty)
   propertyMultiplier: number // default 1 (no property-wide repeat penalty)
+  /** '' when the furnishing needs no power at all, which is the common case.
+   * Presence of this — never `powerWatts`, which is legitimately fractional —
+   * is the gate for "requires power". */
+  powerType: HousingPowerType | ''
+  /** Watts consumed. 0 when unpowered; real values run from 0.2 to 2500. */
+  powerWatts: number
 }
+/** The power grids a furnishing can draw from. These are the game's own
+ * `HeatPower` / `MechanicalPower` / `ElectricPower` names, minus the suffix. */
+type HousingPowerType = 'Heat' | 'Mechanical' | 'Electric'
+const HOUSING_POWER_TYPES: readonly string[] = ['Heat', 'Mechanical', 'Electric']
 interface RawTagDef {
   name: string
   display?: string
@@ -916,13 +926,44 @@ function parseHomeFurnishingValue(classBody: string): RawHousingValue | null {
   if (!category) {
     throw new Error(`[extract] HomeFurnishingValue without a Category: ${body.trim()}`)
   }
+  const power = parseHousingPower(classBody)
   return {
     category,
     baseValue: readNumField(body, 'BaseValue') ?? 0,
     typeForRoomLimit: readLocStrField(body, 'TypeForRoomLimit') ?? '',
     diminishingReturnMultiplier: readNumField(body, 'DiminishingReturnMultiplier') ?? 1,
     propertyMultiplier: readNumField(body, 'DiminishingMultiplierAcrossFullProperty') ?? 1,
+    powerType: power?.type ?? '',
+    powerWatts: power?.watts ?? 0,
   }
+}
+
+/** A furnishing that needs power declares it in a tooltip method on the same
+ * *Item class, e.g.
+ *
+ *     PowerConsumptionTooltip() => Localizer.Do($"Consumes: {Text.Info(1)}w of {new HeatPower().Name} power from fuel.");
+ *
+ * The tooltip is the authoritative marker rather than the components on the
+ * sibling *Object class: generators also carry a PowerGridComponent but have no
+ * consumption tooltip, so keying off the tooltip excludes them for free, and a
+ * few objects (Laser) keep their component wiring in a hand-written file this
+ * pass never sees. Returns null when the furnishing needs no power. */
+function parseHousingPower(classBody: string): { type: HousingPowerType; watts: number } | null {
+  const m =
+    /PowerConsumptionTooltip\(\)[^\n]*Text\.Info\(([0-9.]+)f?\)\}w of \{new (\w+)Power\(\)\.Name\} power/.exec(
+      classBody
+    )
+  if (!m) return null
+  const [, watts, type] = m
+  // A new grid type is a data change we want to hear about, not swallow.
+  if (!HOUSING_POWER_TYPES.includes(type)) {
+    throw new Error(`[extract] unknown housing power type "${type}Power"`)
+  }
+  const parsed = Number(watts)
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`[extract] unparseable housing power wattage "${watts}"`)
+  }
+  return { type: type as HousingPowerType, watts: parsed }
 }
 
 // ---- Plant / crop growth parsing -------------------------------------------
@@ -2258,9 +2299,10 @@ async function main() {
     blockTierCount++
   }
   const housingCount = [...items.values()].filter((i) => i.housing).length
+  const poweredCount = [...items.values()].filter((i) => i.housing?.powerType).length
   console.log(
     `[extract] merged room material tier onto ${blockTierCount} item(s); ` +
-      `${housingCount} housing furnishing(s)`
+      `${housingCount} housing furnishing(s), ${poweredCount} of them powered`
   )
   // Floors, not exact counts: v11 has the fewest furnishings (407) and every
   // version has exactly 46 room materials. A collapse here means a template
@@ -2270,6 +2312,13 @@ async function main() {
   }
   if (housingCount < 380) {
     throw new Error(`[extract] only ${housingCount} housing furnishing(s) found (expected 400+)`)
+  }
+  // Every version states power needs the same way, so a collapse here means the
+  // tooltip template moved — which would otherwise silently report the entire
+  // game as needing no power. A floor, not an exact count: v11 has the fewest
+  // powered furnishings (90) and v14 the most (99).
+  if (poweredCount < 80) {
+    throw new Error(`[extract] only ${poweredCount} powered furnishing(s) found (expected 90+)`)
   }
 
   // Pass 1d: recipe-derived display fallback for items that have no .cs source
@@ -2696,6 +2745,12 @@ async function main() {
       j.HousingTypeForRoomLimit = it.housing.typeForRoomLimit
       j.HousingDiminishingReturnMultiplier = it.housing.diminishingReturnMultiplier
       j.HousingDiminishingMultiplierAcrossFullProperty = it.housing.propertyMultiplier
+      // Both omitted when the furnishing needs no power, so unpowered items add
+      // nothing to the dataset size (they are the large majority).
+      if (it.housing.powerType) {
+        j.HousingPowerType = it.housing.powerType
+        j.HousingPowerWatts = it.housing.powerWatts
+      }
     }
     // Tier 0 is a real material tier (Mortared Basalt), so this must be a
     // presence test, never a truthiness test.

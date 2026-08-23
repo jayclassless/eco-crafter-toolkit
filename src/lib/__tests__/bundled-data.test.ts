@@ -32,6 +32,51 @@ describe('bundled eco-v12 dataset', () => {
 // by eye. These assertions are the review: they pin the shape and rough volume
 // of the gathering data, so a parser regression that silently drops a category
 // fails here rather than surfacing later as wrong prices.
+// Housing power is parsed from a tooltip template that every version writes the
+// same way. If that template ever moves, the parse yields nothing and the whole
+// game silently looks unpowered — which reads as a perfectly plausible dataset.
+// These pin it down.
+describe.each(BUNDLED)('bundled %s housing power', (id) => {
+  const furnishings = load(id).Items.filter((i) => i.HousingCategory != null)
+  const powered = furnishings.filter((i) => i.HousingPowerType != null)
+
+  it('marks a realistic share of furnishings as needing power', () => {
+    // v11 has the fewest (90), v14 the most (99).
+    expect(powered.length).toBeGreaterThanOrEqual(85)
+    expect(powered.length).toBeLessThan(furnishings.length / 2)
+  })
+
+  it('uses every grid the game has, and nothing else', () => {
+    const grids = new Set(powered.map((i) => i.HousingPowerType))
+    expect([...grids].sort()).toEqual(['Electric', 'Heat', 'Mechanical'])
+  })
+
+  it('pairs a positive wattage with every power type', () => {
+    for (const item of powered) {
+      expect(item.HousingPowerWatts, item.Name).toBeGreaterThan(0)
+    }
+    // Fractional wattages are real (candles draw 0.2 W), so presence must be
+    // tested on the type — a 0 sentinel would be indistinguishable.
+    expect(
+      furnishings.every((i) => i.HousingPowerType != null || i.HousingPowerWatts == null)
+    ).toBe(true)
+  })
+
+  it('separates the powered appliance from its unpowered counterpart', () => {
+    const byName = new Map(furnishings.map((i) => [i.Name, i]))
+    expect(byName.get('RefrigeratorItem')?.HousingPowerType).toBe('Electric')
+    expect(byName.get('IceboxItem')?.HousingPowerType).toBeUndefined()
+  })
+
+  it('never marks a generator as consuming power', () => {
+    // Generators carry a power-grid component but produce rather than consume.
+    for (const name of ['WindmillItem', 'WaterwheelItem']) {
+      const item = load(id).Items.find((i) => i.Name === name)
+      if (item?.HousingCategory != null) expect(item.HousingPowerType).toBeUndefined()
+    }
+  })
+})
+
 describe.each(BUNDLED)('bundled %s gathering data', (id) => {
   const data = load(id)
   const items = data.Items

@@ -1,0 +1,19 @@
+/* PrimeFlex 4's `.surface-card` and `.surface-border` utilities resolve to
+ * nothing here: they reference `--p-surface-*` (PrimeReact v11 variable names)
+ * while the bundled Lara theme defines `--surface-*`. A card using them ends up
+ * transparent — indistinguishable from the page — and a border falls back to
+ * currentColor. So these read the theme's own variables directly, the way
+ * RecipeDependencyGraph.css already does.
+ *
+ * The background deliberately matches `.p-datatable .p-datatable-tbody > tr`,
+ * so a room reads as the same kind of surface as the two browsers' tables. */
+.optimizer-room-card {
+  background: var(--surface-card);
+}
+
+/* Rules sit on the cells rather than the row: with border-collapse, a border on
+ * a <tr> is unreliable across browsers. */
+.optimizer-room-rule > th,
+.optimizer-room-rule > td {
+  border-bottom: 1px solid var(--surface-border);
+}

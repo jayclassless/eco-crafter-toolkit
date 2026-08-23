@@ -1,0 +1,188 @@
+// Store -> optimizer boundary: turns game data into the plain arrays
+// `optimizeHousing` consumes, plus the small helpers the config panel and the
+// result view need.
+//
+// This overlaps `buildFurnishingRows` in housing-data.ts by design rather than
+// by accident. That builder produces a display row: localized strings and a
+// UI-shaped `repeatReduction` (1 - multiplier), with Industrial rows already
+// dropped. The solver needs the raw multipliers and the power type instead, so
+// merging the two would leak every future solver need into the furnishings
+// table's virtual-scrolled row type.
+import type { Store } from 'tinybase'
+
+import type { Compare } from '@/lib/collator'
+import { getGameDataIndexes } from '@/lib/game-data-indexes'
+
+import {
+  type CandidateFurnishing,
+  type OptimizerCatalog,
+  type OptimizerConfig,
+  type OptimizerInput,
+  POWER_TYPES,
+  type PowerType,
+  UNSKILLED_SKILL_ID,
+} from './housing-optimizer-types'
+
+/** Resolves an entity id to its localized name (the `useLocalizedName` hook's
+ * `getName`). Passed in rather than hooked, so these stay pure. */
+type GetName = (entityType: string, entityId: string) => string
+
+const POWER_TYPE_SET = new Set<string>(POWER_TYPES)
+
+export function buildOptimizerCatalog(
+  store: Store,
+  datasetId: string,
+  getName: GetName
+): OptimizerCatalog {
+  const {
+    housingItemIdsByDatasetId,
+    roomCategoriesByDatasetId,
+    roomTiersByDatasetId,
+    skillIdsByItemId,
+  } = getGameDataIndexes(store)
+
+  const furnishings: CandidateFurnishing[] = []
+  for (const itemId of housingItemIdsByDatasetId.get(datasetId) ?? []) {
+    const row = store.getRow('items', itemId)
+    const rawName = (row.name as string) ?? ''
+    const powerType = (row.housingPowerType as string) ?? ''
+    furnishings.push({
+      itemId,
+      categoryName: (row.housingCategory as string) ?? '',
+      typeForRoomLimit: (row.housingTypeForRoomLimit as string) ?? '',
+      baseValue: (row.housingBaseValue as number) ?? 0,
+      // 1 means no repeat penalty; 0 would instead zero every repeat.
+      dimMultiplier: (row.housingDiminishingReturnMultiplier as number) ?? 1,
+      skillIds: skillIdsByItemId.get(itemId) ?? [],
+      // An unrecognized grid is treated as "needs no power" rather than making
+      // the furnishing unbuildable; import validation rejects those upstream.
+      powerType: POWER_TYPE_SET.has(powerType) ? (powerType as PowerType) : '',
+      // The localized index may not be warm on first paint, hence the fallback.
+      name: getName('item', itemId) || rawName,
+      rawName,
+    })
+  }
+
+  return {
+    furnishings,
+    // Deliberately unfiltered by `affectsPropertyTypes`: that flag gates which
+    // category may be a room's PRIMARY, but Cultural furniture still supports
+    // Living Room and Outdoor on a Residence. Filtering here would silently
+    // delete real score.
+    categories: roomCategoriesByDatasetId.get(datasetId) ?? [],
+    tiers: roomTiersByDatasetId.get(datasetId) ?? [],
+  }
+}
+
+export interface SkillOption {
+  id: string
+  name: string
+  rawName: string
+  /** How many candidate furnishings this skill unlocks, so the user can see
+   * what a selection is worth. */
+  count: number
+}
+
+/** Skills that craft at least one furnishing, plus the synthetic Unskilled
+ * entry when anything is craftable by nothing. */
+export function collectOptimizerSkillOptions(
+  catalog: OptimizerCatalog,
+  store: Store,
+  getName: GetName,
+  compare: Compare,
+  unskilledLabel: string
+): SkillOption[] {
+  const counts = new Map<string, number>()
+  let unskilled = 0
+  for (const f of catalog.furnishings) {
+    if (f.skillIds.length === 0) {
+      unskilled++
+      continue
+    }
+    for (const id of f.skillIds) counts.set(id, (counts.get(id) ?? 0) + 1)
+  }
+  const options: SkillOption[] = [...counts].map(([id, count]) => {
+    const rawName = (store.getCell('skills', id, 'name') as string) ?? ''
+    return { id, name: getName('skill', id) || rawName, rawName, count }
+  })
+  options.sort((a, b) => compare(a.name, b.name))
+  if (unskilled > 0) {
+    options.unshift({
+      id: UNSKILLED_SKILL_ID,
+      name: unskilledLabel,
+      rawName: '',
+      count: unskilled,
+    })
+  }
+  return options
+}
+
+/** TinyBase cells hold scalars only, so the power selection round-trips through
+ * a comma-joined string. '' means "no power available" and must never decode to
+ * "all" — an empty grid is a legitimate, meaningful choice. */
+export function serializePowerTypes(values: readonly PowerType[]): string {
+  return POWER_TYPES.filter((t) => values.includes(t)).join(',')
+}
+
+export function parsePowerTypes(raw: string): PowerType[] {
+  if (!raw) return []
+  const seen = new Set(raw.split(','))
+  return POWER_TYPES.filter((t) => seen.has(t))
+}
+
+/** Sentinel for "every skill unlocked", which is distinct from an empty
+ * selection. Skill names never contain it. */
+const ALL_SKILLS = '*'
+
+/**
+ * Encode the unlocked-skill selection for the ui store.
+ *
+ * Stored as the game's own skill NAMES, not row ids: ids are per-dataset uuids,
+ * so a persisted id set would resolve to nothing after switching datasets and
+ * silently exclude every furnishing. Names are stable across game versions.
+ */
+export function serializeSkillSelection(
+  skillIds: string[] | null,
+  options: readonly SkillOption[]
+): string {
+  if (skillIds === null) return ALL_SKILLS
+  const nameById = new Map(options.map((o) => [o.id, o.rawName || o.id]))
+  return skillIds
+    .map((id) => nameById.get(id))
+    .filter((name): name is string => !!name)
+    .join(',')
+}
+
+export function parseSkillSelection(raw: string, options: readonly SkillOption[]): string[] | null {
+  if (raw === ALL_SKILLS) return null
+  if (raw === '') return []
+  const wanted = new Set(raw.split(','))
+  const ids = options.filter((o) => wanted.has(o.rawName || o.id)).map((o) => o.id)
+  // A stored selection that resolves to nothing is stale — a dataset that names
+  // its skills differently — so fall back to "all" rather than handing the
+  // solver an empty pool and reporting a zero-score house.
+  return ids.length > 0 ? ids : null
+}
+
+/** Split the synthetic Unskilled entry back out, and keep the tier honest
+ * against datasets whose tier table differs from the persisted choice. */
+export function toOptimizerInput(
+  config: OptimizerConfig,
+  catalog: OptimizerCatalog
+): OptimizerInput {
+  const skillIds = config.skillIds
+  const tiers = catalog.tiers.map((t) => t.tierVal)
+  const tier = tiers.includes(config.tier) ? config.tier : (tiers[tiers.length - 1] ?? 0)
+  return {
+    tier,
+    // null means "everything unlocked", which includes the unskilled items.
+    skillIds: skillIds ? skillIds.filter((id) => id !== UNSKILLED_SKILL_ID) : null,
+    includeUnskilled: skillIds ? skillIds.includes(UNSKILLED_SKILL_ID) : true,
+    maxFurnishingRepeats: config.maxFurnishingRepeats,
+    minFurnishingContribution: config.minFurnishingContribution,
+    residents: config.residents,
+    maxRoomRepeat: config.maxRoomRepeat,
+    minRoomContribution: config.minRoomContribution,
+    power: config.power,
+  }
+}

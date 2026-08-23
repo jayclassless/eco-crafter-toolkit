@@ -39,6 +39,15 @@ describe('createUIStore', () => {
       housingFurnishingSortDir: 'desc',
       housingMaterialSortField: 'tier',
       housingMaterialSortDir: 'asc',
+      housingOptimizerMaxFurnishingRepeats: 3,
+      housingOptimizerMaxRoomRepeat: 2,
+      housingOptimizerMinFurnishingContribution: 0.2,
+      housingOptimizerMinRoomContribution: 2,
+      housingOptimizerPower: 'Heat,Mechanical',
+      housingOptimizerSkills: '*',
+      housingOptimizerResidents: 1,
+      housingOptimizerTier: 5,
+      housingView: 'furnishings',
     })
   })
 

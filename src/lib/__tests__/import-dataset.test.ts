@@ -586,6 +586,34 @@ describe('validateDatasetJson — housing', () => {
     expect(result.errors.join()).toMatch(/non-existent room category/)
   })
 
+  it('accepts a furnishing with a known power grid, and one with none', () => {
+    const data = makeMinimalDataset()
+    const chair = data.Items.find((i) => i.Name === 'ChairItem')!
+    chair.HousingPowerType = 'Electric'
+    chair.HousingPowerWatts = 0.2
+    expect(validateDatasetJson(data).valid).toBe(true)
+    delete chair.HousingPowerType
+    delete chair.HousingPowerWatts
+    expect(validateDatasetJson(data).valid).toBe(true)
+  })
+
+  it('rejects an unknown power grid', () => {
+    // Silently accepting one would make the furnishing bypass the optimizer's
+    // power filter and look freely available.
+    const data = makeMinimalDataset()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    data.Items.find((i) => i.Name === 'ChairItem')!.HousingPowerType = 'Antimatter' as any
+    const result = validateDatasetJson(data)
+    expect(result.valid).toBe(false)
+    expect(result.errors.join()).toMatch(/unknown HousingPowerType/)
+  })
+
+  it('rejects a negative or non-finite wattage', () => {
+    const data = makeMinimalDataset()
+    data.Items.find((i) => i.Name === 'ChairItem')!.HousingPowerWatts = -1
+    expect(validateDatasetJson(data).errors.join()).toMatch(/invalid HousingPowerWatts/)
+  })
+
   it('rejects a dangling supporting-category reference', () => {
     const data = makeMinimalDataset()
     data.RoomCategories![0].SupportingRoomCategoryNames = ['Ghost']

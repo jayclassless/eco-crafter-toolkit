@@ -4,30 +4,30 @@
       "id": "eco-v14",
       "name": "Eco v14.0.3",
       "file": "eco-v14.json",
-      "revision": 5,
-      "updatedAt": "2026-08-22",
+      "revision": 6,
+      "updatedAt": "2026-08-23",
       "default": true
     },
     {
       "id": "eco-v13",
       "name": "Eco v13.0.4",
       "file": "eco-v13.json",
-      "revision": 9,
-      "updatedAt": "2026-08-22"
+      "revision": 10,
+      "updatedAt": "2026-08-23"
     },
     {
       "id": "eco-v12",
       "name": "Eco v12.0.7",
       "file": "eco-v12.json",
-      "revision": 6,
-      "updatedAt": "2026-08-22"
+      "revision": 7,
+      "updatedAt": "2026-08-23"
     },
     {
       "id": "eco-v11",
       "name": "Eco v11.0.6",
       "file": "eco-v11.json",
-      "revision": 5,
-      "updatedAt": "2026-08-22"
+      "revision": 6,
+      "updatedAt": "2026-08-23"
     }
   ]
 }

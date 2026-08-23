@@ -608,7 +608,8 @@
     "viewSwitcher": "Switch housing view",
     "view": {
       "furnishings": "Furnishings",
-      "materials": "Building Materials"
+      "materials": "Building Materials",
+      "optimizer": "Optimizer"
     },
     "columns": {
       "item": "Item",
@@ -633,6 +634,50 @@
     "none": "—",
     "noSkill": "—",
     "empty": "This dataset has no housing data. Update the dataset to enable the Housing Score browsers.",
-    "emptyFiltered": "No items match the selected filters."
+    "emptyFiltered": "No items match the selected filters.",
+    "optimizer": {
+      "config": {
+        "title": "Assumptions",
+        "tier": "Wall Material Tier",
+        "tierOption": "Tier {tier, number} — caps {soft, number} / {hard, number}",
+        "skills": "Unlocked Skills",
+        "skillsPlaceholder": "Skills",
+        "unskilled": "Unskilled",
+        "skillOption": "{name} ({items, number})",
+        "maxRepeats": "Max Copies Per Furnishing",
+        "minContribution": "Min Furnishing Value",
+        "residents": "Residents",
+        "maxRoomRepeat": "Max Rooms Per Category",
+        "minRoomValue": "Min Room Value",
+        "power": "Power Available",
+        "powerPlaceholder": "Power",
+        "reset": "Reset assumptions"
+      },
+      "power": {
+        "Heat": "Heat",
+        "Mechanical": "Mechanical",
+        "Electric": "Electricity"
+      },
+      "total": "Total Housing Score",
+      "totalUnit": "XP / day",
+      "perResidentNote": "per resident — the household produces {value} in total",
+      "byCategory": "Score By Room Category",
+      "share": "{percent} of total",
+      "capped": "capped",
+      "cappedHint": "Limited to a share of the rest of the property.",
+      "rooms": "Rooms",
+      "copies": "×{copies, number}",
+      "copyLine": "Copy {index, number}: {value}",
+      "roomValue": "Room value",
+      "alternatives_one": "or 1 other item that scores the same",
+      "alternatives_other": "or any of {count, number} other items that score the same",
+      "columns": {
+        "item": "Furnishing",
+        "count": "Qty",
+        "contribution": "Score"
+      },
+      "emptyResult": "No rooms scored. Unlock more skills, enable more power, or lower the minimum contributions.",
+      "alternativesTooltip": "Scores exactly the same here:"
+    }
   }
 }

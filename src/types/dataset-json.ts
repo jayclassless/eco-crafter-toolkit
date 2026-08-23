@@ -233,11 +233,22 @@ export interface ItemJson {
   HousingDiminishingReturnMultiplier?: number
   /** Same, but counted across the whole property. 1 = no penalty. */
   HousingDiminishingMultiplierAcrossFullProperty?: number
+  /** Which power grid the furnishing draws from, or absent when it needs none
+   * (the large majority). Absence is the gate — never `HousingPowerWatts`,
+   * which is legitimately fractional. */
+  HousingPowerType?: HousingPowerTypeJson
+  /** Watts consumed. Present exactly when `HousingPowerType` is; values run
+   * from 0.2 to 2500, so this is a float, not an int. */
+  HousingPowerWatts?: number
   /** Highest `[BlockTier(N)]` among the room-material blocks this item places.
    * **Tier 0 is a real tier** (Mortared Basalt), so test presence with
    * `!= null`, never truthiness. */
   BuildingBlockTier?: number
 }
+
+/** The power grids a furnishing can draw from. Not exported: the app-side
+ * equivalent is `PowerType` in the housing-score section. */
+type HousingPowerTypeJson = 'Heat' | 'Mechanical' | 'Electric'
 
 export interface TagJson {
   Name: string

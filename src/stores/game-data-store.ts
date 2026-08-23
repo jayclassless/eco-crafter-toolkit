@@ -90,6 +90,11 @@ export function createGameDataStore() {
       housingTypeForRoomLimit: { type: 'string', default: '' },
       housingDiminishingReturnMultiplier: { type: 'number', default: 1 },
       housingPropertyDiminishingMultiplier: { type: 'number', default: 1 },
+      // '' means "needs no power", which is the majority. Never gate on
+      // housingPowerWatts instead: real wattages go down to 0.2, so a 0
+      // sentinel is indistinguishable from a rounding artifact.
+      housingPowerType: { type: 'string', default: '' },
+      housingPowerWatts: { type: 'number', default: 0 },
       // Tier 0 is a REAL material tier (Mortared Basalt), so no numeric
       // sentinel is available — this boolean is the presence gate. Never
       // replace it with `buildingBlockTier === 0`, or every item in the game
