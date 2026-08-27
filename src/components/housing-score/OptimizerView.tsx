@@ -183,48 +183,64 @@ export function OptimizerView({ datasetId }: Props) {
     return <div className="text-color-secondary p-4 text-center">{t('housingScore.empty')}</div>
   }
 
+  const hasResult = result.rooms.length > 0 && result.perResident > 0
+
   return (
     <div className="flex flex-column gap-3 overflow-y-auto overflow-x-hidden">
-      <OptimizerConfigPanel
-        config={config}
-        skills={skills}
-        tiers={catalog.tiers}
-        onChange={onConfigChange}
-      />
+      {/* Assumptions on the left, summary pinned right. The row stretches
+          rather than starting its items, so the summary can center itself
+          against the taller assumptions block. `flex-wrap` collapses the two
+          into a single stack on a narrow viewport rather than letting the
+          summary squeeze. */}
+      <div className="flex gap-4 flex-wrap">
+        <OptimizerConfigPanel
+          config={config}
+          skills={skills}
+          tiers={catalog.tiers}
+          onChange={onConfigChange}
+        />
 
-      {result.rooms.length === 0 || result.perResident <= 0 ? (
-        <div className="text-color-secondary p-4 text-center">
-          {t('housingScore.optimizer.emptyResult')}
+        {/* `pr-4` keeps the donut off the scroll container's scrollbar. */}
+        <div
+          className="align-items-center justify-content-end flex flex-1 pr-4"
+          style={{ minWidth: '22rem' }}
+        >
+          {hasResult ? (
+            <OptimizerSummary
+              perResident={result.perResident}
+              houseTotal={result.houseTotal}
+              residents={config.residents}
+              segments={segments}
+            />
+          ) : (
+            <div className="text-color-secondary flex-1 p-4 text-center">
+              {t('housingScore.optimizer.emptyResult')}
+            </div>
+          )}
         </div>
-      ) : (
-        <>
-          <OptimizerSummary
-            perResident={result.perResident}
-            houseTotal={result.houseTotal}
-            residents={config.residents}
-            segments={segments}
-          />
-          {/* CSS grid rather than PrimeFlex's `grid`: that one uses negative
-              margins, which push past the scroll container and raise a
-              horizontal scrollbar. */}
-          <div
-            style={{
-              display: 'grid',
-              gap: '1rem',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(34rem, 1fr))',
-            }}
-          >
-            {result.rooms.map((room) => (
-              <OptimizerRoomCard
-                key={room.categoryName}
-                room={room}
-                displayName={categoryLabels.get(room.categoryName) ?? room.categoryName}
-                color={categoryColors.get(room.categoryName) ?? ''}
-                categoryLabels={categoryLabels}
-              />
-            ))}
-          </div>
-        </>
+      </div>
+
+      {/* CSS grid rather than PrimeFlex's `grid`: that one uses negative
+          margins, which push past the scroll container and raise a
+          horizontal scrollbar. */}
+      {hasResult && (
+        <div
+          style={{
+            display: 'grid',
+            gap: '1rem',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(34rem, 1fr))',
+          }}
+        >
+          {result.rooms.map((room) => (
+            <OptimizerRoomCard
+              key={room.categoryName}
+              room={room}
+              displayName={categoryLabels.get(room.categoryName) ?? room.categoryName}
+              color={categoryColors.get(room.categoryName) ?? ''}
+              categoryLabels={categoryLabels}
+            />
+          ))}
+        </div>
       )}
     </div>
   )

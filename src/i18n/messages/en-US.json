@@ -640,6 +640,7 @@
     "optimizer": {
       "preset": {
         "label": "Progression",
+        "tooltip": "A convenience preset of common options. You can use this or alter any assumption however you wish.",
         "day0": "Day 0",
         "earlyGame": "Early Game",
         "midGame": "Mid Game",
@@ -650,15 +651,31 @@
       "config": {
         "title": "Assumptions",
         "tier": "Wall Material Tier",
-        "tierOption": "Tier {tier, number} — caps {soft, number} / {hard, number}",
+        "tierTooltip": "The construction block types available for building the rooms of the residence.",
+        "tierOption": "Tier {tier, number} ({materials})",
+        "tierOptionBare": "Tier {tier, number}",
+        "tierMaterials": {
+          "1": "Adobe",
+          "2": "Hewn Logs, Mortared Stone",
+          "3": "Lumber, Brick, Glass",
+          "4": "Steel, Concrete",
+          "5": "Ashlar Stone, Composite Lumber"
+        },
         "skills": "Unlocked Skills",
+        "skillsTooltip": "The skills that are researched and available in the world.",
         "skillsPlaceholder": "Skills",
         "maxRepeats": "Max Copies Per Furnishing",
+        "maxRepeatsTooltip": "The maximum number of any one item to suggest.",
         "minContribution": "Min Furnishing Value",
+        "minContributionTooltip": "The minimum value an item must contribute to the score to be included in the solution.",
         "residents": "Residents",
+        "residentsTooltip": "How many citizens will make the residence their home.",
         "maxRoomRepeat": "Max Rooms Per Category",
+        "maxRoomRepeatTooltip": "The maximum number of times a room type can be repeated as part of the solution.",
         "minRoomValue": "Min Room Value",
+        "minRoomValueTooltip": "The minimum value a room must contribute to the score to be included in the solution.",
         "power": "Power Available",
+        "powerTooltip": "The power sources that are available in the world.",
         "powerPlaceholder": "Power",
         "reset": "Reset assumptions"
       },

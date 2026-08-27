@@ -1,4 +1,4 @@
-import { SelectButton } from 'primereact/selectbutton'
+import { Dropdown } from 'primereact/dropdown'
 import { memo, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -16,10 +16,9 @@ interface Props {
 
 // Progression-stage picker for the optimizer's tier/skills/power constraints.
 //
-// The Custom segment is appended only while it is the active one: its appearance
-// IS the feedback that the constraints have diverged from a stage, and with
-// `allowEmpty={false}` clicking the active segment is a no-op, so the user can
-// never select it deliberately.
+// The Custom entry is offered only while it is the active one: its appearance
+// IS the feedback that the constraints have diverged from a stage, and picking
+// it is ignored, since there is nothing to apply.
 function OptimizerPresetSelectorImpl({ value, onSelect }: Props) {
   const { t } = useTranslation()
 
@@ -35,17 +34,17 @@ function OptimizerPresetSelectorImpl({ value, onSelect }: Props) {
   }, [value, t])
 
   return (
-    <SelectButton
+    <Dropdown
       value={value ?? CUSTOM}
       options={options}
       optionValue="value"
       optionLabel="label"
-      allowEmpty={false}
       aria-label={t('housingScore.optimizer.preset.label')}
       onChange={(e) => {
         const next = e.value as string | null
         if (next && next !== CUSTOM) onSelect(next as HousingPresetId)
       }}
+      className="w-full"
     />
   )
 }

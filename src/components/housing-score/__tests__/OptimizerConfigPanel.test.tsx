@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { OTHER_PROFESSION, type SkillSelectOption, UNSKILLED_SKILL_ID } from '@/lib/skill-options'
@@ -52,36 +52,65 @@ function panel(config: Partial<OptimizerConfig> = {}) {
   return { onChange }
 }
 
-/** The label of every rendered progression segment, in order. */
-function segments() {
-  return [...document.querySelectorAll('.p-selectbutton .p-button')].map((el) => el.textContent)
+/** The <label> wrapping a named field. PrimeReact hangs `aria-label` on a
+ * hidden input rather than the dropdown root, so the caption is the handle. */
+function field(label: string): HTMLElement {
+  const caption = [...document.querySelectorAll('label > span')].find((el) =>
+    el.textContent?.trim().startsWith(label)
+  )
+  if (!caption?.parentElement) throw new Error(`no field labelled ${label}`)
+  return caption.parentElement
 }
 
-function activeSegment() {
-  return document.querySelector('.p-selectbutton .p-button.p-highlight')?.textContent
+/** Opens a field's dropdown and returns the labels of its panel's items. */
+function openOptions(label: string) {
+  fireEvent.click(field(label).querySelector('.p-dropdown') as HTMLElement)
+  return [...document.querySelectorAll('.p-dropdown-item')].map((el) => el.textContent)
+}
+
+/** Picks an option from a field's dropdown. Scoped to the open panel, because
+ * the selected label repeats the option text outside it. */
+function pick(fieldLabel: string, optionLabel: string) {
+  openOptions(fieldLabel)
+  const item = [...document.querySelectorAll('.p-dropdown-item')].find(
+    (el) => el.textContent === optionLabel
+  )
+  if (!item) throw new Error(`no option ${optionLabel} in ${fieldLabel}`)
+  fireEvent.click(item)
+}
+
+/** The progression dropdown's current selection. */
+function activeStage() {
+  return field('Progression').querySelector('.p-dropdown-label')?.textContent
 }
 
 const preset = (id: string) => HOUSING_PRESETS.find((p) => p.id === id)!
 
 describe('OptimizerConfigPanel progression presets', () => {
-  it('offers the five stages, with no Custom segment while one is active', () => {
+  it('offers the five stages, with no Custom entry while one is active', () => {
     panel(housingPresetPatch(preset('midGame'), skills))
-    expect(segments()).toEqual(['Day 0', 'Early Game', 'Mid Game', 'Late Game', 'End Game'])
+    expect(openOptions('Progression')).toEqual([
+      'Day 0',
+      'Early Game',
+      'Mid Game',
+      'Late Game',
+      'End Game',
+    ])
   })
 
-  it('shows the stage the constraints already match, without being clicked', () => {
+  it('shows the stage the constraints already match, without being picked', () => {
     panel(housingPresetPatch(preset('midGame'), skills))
-    expect(activeSegment()).toBe('Mid Game')
+    expect(activeStage()).toBe('Mid Game')
   })
 
   it('opens on End Game for the shipped defaults', () => {
     panel()
-    expect(activeSegment()).toBe('End Game')
+    expect(activeStage()).toBe('End Game')
   })
 
-  it('applies tier, skills and power together when a stage is clicked', () => {
+  it('applies tier, skills and power together when a stage is picked', () => {
     const { onChange } = panel()
-    fireEvent.click(screen.getByText('Early Game'))
+    pick('Progression', 'Early Game')
     expect(onChange).toHaveBeenCalledTimes(1)
     expect(onChange).toHaveBeenCalledWith({
       tier: 2,
@@ -92,34 +121,76 @@ describe('OptimizerConfigPanel progression presets', () => {
 
   it('leaves the numeric assumptions alone when a stage is applied', () => {
     const { onChange } = panel({ residents: 4 })
-    fireEvent.click(screen.getByText('Day 0'))
+    pick('Progression', 'Day 0')
     const patch = onChange.mock.calls[0][0] as Partial<OptimizerConfig>
     expect(patch).not.toHaveProperty('residents')
     expect(patch).not.toHaveProperty('maxFurnishingRepeats')
   })
 
-  it('reveals a Custom segment once the constraints diverge from every stage', () => {
+  it('reveals a Custom entry once the constraints diverge from every stage', () => {
     panel({ ...housingPresetPatch(preset('midGame'), skills), tier: 4 })
-    expect(segments()).toEqual([
-      'Day 0',
-      'Early Game',
-      'Mid Game',
-      'Late Game',
-      'End Game',
-      'Custom',
-    ])
-    expect(activeSegment()).toBe('Custom')
+    expect(activeStage()).toBe('Custom')
+    expect(openOptions('Progression')).toContain('Custom')
   })
 
-  it('ignores a click on the Custom segment rather than emitting a patch', () => {
+  it('ignores a pick of the Custom entry rather than emitting a patch', () => {
     // It only exists while already active, so there is nothing to apply.
     const { onChange } = panel({ ...housingPresetPatch(preset('midGame'), skills), tier: 4 })
-    fireEvent.click(screen.getByText('Custom'))
+    pick('Progression', 'Custom')
     expect(onChange).not.toHaveBeenCalled()
   })
 
   it('keeps the stage active when a numeric assumption changes', () => {
     panel({ ...housingPresetPatch(preset('day0'), skills), residents: 4, maxRoomRepeat: 7 })
-    expect(activeSegment()).toBe('Day 0')
+    expect(activeStage()).toBe('Day 0')
+  })
+})
+
+describe('OptimizerConfigPanel layout', () => {
+  it('names each wall material tier by the blocks it covers', () => {
+    panel()
+    expect(openOptions('Wall Material Tier')).toEqual([
+      'Tier 0',
+      'Tier 1 (Adobe)',
+      'Tier 2 (Hewn Logs, Mortared Stone)',
+      'Tier 3 (Lumber, Brick, Glass)',
+      'Tier 4 (Steel, Concrete)',
+      'Tier 5 (Ashlar Stone, Composite Lumber)',
+    ])
+  })
+
+  it('stacks the assumptions in progression-then-pruning order', () => {
+    panel()
+    const labels = [...document.querySelectorAll('label > span')].map((el) =>
+      el.textContent?.trim()
+    )
+    expect(labels).toEqual([
+      'Progression',
+      'Wall Material Tier',
+      'Unlocked Skills',
+      'Power Available',
+      'Residents',
+      'Max Copies Per Furnishing',
+      'Min Furnishing Value',
+      'Max Rooms Per Category',
+      'Min Room Value',
+    ])
+  })
+
+  it('explains every field from an info icon, the stage picker included', () => {
+    panel()
+    const tips = [...document.querySelectorAll('.optimizer-field-tip')].map((el) =>
+      el.getAttribute('data-pr-tooltip')
+    )
+    expect(tips).toHaveLength(9)
+    expect(tips[0]).toBe(
+      'A convenience preset of common options. You can use this or alter any assumption however you wish.'
+    )
+    expect(tips[1]).toBe(
+      'The construction block types available for building the rooms of the residence.'
+    )
+    expect(tips[8]).toBe(
+      'The minimum value a room must contribute to the score to be included in the solution.'
+    )
   })
 })
