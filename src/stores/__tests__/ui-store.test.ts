@@ -43,7 +43,7 @@ describe('createUIStore', () => {
       housingOptimizerMaxRoomRepeat: 2,
       housingOptimizerMinFurnishingContribution: 0.2,
       housingOptimizerMinRoomContribution: 2,
-      housingOptimizerPower: 'Heat,Mechanical',
+      housingOptimizerPower: 'Heat,Mechanical,Electric',
       housingOptimizerSkills: '*',
       housingOptimizerResidents: 1,
       housingOptimizerTier: 5,

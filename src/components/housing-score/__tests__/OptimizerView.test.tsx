@@ -98,8 +98,9 @@ describe('OptimizerView', () => {
     renderView()
     expect(screen.getByText('Total Housing Score')).toBeInTheDocument()
     expect(screen.getByText('CastIronBedItem')).toBeInTheDocument()
-    // Electricity is off by default, so the powered lamp is not in the plan.
-    expect(screen.queryByText('ElectricLampItem')).not.toBeInTheDocument()
+    // The defaults are the End Game stage, so every grid is available and the
+    // powered lamp makes the plan.
+    expect(screen.getByText('ElectricLampItem')).toBeInTheDocument()
   })
 
   it('recomputes when a persisted assumption changes', () => {
@@ -113,9 +114,12 @@ describe('OptimizerView', () => {
     expect(after).not.toEqual(before)
   })
 
-  it('brings powered furnishings in once their grid is available', () => {
+  it('drops and restores powered furnishings as their grid comes and goes', () => {
     seedHousing()
     renderView()
+    act(() => {
+      stores.uiStore.setCell('uiState', 'main', 'housingOptimizerPower', 'Heat,Mechanical')
+    })
     expect(screen.queryByText('ElectricLampItem')).not.toBeInTheDocument()
     act(() => {
       stores.uiStore.setCell('uiState', 'main', 'housingOptimizerPower', 'Heat,Mechanical,Electric')

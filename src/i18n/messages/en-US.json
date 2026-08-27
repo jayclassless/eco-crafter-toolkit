@@ -638,6 +638,15 @@
     "empty": "This dataset has no housing data. Update the dataset to enable the Housing Score browsers.",
     "emptyFiltered": "No items match the selected filters.",
     "optimizer": {
+      "preset": {
+        "label": "Progression",
+        "day0": "Day 0",
+        "earlyGame": "Early Game",
+        "midGame": "Mid Game",
+        "lateGame": "Late Game",
+        "endGame": "End Game",
+        "custom": "Custom"
+      },
       "config": {
         "title": "Assumptions",
         "tier": "Wall Material Tier",

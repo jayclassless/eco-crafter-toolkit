@@ -58,8 +58,14 @@ export interface OptimizerConfig {
   power: PowerType[]
 }
 
+/**
+ * The tier/skills/power fields deliberately equal the End Game preset, so a
+ * fresh install opens on a named stage rather than "Custom" — the interesting
+ * question is what a finished house can reach. Keep them in sync with
+ * `HOUSING_PRESETS`' last entry and with the `housingOptimizer*` cell defaults
+ * in ui-store.ts.
+ */
 export const DEFAULT_OPTIMIZER_CONFIG: OptimizerConfig = {
-  // Highest tier: the interesting question is what a finished house can reach.
   tier: 5,
   skillIds: null,
   maxFurnishingRepeats: 3,
@@ -67,7 +73,7 @@ export const DEFAULT_OPTIMIZER_CONFIG: OptimizerConfig = {
   residents: 1,
   maxRoomRepeat: 2,
   minRoomContribution: 2,
-  power: ['Heat', 'Mechanical'],
+  power: ['Heat', 'Mechanical', 'Electric'],
 }
 
 /** `OptimizerConfig` with the synthetic Unskilled entry split back out. */

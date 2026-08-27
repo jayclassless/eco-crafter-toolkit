@@ -15,7 +15,14 @@ import {
   POWER_TYPES,
   type PowerType,
 } from './housing-optimizer-types'
+import {
+  HOUSING_PRESETS,
+  housingPresetPatch,
+  type HousingPresetId,
+  matchHousingPreset,
+} from './housing-presets'
 import { OptimizerField } from './OptimizerField'
+import { OptimizerPresetSelector } from './OptimizerPresetSelector'
 
 interface Props {
   config: OptimizerConfig
@@ -74,6 +81,18 @@ function OptimizerConfigPanelImpl({ config, skills, tiers, onChange }: Props) {
     [onChange]
   )
 
+  // Derived rather than stored, so editing the constraints back into a stage's
+  // shape re-activates that stage.
+  const activePreset = useMemo(() => matchHousingPreset(config, skills), [config, skills])
+
+  const onPresetSelect = useCallback(
+    (id: HousingPresetId) => {
+      const preset = HOUSING_PRESETS.find((p) => p.id === id)
+      if (preset) onChange(housingPresetPatch(preset, skills))
+    },
+    [onChange, skills]
+  )
+
   // A null/blank commit means the user cleared the field; keep the last good
   // value rather than pushing NaN into the solver.
   const numeric = (key: keyof OptimizerConfig, min: number) => (value: number | null) => {
@@ -82,101 +101,113 @@ function OptimizerConfigPanelImpl({ config, skills, tiers, onChange }: Props) {
   }
 
   return (
-    <div className="flex align-items-end gap-3 flex-wrap mb-3">
-      <OptimizerField label={t('housingScore.optimizer.config.tier')}>
-        <Dropdown
-          value={config.tier}
-          options={tierOptions}
-          optionValue="value"
-          optionLabel="label"
-          onChange={(e) => onChange({ tier: e.value as number })}
-          style={{ width: '15rem' }}
-        />
-      </OptimizerField>
+    <div className="flex flex-column gap-3 mb-3">
+      {/* Deliberately not an OptimizerField: that one is a <label>, which would
+          bind to only the first of the SelectButton's several buttons. The
+          selector carries its own aria-label instead. */}
+      <div className="flex flex-column gap-1 align-items-start">
+        <span className="text-sm text-color-secondary">
+          {t('housingScore.optimizer.preset.label')}
+        </span>
+        <OptimizerPresetSelector value={activePreset} onSelect={onPresetSelect} />
+      </div>
 
-      <OptimizerField label={t('housingScore.optimizer.config.skills')}>
-        <SkillMultiSelect
-          options={skills}
-          value={config.skillIds}
-          onChange={onSkillsChange}
-          placeholder={t('housingScore.optimizer.config.skillsPlaceholder')}
-          ariaLabel={t('housingScore.optimizer.config.skills')}
-          style={{ width: '13rem' }}
-        />
-      </OptimizerField>
+      <div className="flex align-items-end gap-3 flex-wrap">
+        <OptimizerField label={t('housingScore.optimizer.config.tier')}>
+          <Dropdown
+            value={config.tier}
+            options={tierOptions}
+            optionValue="value"
+            optionLabel="label"
+            onChange={(e) => onChange({ tier: e.value as number })}
+            style={{ width: '15rem' }}
+          />
+        </OptimizerField>
 
-      <OptimizerField label={t('housingScore.optimizer.config.power')}>
-        <MultiSelect
-          value={config.power}
-          options={powerOptions}
-          optionValue="value"
-          optionLabel="label"
-          onChange={(e) => onChange({ power: e.value as PowerType[] })}
-          placeholder={t('housingScore.optimizer.config.powerPlaceholder')}
-          aria-label={t('housingScore.optimizer.config.power')}
-          display="chip"
-          style={{ width: '15rem' }}
-        />
-      </OptimizerField>
+        <OptimizerField label={t('housingScore.optimizer.config.skills')}>
+          <SkillMultiSelect
+            options={skills}
+            value={config.skillIds}
+            onChange={onSkillsChange}
+            placeholder={t('housingScore.optimizer.config.skillsPlaceholder')}
+            ariaLabel={t('housingScore.optimizer.config.skills')}
+            style={{ width: '13rem' }}
+          />
+        </OptimizerField>
 
-      <OptimizerField label={t('housingScore.optimizer.config.residents')}>
-        <NumericField
-          value={config.residents}
-          onChange={numeric('residents', 1)}
-          min={1}
-          maxFractionDigits={0}
-          style={{ width: '6rem' }}
-        />
-      </OptimizerField>
+        <OptimizerField label={t('housingScore.optimizer.config.power')}>
+          <MultiSelect
+            value={config.power}
+            options={powerOptions}
+            optionValue="value"
+            optionLabel="label"
+            onChange={(e) => onChange({ power: e.value as PowerType[] })}
+            placeholder={t('housingScore.optimizer.config.powerPlaceholder')}
+            aria-label={t('housingScore.optimizer.config.power')}
+            display="chip"
+            style={{ width: '15rem' }}
+          />
+        </OptimizerField>
 
-      <OptimizerField label={t('housingScore.optimizer.config.maxRepeats')}>
-        <NumericField
-          value={config.maxFurnishingRepeats}
-          onChange={numeric('maxFurnishingRepeats', 1)}
-          min={1}
-          maxFractionDigits={0}
-          style={{ width: '6rem' }}
-        />
-      </OptimizerField>
+        <OptimizerField label={t('housingScore.optimizer.config.residents')}>
+          <NumericField
+            value={config.residents}
+            onChange={numeric('residents', 1)}
+            min={1}
+            maxFractionDigits={0}
+            style={{ width: '6rem' }}
+          />
+        </OptimizerField>
 
-      <OptimizerField label={t('housingScore.optimizer.config.minContribution')}>
-        <NumericField
-          value={config.minFurnishingContribution}
-          onChange={numeric('minFurnishingContribution', 0)}
-          min={0}
-          maxFractionDigits={2}
-          style={{ width: '6rem' }}
-        />
-      </OptimizerField>
+        <OptimizerField label={t('housingScore.optimizer.config.maxRepeats')}>
+          <NumericField
+            value={config.maxFurnishingRepeats}
+            onChange={numeric('maxFurnishingRepeats', 1)}
+            min={1}
+            maxFractionDigits={0}
+            style={{ width: '6rem' }}
+          />
+        </OptimizerField>
 
-      <OptimizerField label={t('housingScore.optimizer.config.maxRoomRepeat')}>
-        <NumericField
-          value={config.maxRoomRepeat}
-          onChange={numeric('maxRoomRepeat', 0)}
-          min={0}
-          maxFractionDigits={0}
-          style={{ width: '6rem' }}
-        />
-      </OptimizerField>
+        <OptimizerField label={t('housingScore.optimizer.config.minContribution')}>
+          <NumericField
+            value={config.minFurnishingContribution}
+            onChange={numeric('minFurnishingContribution', 0)}
+            min={0}
+            maxFractionDigits={2}
+            style={{ width: '6rem' }}
+          />
+        </OptimizerField>
 
-      <OptimizerField label={t('housingScore.optimizer.config.minRoomValue')}>
-        <NumericField
-          value={config.minRoomContribution}
-          onChange={numeric('minRoomContribution', 0)}
-          min={0}
-          maxFractionDigits={2}
-          style={{ width: '6rem' }}
-        />
-      </OptimizerField>
+        <OptimizerField label={t('housingScore.optimizer.config.maxRoomRepeat')}>
+          <NumericField
+            value={config.maxRoomRepeat}
+            onChange={numeric('maxRoomRepeat', 0)}
+            min={0}
+            maxFractionDigits={0}
+            style={{ width: '6rem' }}
+          />
+        </OptimizerField>
 
-      {isModified && (
-        <Button
-          text
-          icon="pi pi-filter-slash"
-          label={t('housingScore.optimizer.config.reset')}
-          onClick={() => onChange(DEFAULT_OPTIMIZER_CONFIG)}
-        />
-      )}
+        <OptimizerField label={t('housingScore.optimizer.config.minRoomValue')}>
+          <NumericField
+            value={config.minRoomContribution}
+            onChange={numeric('minRoomContribution', 0)}
+            min={0}
+            maxFractionDigits={2}
+            style={{ width: '6rem' }}
+          />
+        </OptimizerField>
+
+        {isModified && (
+          <Button
+            text
+            icon="pi pi-filter-slash"
+            label={t('housingScore.optimizer.config.reset')}
+            onClick={() => onChange(DEFAULT_OPTIMIZER_CONFIG)}
+          />
+        )}
+      </div>
     </div>
   )
 }

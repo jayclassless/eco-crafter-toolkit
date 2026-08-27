@@ -42,7 +42,7 @@ export function createUIStore() {
       housingOptimizerMinRoomContribution: { type: 'number', default: 2 },
       // Comma-joined PowerType names. '' means "no power available" and must
       // never be read back as "all".
-      housingOptimizerPower: { type: 'string', default: 'Heat,Mechanical' },
+      housingOptimizerPower: { type: 'string', default: 'Heat,Mechanical,Electric' },
       // Unlocked-skill selection, stored as the game's own skill NAMES rather
       // than row ids. Ids are per-dataset uuids, so storing those would silently
       // exclude every furnishing after a dataset switch; names are stable across
