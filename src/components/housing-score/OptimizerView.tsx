@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useLocalization } from '@/hooks/use-localization'
 import { useLocalizedName } from '@/hooks/use-localized-name'
 import { useCellValue, useStoreRevision } from '@/hooks/use-store-revision'
+import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import { collectSkillOptions } from '@/lib/skill-options'
 import { useStores } from '@/stores/providers'
 
@@ -13,6 +14,7 @@ import {
   buildOptimizerCatalog,
   parsePowerTypes,
   parseSkillSelection,
+  reachableItemIdsForSkills,
   serializePowerTypes,
   serializeSkillSelection,
   toOptimizerInput,
@@ -68,13 +70,31 @@ export function OptimizerView({ datasetId }: Props) {
     [gameDataStore, datasetId, getName, rev]
   )
 
+  // Every crafting skill is selectable here, not just the ones that craft a
+  // furnishing: the constraint resolves through the full crafting tree, so a
+  // skill like Mining is load-bearing via the materials it gates even though it
+  // makes no furnishing itself and would show a count of 0.
+  const craftingSkillIds = useMemo(
+    () => getGameDataIndexes(gameDataStore).craftingSkillIdsByDatasetId.get(datasetId) ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [gameDataStore, datasetId, rev]
+  )
+
   const skills = useMemo(
     () =>
-      collectSkillOptions(catalog.furnishings, gameDataStore, datasetId, getName, compare, {
-        unskilled: t('common.unskilled'),
-        otherProfession: t('common.otherProfession'),
-      }),
-    [catalog.furnishings, gameDataStore, datasetId, getName, compare, t]
+      collectSkillOptions(
+        catalog.furnishings,
+        gameDataStore,
+        datasetId,
+        getName,
+        compare,
+        {
+          unskilled: t('common.unskilled'),
+          otherProfession: t('common.otherProfession'),
+        },
+        craftingSkillIds
+      ),
+    [catalog.furnishings, gameDataStore, datasetId, getName, compare, t, craftingSkillIds]
   )
 
   // Both of these are memoized on their scalar fields on purpose. The solver is
@@ -105,9 +125,18 @@ export function OptimizerView({ datasetId }: Props) {
     ]
   )
 
+  // Memoized on the skill selection alone: the closure walks every recipe in
+  // the dataset, so it must not re-run when an unrelated knob (residents, room
+  // repeats) changes.
+  const reachableItemIds = useMemo(
+    () => reachableItemIdsForSkills(gameDataStore, datasetId, skillIds),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [gameDataStore, datasetId, skillIds, rev]
+  )
+
   const result = useMemo(
-    () => optimizeHousing(toOptimizerInput(config, catalog), catalog),
-    [config, catalog]
+    () => optimizeHousing(toOptimizerInput(config, catalog, reachableItemIds), catalog),
+    [config, catalog, reachableItemIds]
   )
 
   const categoryLabels = useMemo(

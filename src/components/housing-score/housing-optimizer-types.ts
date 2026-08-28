@@ -76,11 +76,22 @@ export const DEFAULT_OPTIMIZER_CONFIG: OptimizerConfig = {
   power: ['Heat', 'Mechanical', 'Electric'],
 }
 
-/** `OptimizerConfig` with the synthetic Unskilled entry split back out. */
+/** `OptimizerConfig` with the synthetic Unskilled entry split back out and the
+ * skill selection already resolved to the items it makes obtainable. */
 export interface OptimizerInput {
   tier: number
-  /** null = every skill is unlocked. */
-  skillIds: string[] | null
+  /**
+   * Every item obtainable under the selected skills, from
+   * `computeReachableItemIds` — the full crafting closure, not just what the
+   * skills craft directly. null = every skill is unlocked, so no test applies.
+   *
+   * This replaces a direct skill test, which was a one-hop check: it admitted
+   * an Elk Mount whenever Hunting was unlocked, ignoring that its recipe needs
+   * Composite Lumber and Fabric from two other skills. A furnishing crafted
+   * only by a locked skill is simply absent from this set, so the skill test is
+   * subsumed rather than merely supplemented.
+   */
+  reachableItemIds: ReadonlySet<string> | null
   includeUnskilled: boolean
   maxFurnishingRepeats: number
   minFurnishingContribution: number

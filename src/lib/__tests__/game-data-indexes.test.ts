@@ -496,3 +496,135 @@ describe('housing indexes', () => {
     expect(getGameDataIndexes(store).roomTiersByDatasetId.get('ds2')!).toHaveLength(1)
   })
 })
+
+describe('rawMaterialItemIds', () => {
+  const item = (id: string, cells: Record<string, unknown> = {}) =>
+    store.setRow('items', id, { id, datasetId: 'ds', name: id, ...cells })
+
+  it('admits an item for any one of the gathering markers', () => {
+    item('ore', { minableHardness: 2 })
+    item('clay', { requiresShovel: true })
+    item('carcass', { animalHealth: 8.5 })
+    item('oak', { isTree: true })
+    item('wheat', { maturityAgeDays: 0.8 })
+    // PlantFibers carries only the resource range, and is ALSO produced by a
+    // recipe — so nothing but this marker catches it.
+    item('plantFibers', { primaryResourceMin: 1 })
+    store.setRow('recipes', 'r1', { id: 'r1', datasetId: 'ds', skillId: 'gathering' })
+    store.setRow('recipeElements', 're1', {
+      id: 're1',
+      datasetId: 'ds',
+      recipeId: 'r1',
+      itemOrTagId: 'plantFibers',
+      isProduct: true,
+    })
+    const { rawMaterialItemIds } = getGameDataIndexes(store)
+    for (const id of ['ore', 'clay', 'carcass', 'oak', 'wheat', 'plantFibers']) {
+      expect(rawMaterialItemIds.has(id), id).toBe(true)
+    }
+  })
+
+  it('admits an item that no recipe produces, and excludes tags', () => {
+    item('tuna')
+    item('woodTag', { isTag: true })
+    const { rawMaterialItemIds } = getGameDataIndexes(store)
+    expect(rawMaterialItemIds.has('tuna')).toBe(true)
+    expect(rawMaterialItemIds.has('woodTag')).toBe(false)
+  })
+
+  it('seeds the Campsite, which is otherwise unreachable', () => {
+    // It is the crafting table for the Workbench and Tool Bench recipes but is
+    // itself built at a Tailoring Table, so the graph has no entry point
+    // without it. Players spawn holding one; the dataset cannot say so.
+    item('CampsiteItem')
+    store.setRow('recipes', 'r1', { id: 'r1', datasetId: 'ds', skillId: 'tailoring' })
+    store.setRow('recipeElements', 're1', {
+      id: 're1',
+      datasetId: 'ds',
+      recipeId: 'r1',
+      itemOrTagId: 'CampsiteItem',
+      isProduct: true,
+    })
+    expect(getGameDataIndexes(store).rawMaterialItemIds.has('CampsiteItem')).toBe(true)
+  })
+
+  it('excludes a processed excavatable, which really does come from a recipe', () => {
+    item('crushedRock')
+    item('excavatable', { isTag: true })
+    item('crushedRockTag', { isTag: true })
+    store.setRow('tagItems', 'a', {
+      id: 'a',
+      datasetId: 'ds',
+      tagId: 'excavatable',
+      itemId: 'crushedRock',
+    })
+    store.setRow('tagItems', 'b', {
+      id: 'b',
+      datasetId: 'ds',
+      tagId: 'crushedRockTag',
+      itemId: 'crushedRock',
+    })
+    store.setCell('items', 'excavatable', 'name', 'Excavatable')
+    store.setCell('items', 'crushedRockTag', 'name', 'CrushedRock')
+    // Produced by a recipe, so the "nothing makes it" rule does not save it.
+    store.setRow('recipes', 'r1', { id: 'r1', datasetId: 'ds', skillId: 'mining' })
+    store.setRow('recipeElements', 're1', {
+      id: 're1',
+      datasetId: 'ds',
+      recipeId: 'r1',
+      itemOrTagId: 'crushedRock',
+      isProduct: true,
+    })
+    expect(getGameDataIndexes(store).rawLeafItemIds.has('crushedRock')).toBe(false)
+    expect(getGameDataIndexes(store).rawMaterialItemIds.has('crushedRock')).toBe(false)
+  })
+})
+
+describe('reachabilityGraphByDatasetId', () => {
+  it('resolves a recipe crafting table to its item id, matching by name', () => {
+    // `craftingTables` rows carry a fresh uuid with no link back to the item,
+    // so the only join available is the shared raw name.
+    store.setRow('items', 'i:workbench', { id: 'i:workbench', datasetId: 'ds', name: 'Workbench' })
+    store.setRow('craftingTables', 'ct1', { id: 'ct1', datasetId: 'ds', name: 'Workbench' })
+    store.setRow('recipes', 'r1', {
+      id: 'r1',
+      datasetId: 'ds',
+      skillId: 'carpentry',
+      craftingTableId: 'ct1',
+    })
+    const graph = getGameDataIndexes(store).reachabilityGraphByDatasetId.get('ds')!
+    expect(graph.recipes[0].craftingTableItemId).toBe('i:workbench')
+    expect(graph.recipes[0].skillId).toBe('carpentry')
+  })
+
+  it('leaves the table unrestricted when the name resolves to no item', () => {
+    // Over-blocking would silently empty the optimizer; import already
+    // validates this link, so a miss here means malformed data.
+    store.setRow('craftingTables', 'ct1', { id: 'ct1', datasetId: 'ds', name: 'Ghost' })
+    store.setRow('recipes', 'r1', { id: 'r1', datasetId: 'ds', craftingTableId: 'ct1' })
+    const graph = getGameDataIndexes(store).reachabilityGraphByDatasetId.get('ds')!
+    expect(graph.recipes[0].craftingTableItemId).toBe('')
+  })
+
+  it('keeps tag ingredients unresolved and separates datasets', () => {
+    store.setRow('items', 'woodTag', { id: 'woodTag', datasetId: 'ds', name: 'Wood', isTag: true })
+    store.setRow('items', 'oak', { id: 'oak', datasetId: 'ds', name: 'Oak' })
+    store.setRow('tagItems', 'ti', { id: 'ti', datasetId: 'ds', tagId: 'woodTag', itemId: 'oak' })
+    store.setRow('recipes', 'r1', { id: 'r1', datasetId: 'ds', skillId: '' })
+    store.setRow('recipeElements', 're1', {
+      id: 're1',
+      datasetId: 'ds',
+      recipeId: 'r1',
+      itemOrTagId: 'woodTag',
+      isProduct: false,
+    })
+    store.setRow('recipes', 'r2', { id: 'r2', datasetId: 'other', skillId: '' })
+
+    const { reachabilityGraphByDatasetId } = getGameDataIndexes(store)
+    const graph = reachabilityGraphByDatasetId.get('ds')!
+    expect(graph.recipes).toHaveLength(1)
+    expect(graph.recipes[0].ingredientIds).toEqual(['woodTag'])
+    expect(graph.tagMembers.get('woodTag')).toEqual(['oak'])
+    expect(reachabilityGraphByDatasetId.get('other')!.recipes).toHaveLength(1)
+  })
+})

@@ -13,6 +13,7 @@ import {
   type TalentIndexEntry,
 } from '@/hooks/use-solver-snapshot'
 import { compareKeys } from '@/lib/collator'
+import type { ReachabilityGraph, ReachabilityRecipe } from '@/lib/item-reachability'
 import type { ModuleSlot, RoomCategory, RoomTier } from '@/types/game-data'
 
 /** A module a crafting table accepts, in the shape the module UI needs. Names
@@ -102,6 +103,23 @@ interface GameDataIndexes {
    * per dataset, with the JSON-encoded columns already rehydrated. */
   roomCategoriesByDatasetId: Map<string, RoomCategory[]>
   roomTiersByDatasetId: Map<string, RoomTier[]>
+  /** Items that should terminate a dependency expansion — gathered, foraged or
+   * excavated raw materials, identified by tag. Used by the recipe dependency
+   * tree, which used to recompute this on every call. */
+  rawLeafItemIds: Set<string>
+  /** Everything obtainable from the world with no recipe: `rawLeafItemIds`
+   * plus the per-item gathering markers, plus items nothing produces, plus the
+   * starter items. Seeds the reachability closure. */
+  rawMaterialItemIds: Set<string>
+  /** Per-dataset crafting graph for `computeReachableItemIds`. Dataset-keyed
+   * because a closure must never combine two datasets' recipes. */
+  reachabilityGraphByDatasetId: Map<string, ReachabilityGraph>
+  /** Skills that craft at least one recipe, per dataset. The optimizer's
+   * unlocked-skill selector needs these — a skill can gate an intermediate
+   * material without ever crafting a furnishing, which makes it load-bearing
+   * for reachability even though it would never appear in a list built from
+   * furnishings alone. Excludes the profession skills, which craft nothing. */
+  craftingSkillIdsByDatasetId: Map<string, string[]>
 }
 
 /** An `(item, quantity)` pair from either garbage table. */
@@ -268,6 +286,217 @@ function buildGatherableItemIds(store: Store): Set<string> {
     if (logItemId) out.add(logItemId)
   }
   return out
+}
+
+/** Items carrying any of these tag names are gathered/foraged from the world —
+ * even if a recipe produces one, it is obtainable without that recipe. */
+const RAW_LEAF_TAG_NAMES: readonly string[] = ['NaturalFiber', 'Crop', 'Harvestable']
+/** `Excavatable` items are also raw — UNLESS they're processed forms
+ * (CrushedRock / ConcentratedOre), which legitimately come from recipes. */
+const EXCAVATABLE_TAG_NAME = 'Excavatable'
+const EXCAVATABLE_EXCLUDE_TAG_NAMES: readonly string[] = ['CrushedRock', 'ConcentratedOre']
+
+/**
+ * Items a player starts with, by raw game name.
+ *
+ * The Campsite is the table for the Workbench and Tool Bench recipes, but is
+ * itself crafted at a Tailoring Table — so on paper the crafting graph has no
+ * entry point and a reachability closure bottoms out at a handful of flowers.
+ * In game every player spawns holding one. The dataset does not encode
+ * "starting item" in any form, so it has to be named here.
+ */
+const STARTER_ITEM_NAMES: readonly string[] = ['CampsiteItem']
+
+/**
+ * Items that are terminal in a crafting graph because the world provides them.
+ *
+ * Tag-based only; `buildRawMaterialItemIds` widens this with the per-item
+ * gathering markers. Kept separate because the dependency tree wants exactly
+ * this narrower notion — an item it should stop expanding — while reachability
+ * wants everything obtainable by any means.
+ */
+function buildRawLeafItemIds(store: Store, tagIdsByItemId: Map<string, string[]>): Set<string> {
+  const tagIdByName = new Map<string, string>()
+  for (const id of store.getRowIds('items')) {
+    const row = store.getRow('items', id)
+    if (row.isTag) tagIdByName.set(row.name as string, id)
+  }
+  const alwaysLeafTagIds = new Set<string>()
+  for (const name of RAW_LEAF_TAG_NAMES) {
+    const id = tagIdByName.get(name)
+    if (id) alwaysLeafTagIds.add(id)
+  }
+  const excavatableId = tagIdByName.get(EXCAVATABLE_TAG_NAME)
+  const excavatableExcludeIds = new Set<string>()
+  for (const name of EXCAVATABLE_EXCLUDE_TAG_NAMES) {
+    const id = tagIdByName.get(name)
+    if (id) excavatableExcludeIds.add(id)
+  }
+
+  const result = new Set<string>()
+  for (const [itemId, tagIds] of tagIdsByItemId) {
+    let qualifies = tagIds.some((tid) => alwaysLeafTagIds.has(tid))
+    if (!qualifies && excavatableId && tagIds.includes(excavatableId)) {
+      qualifies = !tagIds.some((tid) => excavatableExcludeIds.has(tid))
+    }
+    if (qualifies) result.add(itemId)
+  }
+  return result
+}
+
+/**
+ * Everything obtainable without crafting, which seeds the reachability closure.
+ *
+ * No single signal is sufficient, so this is a union of four:
+ *  1. `rawLeafItemIds` — the tag-based predicate above.
+ *  2. Per-item gathering markers (minable / shovel / carcass / tree), plus the
+ *     log of every tree species — the same classification `gatherableItemIds`
+ *     uses, which alone misses every plant.
+ *  3. Plant markers. A plant that is ALSO produced by a recipe is caught by
+ *     nothing else: PlantFibers is picked from the world but is additionally
+ *     an output of Cotton Lint and Flax Fiber, so both the marker set above and
+ *     the "nothing produces it" rule below skip it — and missing it collapses
+ *     the whole day-0 chain, since it gates the Research Table.
+ *  4. Items no recipe produces at all. Catches the fish, acorns and flowers
+ *     that carry no marker because the extractor does not parse fishing.
+ *
+ * The union errs toward admitting: a wrongly-included raw material makes the
+ * optimizer slightly permissive, while a wrongly-excluded one silently deletes
+ * a whole branch of the tech tree.
+ */
+function buildRawMaterialItemIds(
+  store: Store,
+  rawLeafItemIds: Set<string>,
+  productItemIdsByRecipeId: Map<string, string[]>
+): Set<string> {
+  const produced = new Set<string>()
+  for (const productIds of productItemIdsByRecipeId.values()) {
+    for (const id of productIds) produced.add(id)
+  }
+
+  const result = new Set(rawLeafItemIds)
+  const starterNames = new Set(STARTER_ITEM_NAMES)
+  for (const itemId of store.getRowIds('items')) {
+    const row = store.getRow('items', itemId)
+    // Tags are rows in `items` too, but a tag is never itself obtainable — it
+    // is satisfied through its members.
+    if (row.isTag) continue
+    if (
+      ((row.minableHardness as number) ?? 0) > 0 ||
+      row.requiresShovel === true ||
+      ((row.animalHealth as number) ?? 0) > 0 ||
+      row.isTree === true ||
+      ((row.maturityAgeDays as number) ?? 0) > 0 ||
+      ((row.primaryResourceMin as number) ?? 0) > 0 ||
+      starterNames.has(row.name as string) ||
+      !produced.has(itemId)
+    ) {
+      result.add(itemId)
+    }
+  }
+  for (const speciesId of store.getRowIds('treeSpecies')) {
+    const logItemId = store.getCell('treeSpecies', speciesId, 'logItemId') as string
+    if (logItemId) result.add(logItemId)
+  }
+  return result
+}
+
+/**
+ * The per-dataset crafting graph the reachability closure walks.
+ *
+ * The crafting table is folded in as an item id rather than left as a
+ * `craftingTables` row id: the closure treats it as an implicit ingredient, and
+ * `craftingTables` rows carry a fresh uuid with no link back to the item — only
+ * a matching `name` — so the join has to happen here.
+ */
+function buildReachabilityGraphs(
+  store: Store,
+  productItemIdsByRecipeId: Map<string, string[]>,
+  ingredientItemIdsByRecipeId: Map<string, Set<string>>,
+  itemIdsByTagId: Map<string, string[]>,
+  rawMaterialItemIds: Set<string>
+): Map<string, ReachabilityGraph> {
+  const itemIdByDatasetName = new Map<string, string>()
+  const rawByDataset = new Map<string, Set<string>>()
+  for (const itemId of store.getRowIds('items')) {
+    const row = store.getRow('items', itemId)
+    const datasetId = (row.datasetId as string) ?? ''
+    if (!datasetId) continue
+    if (!row.isTag) itemIdByDatasetName.set(`${datasetId} ${row.name as string}`, itemId)
+    if (rawMaterialItemIds.has(itemId)) {
+      let set = rawByDataset.get(datasetId)
+      if (!set) {
+        set = new Set()
+        rawByDataset.set(datasetId, set)
+      }
+      set.add(itemId)
+    }
+  }
+
+  const tagsByDataset = new Map<string, Map<string, string[]>>()
+  for (const [tagId, itemIds] of itemIdsByTagId) {
+    const datasetId = (store.getCell('items', tagId, 'datasetId') as string) ?? ''
+    if (!datasetId) continue
+    let map = tagsByDataset.get(datasetId)
+    if (!map) {
+      map = new Map()
+      tagsByDataset.set(datasetId, map)
+    }
+    map.set(tagId, itemIds)
+  }
+
+  // A table whose name resolves to no item leaves the recipe table-unrestricted
+  // rather than permanently blocked: import validates this link, so a miss here
+  // means malformed data, and over-blocking would silently empty the optimizer.
+  const tableItemIdByTableId = new Map<string, string>()
+  for (const ctId of store.getRowIds('craftingTables')) {
+    const row = store.getRow('craftingTables', ctId)
+    const key = `${row.datasetId as string} ${row.name as string}`
+    tableItemIdByTableId.set(ctId, itemIdByDatasetName.get(key) ?? '')
+  }
+
+  const byDataset = new Map<string, ReachabilityGraph>()
+  for (const recipeId of store.getRowIds('recipes')) {
+    const row = store.getRow('recipes', recipeId)
+    const datasetId = (row.datasetId as string) ?? ''
+    if (!datasetId) continue
+    let graph = byDataset.get(datasetId)
+    if (!graph) {
+      graph = {
+        recipes: [],
+        tagMembers: tagsByDataset.get(datasetId) ?? new Map(),
+        rawItemIds: rawByDataset.get(datasetId) ?? new Set(),
+      }
+      byDataset.set(datasetId, graph)
+    }
+    const recipe: ReachabilityRecipe = {
+      skillId: (row.skillId as string) ?? '',
+      craftingTableItemId: tableItemIdByTableId.get(row.craftingTableId as string) ?? '',
+      ingredientIds: [...(ingredientItemIdsByRecipeId.get(recipeId) ?? [])],
+      productIds: productItemIdsByRecipeId.get(recipeId) ?? [],
+    }
+    graph.recipes.push(recipe)
+  }
+  return byDataset
+}
+
+function buildCraftingSkillIdsByDatasetId(store: Store): Map<string, string[]> {
+  const sets = new Map<string, Set<string>>()
+  for (const recipeId of store.getRowIds('recipes')) {
+    const row = store.getRow('recipes', recipeId)
+    const datasetId = (row.datasetId as string) ?? ''
+    const skillId = (row.skillId as string) ?? ''
+    if (!datasetId || !skillId) continue
+    let set = sets.get(datasetId)
+    if (!set) {
+      set = new Set()
+      sets.set(datasetId, set)
+    }
+    set.add(skillId)
+  }
+  const map = new Map<string, string[]>()
+  for (const [datasetId, set] of sets) map.set(datasetId, [...set])
+  return map
 }
 
 function buildSkillIdsByItemId(
@@ -475,12 +704,30 @@ function build(store: Store): GameDataIndexes {
   const productItemIdsByRecipeId = buildRecipeProductItemIds(store)
   const ingredientItemIdsByRecipeId = buildRecipeIngredientItemIds(store)
   const housingItemIds = buildHousingItemIds(store)
+  const tagIdsByItemId = buildTagIdsByItemId(store)
+  const itemIdsByTagId = buildItemIdsByTagId(store)
+  const rawLeafItemIds = buildRawLeafItemIds(store, tagIdsByItemId)
+  const rawMaterialItemIds = buildRawMaterialItemIds(
+    store,
+    rawLeafItemIds,
+    productItemIdsByRecipeId
+  )
   return {
     productItemIdsByRecipeId,
     ingredientItemIdsByRecipeId,
     unlockingTalentsByRecipeId: buildRecipeUnlockingTalents(store),
-    tagIdsByItemId: buildTagIdsByItemId(store),
-    itemIdsByTagId: buildItemIdsByTagId(store),
+    tagIdsByItemId,
+    itemIdsByTagId,
+    rawLeafItemIds,
+    rawMaterialItemIds,
+    reachabilityGraphByDatasetId: buildReachabilityGraphs(
+      store,
+      productItemIdsByRecipeId,
+      ingredientItemIdsByRecipeId,
+      itemIdsByTagId,
+      rawMaterialItemIds
+    ),
+    craftingSkillIdsByDatasetId: buildCraftingSkillIdsByDatasetId(store),
     solverTagItemsByDatasetId: buildSolverTagItems(store),
     primaryRecipeIdsByItemId: buildPrimaryRecipeIdsByItemId(
       productItemIdsByRecipeId,

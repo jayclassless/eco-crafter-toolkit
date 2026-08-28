@@ -71,10 +71,11 @@ export interface SkillSelectLabels {
 }
 
 /**
- * The skills that craft at least one of `entries`, plus the Unskilled entry
- * when anything is craftable by nothing. Flat, sorted by name, with Unskilled
- * last to match the display order — grouping is `groupSkillOptions`' job, so a
- * caller that only needs ids (persistence, "select all") never pays for it.
+ * The skills that craft at least one of `entries`, plus any id in
+ * `alwaysInclude` (at count 0), plus the Unskilled entry when anything is
+ * craftable by nothing. Flat, sorted by name, with Unskilled last to match the
+ * display order — grouping is `groupSkillOptions`' job, so a caller that only
+ * needs ids (persistence, "select all") never pays for it.
  */
 export function collectSkillOptions(
   entries: readonly SkillBearing[],
@@ -82,7 +83,8 @@ export function collectSkillOptions(
   datasetId: string,
   getName: GetName,
   compare: Compare,
-  labels: SkillSelectLabels
+  labels: SkillSelectLabels,
+  alwaysInclude?: readonly string[]
 ): SkillSelectOption[] {
   const counts = new Map<string, number>()
   let unskilled = 0
@@ -93,6 +95,11 @@ export function collectSkillOptions(
     }
     for (const id of entry.skillIds) counts.set(id, (counts.get(id) ?? 0) + 1)
   }
+  // Listed at count 0 rather than omitted. The optimizer needs every crafting
+  // skill selectable because a skill can gate an intermediate material without
+  // crafting any of `entries` itself — Mining crafts no furnishing in v14, yet
+  // locking it removes every stone furnishing downstream of it.
+  for (const id of alwaysInclude ?? []) if (!counts.has(id)) counts.set(id, 0)
 
   // A skill's `profession` cell holds the profession's raw NAME, not its row
   // id, so resolving the localized label needs the reverse map. Built once per

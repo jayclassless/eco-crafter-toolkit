@@ -270,29 +270,36 @@ describe('toOptimizerInput', () => {
   }
 
   it('treats a null skill selection as everything unlocked, unskilled included', () => {
-    const input = toOptimizerInput({ ...DEFAULT_OPTIMIZER_CONFIG, tier: 3 }, catalog)
-    expect(input.skillIds).toBeNull()
+    const input = toOptimizerInput({ ...DEFAULT_OPTIMIZER_CONFIG, tier: 3 }, catalog, null)
+    expect(input.reachableItemIds).toBeNull()
     expect(input.includeUnskilled).toBe(true)
+  })
+
+  it('passes the reachable set through untouched', () => {
+    const reachable = new Set(['i1'])
+    const input = toOptimizerInput({ ...DEFAULT_OPTIMIZER_CONFIG, tier: 3 }, catalog, reachable)
+    expect(input.reachableItemIds).toBe(reachable)
   })
 
   it('splits the synthetic Unskilled entry back out of the selection', () => {
     const withUnskilled = toOptimizerInput(
       { ...DEFAULT_OPTIMIZER_CONFIG, tier: 3, skillIds: ['s1', UNSKILLED_SKILL_ID] },
-      catalog
+      catalog,
+      null
     )
-    expect(withUnskilled.skillIds).toEqual(['s1'])
     expect(withUnskilled.includeUnskilled).toBe(true)
 
     const without = toOptimizerInput(
       { ...DEFAULT_OPTIMIZER_CONFIG, tier: 3, skillIds: ['s1'] },
-      catalog
+      catalog,
+      null
     )
     expect(without.includeUnskilled).toBe(false)
   })
 
   it('clamps a persisted tier the dataset does not have', () => {
     // Default is tier 5, which this cut-down tier table lacks.
-    expect(toOptimizerInput(DEFAULT_OPTIMIZER_CONFIG, catalog).tier).toBe(3)
-    expect(toOptimizerInput({ ...DEFAULT_OPTIMIZER_CONFIG, tier: 0 }, catalog).tier).toBe(0)
+    expect(toOptimizerInput(DEFAULT_OPTIMIZER_CONFIG, catalog, null).tier).toBe(3)
+    expect(toOptimizerInput({ ...DEFAULT_OPTIMIZER_CONFIG, tier: 0 }, catalog, null).tier).toBe(0)
   })
 })

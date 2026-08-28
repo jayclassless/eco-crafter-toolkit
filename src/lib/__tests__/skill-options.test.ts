@@ -177,3 +177,29 @@ describe('groupSkillOptions', () => {
     expect(groupSkillOptions([], compare)).toEqual([])
   })
 })
+
+describe('collectSkillOptions alwaysInclude', () => {
+  it('lists a skill that unlocks nothing at count 0', () => {
+    // The optimizer needs every crafting skill selectable: Mining crafts no
+    // furnishing but gates the stone ones through their ingredients, so
+    // omitting it would make the constraint silently unable to model it.
+    seed()
+    // `mason` is the one seeded skill no entry is attributed to.
+    const options = collectSkillOptions(entries, store, 'ds1', getName, compare, labels, [
+      'masonry',
+      'mason',
+    ])
+    const byId = new Map(options.map((o) => [o.id, o]))
+    expect(byId.get('mason')?.count).toBe(0)
+    expect(byId.get('mason')?.rawName).toBe('MasonSkill')
+    // An id that already had a count keeps it rather than being reset to 0.
+    expect(byId.get('masonry')?.count).toBe(1)
+  })
+
+  it('changes nothing when omitted', () => {
+    seed()
+    const withArg = collectSkillOptions(entries, store, 'ds1', getName, compare, labels, [])
+    const without = collectSkillOptions(entries, store, 'ds1', getName, compare, labels)
+    expect(withArg).toEqual(without)
+  })
+})

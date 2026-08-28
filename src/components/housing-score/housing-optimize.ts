@@ -452,7 +452,7 @@ export function optimizeHousing(input: OptimizerInput, catalog: OptimizerCatalog
   if (!tier) return empty
 
   const categoriesByName = new Map(catalog.categories.map((c) => [c.name, c]))
-  const skills = input.skillIds ? new Set(input.skillIds) : null
+  const reachable = input.reachableItemIds
   const power = new Set(input.power)
 
   const candidates = catalog.furnishings.filter((f) => {
@@ -461,8 +461,11 @@ export function optimizeHousing(input: OptimizerInput, catalog: OptimizerCatalog
     if (f.baseValue <= 0) return false
     if (categoriesByName.get(f.categoryName)?.negatesValue !== false) return false
     if (f.powerType && !power.has(f.powerType)) return false
-    if (f.skillIds.length === 0) return input.includeUnskilled
-    return !skills || f.skillIds.some((id) => skills.has(id))
+    // Furnishings no skill crafts stay under the user's explicit Unskilled
+    // toggle, but still have to be reachable: a Participation Trophy needs no
+    // skill and yet cannot be made until a Carpentry Table exists.
+    if (f.skillIds.length === 0 && !input.includeUnskilled) return false
+    return !reachable || reachable.has(f.itemId)
   })
 
   const { representatives, equivalents } = dedupeByStats(candidates)

@@ -11,6 +11,7 @@
 import type { Store } from 'tinybase'
 
 import { getGameDataIndexes } from '@/lib/game-data-indexes'
+import { computeReachableItemIds } from '@/lib/item-reachability'
 import { type SkillSelectOption, UNSKILLED_SKILL_ID } from '@/lib/skill-options'
 
 import {
@@ -123,19 +124,43 @@ export function parseSkillSelection(
   return ids.length > 0 ? ids : null
 }
 
+/**
+ * Everything the selected skills make obtainable, as the full crafting closure.
+ *
+ * Returns null for "no constraint" both when every skill is unlocked and when
+ * the dataset has no recipes to walk — an empty graph would otherwise report
+ * nothing as reachable and blank the whole result.
+ *
+ * The synthetic Unskilled entry is dropped before the closure runs: it is a
+ * display toggle over furnishings nothing crafts, not a skill, and skill-less
+ * recipes are usable regardless of it (they require no skill by definition).
+ */
+export function reachableItemIdsForSkills(
+  store: Store,
+  datasetId: string,
+  skillIds: string[] | null
+): Set<string> | null {
+  if (skillIds === null) return null
+  const graph = getGameDataIndexes(store).reachabilityGraphByDatasetId.get(datasetId)
+  if (!graph) return null
+  const unlocked = new Set(skillIds.filter((id) => id !== UNSKILLED_SKILL_ID))
+  return computeReachableItemIds(graph, unlocked)
+}
+
 /** Split the synthetic Unskilled entry back out, and keep the tier honest
  * against datasets whose tier table differs from the persisted choice. */
 export function toOptimizerInput(
   config: OptimizerConfig,
-  catalog: OptimizerCatalog
+  catalog: OptimizerCatalog,
+  reachableItemIds: ReadonlySet<string> | null
 ): OptimizerInput {
   const skillIds = config.skillIds
   const tiers = catalog.tiers.map((t) => t.tierVal)
   const tier = tiers.includes(config.tier) ? config.tier : (tiers[tiers.length - 1] ?? 0)
   return {
     tier,
+    reachableItemIds,
     // null means "everything unlocked", which includes the unskilled items.
-    skillIds: skillIds ? skillIds.filter((id) => id !== UNSKILLED_SKILL_ID) : null,
     includeUnskilled: skillIds ? skillIds.includes(UNSKILLED_SKILL_ID) : true,
     maxFurnishingRepeats: config.maxFurnishingRepeats,
     minFurnishingContribution: config.minFurnishingContribution,

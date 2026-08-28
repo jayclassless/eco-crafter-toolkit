@@ -39,9 +39,10 @@ interface PresetDelta {
 
 // Several of these skills craft no furnishings in the current datasets
 // (Gathering, Mining, Campfire Cooking, Butchery, Basic Engineering, Milling,
-// Baking, Cooking, Recycling), so they resolve to nothing today. They are kept
-// because the stages describe Eco's progression rather than one dataset's
-// furnishing list, and a later dataset may well add furnishings behind them.
+// Baking, Cooking, Recycling). They still matter, and are still resolved: the
+// unlocked-skills constraint walks the whole crafting tree, so a skill earns
+// its place by gating an INGREDIENT of a furnishing, not only by crafting one.
+// Mining unlocks no furnishing directly and gates every stone one.
 const PRESET_DELTAS: readonly PresetDelta[] = [
   {
     id: 'day0',
@@ -122,8 +123,9 @@ export const HOUSING_PRESETS: readonly HousingPreset[] = (() => {
 /**
  * Resolve a stage's tokens to the skill row ids the config holds.
  *
- * Tokens that no option carries are dropped: a skill that crafts no furnishing
- * never appears in the dropdown, and skill sets differ between game versions.
+ * Tokens that no option carries are dropped, since skill sets differ between
+ * game versions. That is now a narrow case: the optimizer's dropdown lists
+ * every crafting skill, not just the ones that craft a furnishing.
  * A selection covering every option normalizes to null, matching what
  * `SkillMultiSelect` emits — otherwise an applied preset and a hand-made
  * identical selection would compare unequal.

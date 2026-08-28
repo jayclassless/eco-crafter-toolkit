@@ -65,7 +65,7 @@ const UNCAPPED = tier(9, 10_000, 20_000)
 function input(over: Partial<OptimizerInput> = {}): OptimizerInput {
   return {
     tier: 9,
-    skillIds: null,
+    reachableItemIds: null,
     includeUnskilled: true,
     maxFurnishingRepeats: 3,
     minFurnishingContribution: 0,
@@ -338,7 +338,7 @@ describe('excluded candidates', () => {
     expect(onlyRoom(heatOnly).roomValue).toBeCloseTo(10, 6)
   })
 
-  it('filters on unlocked skills, with skill-less items gated separately', () => {
+  it('filters on reachable items, with skill-less items gated separately', () => {
     const furnishings = [
       item({
         itemId: 'crafted',
@@ -355,27 +355,59 @@ describe('excluded candidates', () => {
         dimMultiplier: 0,
       }),
     ]
+    const both = new Set(['crafted', 'flower'])
     expect(
       onlyRoom(
         optimizeHousing(
-          input({ skillIds: ['carpentry'], includeUnskilled: true }),
+          input({ reachableItemIds: both, includeUnskilled: true }),
           catalog(furnishings)
         )
       ).roomValue
     ).toBeCloseTo(15, 6)
+    // The Unskilled toggle still hides skill-less items on its own.
     expect(
       onlyRoom(
         optimizeHousing(
-          input({ skillIds: ['carpentry'], includeUnskilled: false }),
+          input({ reachableItemIds: both, includeUnskilled: false }),
           catalog(furnishings)
         )
       ).roomValue
     ).toBeCloseTo(10, 6)
+    // The crafted item drops out purely by being unreachable.
     expect(
       onlyRoom(
-        optimizeHousing(input({ skillIds: [], includeUnskilled: true }), catalog(furnishings))
+        optimizeHousing(
+          input({ reachableItemIds: new Set(['flower']), includeUnskilled: true }),
+          catalog(furnishings)
+        )
       ).roomValue
     ).toBeCloseTo(5, 6)
+  })
+
+  it('excludes a skill-less furnishing whose ingredients are out of reach', () => {
+    // A Participation Trophy needs no skill but does need a Carpentry Table, so
+    // the Unskilled toggle alone must not be enough to place it.
+    const furnishings = [
+      item({ itemId: 'trophy', typeForRoomLimit: 'Trophy', baseValue: 10, skillIds: [] }),
+    ]
+    expect(
+      optimizeHousing(
+        input({ reachableItemIds: new Set<string>(), includeUnskilled: true }),
+        catalog(furnishings)
+      ).rooms
+    ).toHaveLength(0)
+  })
+
+  it('applies no reachability test at all when every skill is unlocked', () => {
+    const furnishings = [item({ itemId: 'bed', typeForRoomLimit: 'Bed', baseValue: 10 })]
+    expect(
+      onlyRoom(
+        optimizeHousing(
+          input({ reachableItemIds: null, maxFurnishingRepeats: 1 }),
+          catalog(furnishings)
+        )
+      ).roomValue
+    ).toBeCloseTo(10, 6)
   })
 
   it('drops any copy contributing less than the minimum', () => {

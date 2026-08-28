@@ -61,15 +61,6 @@ export type DependencyTreeStart =
 const SEL_RECIPE = 'recipe:'
 const SEL_TAG_ITEM = 'tag-item:'
 
-/** Items carrying any of these tag names are gathered/foraged from the
- * world — even if a custom recipe produces one, treat it as a terminal
- * raw material in the graph. */
-const RAW_LEAF_TAG_NAMES: readonly string[] = ['NaturalFiber', 'Crop', 'Harvestable']
-/** `Excavatable` items are also raw — UNLESS they're processed forms
- * (CrushedRock / ConcentratedOre), which legitimately come from recipes. */
-const EXCAVATABLE_TAG_NAME = 'Excavatable'
-const EXCAVATABLE_EXCLUDE_TAG_NAMES: readonly string[] = ['CrushedRock', 'ConcentratedOre']
-
 interface BuildContext {
   store: Store
   primaryRecipeIdsByItemId: Map<string, string[]>
@@ -92,47 +83,6 @@ interface BuildContext {
   /** Item ids that should render as leaves regardless of producing
    * recipes — gathered/foraged/excavated raw materials. */
   rawLeafItemIds: Set<string>
-}
-
-/**
- * Compute the set of item ids that should always render as leaf nodes
- * (no recipe dropdown, no children) — gathered/foraged raw materials.
- * Built once per buildDependencyTree call from the tag indexes.
- */
-function computeRawLeafItemIds(store: Store, tagIdsByItemId: Map<string, string[]>): Set<string> {
-  const tagIdByName = new Map<string, string>()
-  for (const id of store.getRowIds('items')) {
-    const row = store.getRow('items', id)
-    if (row.isTag) tagIdByName.set(row.name as string, id)
-  }
-  const alwaysLeafTagIds = new Set<string>()
-  for (const name of RAW_LEAF_TAG_NAMES) {
-    const id = tagIdByName.get(name)
-    if (id) alwaysLeafTagIds.add(id)
-  }
-  const excavatableId = tagIdByName.get(EXCAVATABLE_TAG_NAME)
-  const excavatableExcludeIds = new Set<string>()
-  for (const name of EXCAVATABLE_EXCLUDE_TAG_NAMES) {
-    const id = tagIdByName.get(name)
-    if (id) excavatableExcludeIds.add(id)
-  }
-
-  const result = new Set<string>()
-  for (const [itemId, tagIds] of tagIdsByItemId) {
-    let qualifies = false
-    for (const tagId of tagIds) {
-      if (alwaysLeafTagIds.has(tagId)) {
-        qualifies = true
-        break
-      }
-    }
-    if (!qualifies && excavatableId && tagIds.includes(excavatableId)) {
-      const excluded = tagIds.some((tid) => excavatableExcludeIds.has(tid))
-      if (!excluded) qualifies = true
-    }
-    if (qualifies) result.add(itemId)
-  }
-  return result
 }
 
 function nodeKey(itemOrTagId: string, isTag: boolean): string {
@@ -173,7 +123,7 @@ export function buildDependencyTree(
     shortcutEdges: [],
     visited: new Map(),
     pathKeys: new Set(),
-    rawLeafItemIds: computeRawLeafItemIds(store, indexes.tagIdsByItemId),
+    rawLeafItemIds: indexes.rawLeafItemIds,
   }
 
   if (start.type === 'recipe') {
