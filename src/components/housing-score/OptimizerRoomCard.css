@@ -17,3 +17,25 @@
 .optimizer-room-rule > td {
   border-bottom: 1px solid var(--surface-border);
 }
+
+/* "+N mechanically identical furnishings", hover for their names.
+ *
+ * `flex-shrink: 0` matters: this sits in the same flex row as the item name, in
+ * a fixed-layout column, so without it a long name would squeeze the badge to
+ * nothing rather than wrapping itself. */
+.optimizer-alt-badge {
+  flex-shrink: 0;
+  padding: 0 0.35rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 1rem;
+  background: var(--surface-hover);
+  color: var(--text-color-secondary);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  cursor: help;
+}
+
+.optimizer-alt-badge:hover {
+  border-color: var(--primary-color);
+  color: var(--text-color);
+}

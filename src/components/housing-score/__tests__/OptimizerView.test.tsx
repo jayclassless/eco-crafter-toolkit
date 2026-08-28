@@ -161,6 +161,36 @@ describe('OptimizerView', () => {
     expect(lines).toEqual(['Ashlar Basalt Fireplace', 'Ashlar Shale Fireplace'])
   })
 
+  it('shows the alternatives as a compact badge, keeping the prose for screen readers', () => {
+    seedHousing()
+    for (const [id, name] of [
+      ['f1', 'Ashlar Zircon Fireplace'],
+      ['f2', 'Ashlar Shale Fireplace'],
+      ['f3', 'Ashlar Basalt Fireplace'],
+    ]) {
+      stores.gameDataStore.setRow('items', id, {
+        id,
+        datasetId: 'ds1',
+        name,
+        isTag: false,
+        housingCategory: 'Bedroom',
+        housingBaseValue: 9,
+        housingTypeForRoomLimit: 'Fireplace',
+        housingDiminishingReturnMultiplier: 0.1,
+      })
+    }
+    clearGameDataIndexesCache(stores.gameDataStore)
+    renderView()
+
+    const badge = document.querySelector('.optimizer-alt-badge')!
+    // Visually a count; the sentence it replaced survives as the label, so the
+    // meaning is not hover-only.
+    expect(badge.textContent).toBe('+2')
+    expect(badge.getAttribute('aria-label')).toBe('or any of 2 other items that score the same')
+    // The old full-width line under the name is what made the cards congested.
+    expect(screen.queryByText(/other items that score the same/)).toBeNull()
+  })
+
   it('persists the unlocked-skill selection as stable skill names', () => {
     seedHousing()
     // A skill row plus the recipe that links it to the bed.

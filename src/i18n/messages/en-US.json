@@ -689,7 +689,7 @@
       "perResidentNote": "per resident — the household produces {value} in total",
       "byCategory": "Score By Room Category",
       "share": "{percent} of total",
-      "capped": "capped",
+      "capped": "(capped)",
       "cappedHint": "Limited to a share of the rest of the property.",
       "rooms": "Rooms",
       "copies": "×{copies, number}",
@@ -697,6 +697,7 @@
       "roomValue": "Room value",
       "alternatives_one": "or 1 other item that scores the same",
       "alternatives_other": "or any of {count, number} other items that score the same",
+      "alternativesBadge": "+{count, number}",
       "columns": {
         "item": "Furnishing",
         "count": "Qty",

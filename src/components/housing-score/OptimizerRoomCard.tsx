@@ -93,29 +93,40 @@ function OptimizerRoomCardImpl({ room, displayName, color, categoryLabels }: Pro
               {category.furnishings.map((f) => (
                 <tr key={f.itemId}>
                   <td className="py-1">
-                    <HousingItemCell name={f.name} rawName={f.rawName} />
-                    {f.equivalents.length > 0 && (
-                      // Mechanically identical furnishings — same category,
-                      // type, value and multiplier — so the player can build
-                      // whichever they happen to have access to. The tooltip
-                      // names them: a bare count is not actionable.
-                      <>
-                        <span
-                          className={`text-color-secondary text-sm block cursor-help ${ALTERNATIVES_CLASS}`}
-                          data-pr-tooltip={[
-                            t('housingScore.optimizer.alternativesTooltip'),
-                            // Alphabetical, via the locale collator — the
-                            // solver's own order is by item id, which is a
-                            // uuid and so effectively arbitrary.
-                            ...f.equivalents.map((alt) => alt.name).sort((a, b) => compare(a, b)),
-                          ].join('\n')}
-                        >
-                          {t('housingScore.optimizer.alternatives', {
-                            count: f.equivalents.length,
-                          })}
-                        </span>
-                      </>
-                    )}
+                    <HousingItemCell
+                      name={f.name}
+                      rawName={f.rawName}
+                      trailing={
+                        f.equivalents.length > 0 && (
+                          // Mechanically identical furnishings — same category,
+                          // type, value and multiplier — so the player can build
+                          // whichever they happen to have access to.
+                          //
+                          // A badge rather than a line of prose under the name:
+                          // two thirds of the rows in a typical plan carry this,
+                          // so a second line made every card half again as tall.
+                          // The count stays glanceable and the tooltip still
+                          // names them — a bare count is not actionable.
+                          <span
+                            className={`optimizer-alt-badge ${ALTERNATIVES_CLASS}`}
+                            aria-label={t('housingScore.optimizer.alternatives', {
+                              count: f.equivalents.length,
+                            })}
+                            data-pr-tooltip={[
+                              t('housingScore.optimizer.alternativesTooltip'),
+                              // Alphabetical, via the locale collator — the
+                              // solver's own order is by item id, which is a
+                              // uuid and so effectively arbitrary.
+                              ...f.equivalents.map((alt) => alt.name).sort((a, b) => compare(a, b)),
+                            ].join('\n')}
+                          >
+                            {t('housingScore.optimizer.alternativesBadge', {
+                              count: f.equivalents.length,
+                            })}
+                          </span>
+                        )
+                      }
+                    />
                   </td>
                   <td className="text-right py-1">{f.count}</td>
                   <td className="text-right py-1">{format(f.contribution)}</td>
