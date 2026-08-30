@@ -1,6 +1,6 @@
 # Eco Crafter Toolkit Change Log
 
-## 0.9.0 (TBD)
+## 0.9.0 (2026-08-30)
 
 - Added a Housing Score section with two browsers that let you see all the
   Furnishings you can use in your house, as well as all the block types you
