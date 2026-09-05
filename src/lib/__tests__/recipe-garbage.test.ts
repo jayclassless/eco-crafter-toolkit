@@ -3,6 +3,7 @@ import { resolve } from 'path'
 
 import { describe, expect, it } from 'vitest'
 
+import { compareKeys } from '@/lib/collator'
 import type { DatasetJson } from '@/types/dataset-json'
 
 import { CRAFT_GARBAGE_RATIO } from '../game-constants'
@@ -36,10 +37,9 @@ function fromDataset(id: string, recipeName: string, pinnedTagItems: Record<stri
   // Mirror the importer: it only writes a `tagItems` row for an AssociatedItem
   // that resolves to a real Item (`import-dataset.ts`). Roughly 40 of the 50
   // names on the `Wood` tag are `*Stacked*Block` variants that are blocks, not
-  // items, and are dropped — which is exactly why `Wood` turns out UNIFORM in
-  // the app. Feeding the raw list here would test a candidate set production
-  // never sees, and would wrongly report a range for a tag the UI shows as
-  // exact.
+  // items, and are dropped. Feeding the raw list here would test a candidate
+  // set production never sees, and would report ranges over items no recipe can
+  // actually consume.
   const itemNames = new Set(data.Items.map((i) => i.Name))
   const tagItems = new Map(
     data.Tags.map((t) => [t.Name, t.AssociatedItems.filter((n) => itemNames.has(n))])
@@ -63,6 +63,60 @@ function fromDataset(id: string, recipeName: string, pinnedTagItems: Record<stri
       ratio: CRAFT_GARBAGE_RATIO,
     }),
   }
+}
+
+/**
+ * Pick a recipe whose only ingredient is a tag every member of which carries
+ * identical salvage, together with the exact garbage that implies.
+ *
+ * Derived rather than named, because naming one is how this test broke: it used
+ * `Wood`, which was uniform until v14.1.0 split the logs into BioResidue +
+ * WoodScrap and left SaguaroRib on the old profile. The property under test —
+ * a tag whose items agree reads as exact, not as a degenerate range — is true
+ * of no particular tag, so letting the dataset choose the vehicle keeps the
+ * assertion pointed at the behavior instead of at this patch's tag list.
+ *
+ * The expectation is still real work: it is plain multiplication here, while
+ * `computeRecipeGarbage` reaches the same numbers through tag-candidate
+ * enumeration, min/max bounding and aggregation. `AdvancedCircuitRecipe` above
+ * stays hand-pinned to live-server figures as the ground truth for the formula.
+ */
+function uniformTagFixture(id: string) {
+  const data = load(id)
+  const byName = new Map(data.Items.map((i) => [i.Name, i]))
+  const profile = (name: string) =>
+    JSON.stringify(
+      (byName.get(name)?.SalvageCost ?? [])
+        .map((s) => [s.ItemOrTag, s.Quantity] as const)
+        .sort((a, b) => compareKeys(a[0], b[0]))
+    )
+  // Same real-items-only filter as `fromDataset`; see the note there.
+  const members = new Map(
+    data.Tags.map((t) => [t.Name, t.AssociatedItems.filter((n) => byName.has(n))])
+  )
+
+  for (const recipe of [...data.Recipes].sort((a, b) => compareKeys(a.Name, b.Name))) {
+    if ((recipe.GarbageOutputs ?? []).length > 0) continue
+    if (recipe.Ingredients?.length !== 1) continue
+    const ing = recipe.Ingredients[0]
+    const candidates = members.get(ing.ItemOrTag)
+    // Two members minimum, so "they agree" is a claim about a set rather than
+    // a restatement of one item's salvage.
+    if (!candidates || candidates.length < 2) continue
+    const salvage = byName.get(candidates[0])!.SalvageCost ?? []
+    if (salvage.length === 0) continue
+    if (candidates.some((n) => profile(n) !== profile(candidates[0]))) continue
+
+    const quantity = Math.abs(ing.Quantity.BaseValue)
+    return {
+      recipeName: recipe.Name,
+      tagName: ing.ItemOrTag,
+      expected: Object.fromEntries(
+        salvage.map((s) => [s.ItemOrTag, +(quantity * s.Quantity * CRAFT_GARBAGE_RATIO).toFixed(6)])
+      ),
+    }
+  }
+  throw new Error(`no single-ingredient uniform-tag recipe in ${id}`)
 }
 
 /** Exact totals as `{ item: quantity }`, asserting nothing is a range. */
@@ -142,27 +196,36 @@ describe('computeRecipeGarbage — v14 fixtures', () => {
 
 describe('computeRecipeGarbage — tag ingredients', () => {
   it('treats a tag whose items agree as exact, not a degenerate range', () => {
-    // `BoardRecipe` consumes `Wood ×1`. All 10 real items on that tag carry
-    // BioResidue 0.25 — the differing `*Stacked*Block` entries are dropped by
-    // the importer — so there is one honest number and no "varies" noise.
-    const { result } = fromDataset('eco-v14', 'BoardRecipe')
-    expect(result.breakdown).toHaveLength(1)
-    expect(result.breakdown[0].sourceItemOrTagId).toBe('Wood')
+    // One honest set of numbers and no "varies" noise, however many outputs the
+    // shared salvage profile carries.
+    const { recipeName, tagName, expected } = uniformTagFixture('eco-v14')
+    const { result } = fromDataset('eco-v14', recipeName)
+    expect(result.breakdown, recipeName).toHaveLength(1)
+    expect(result.breakdown[0].sourceItemOrTagId).toBe(tagName)
     expect(result.breakdown[0].isRange).toBe(false)
-    expect(exactTotals(result.totals)).toEqual({ BioResidueItem: 0.02 }) // 1 × 0.25 × 0.08
+    expect(exactTotals(result.totals)).toEqual(expected)
   })
 
   it('ranges over a tag whose items genuinely disagree', () => {
-    // `PrimitiveBinRecipe` is the ideal fixture: `Wood ×4` is uniform (exact
-    // 0.08 BioResidue) while `WoodBoard ×2` spans WoodScrap 0.3 / 0.4 / 0.5, so
-    // one recipe exercises both paths. 23 of the 46 v14 ingredient tags vary
-    // like this, across 347 recipes, so a single made-up number would be wrong
+    // `PrimitiveBinRecipe` exercises both shapes of disagreement at once.
+    // `WoodBoard ×2` spans WoodScrap 0.3 / 0.4 / 0.5 — every candidate emits the
+    // output, only the amount differs. `Wood ×4` is the harder shape: since
+    // v14.1.0 its nine logs emit BioResidue 0.08 + WoodScrap 0.17 while
+    // SaguaroRib emits BioResidue 0.25 and no WoodScrap at all, so WoodScrap's
+    // floor must be 0 rather than the smallest non-zero yield. 24 of the 46 v14
+    // ingredient tags vary like this, so a single made-up number would be wrong
     // far more often than not.
     const { result } = fromDataset('eco-v14', 'PrimitiveBinRecipe')
 
     const wood = result.breakdown.find((r) => r.sourceItemOrTagId === 'Wood')!
-    expect(wood.isRange).toBe(false)
-    expect(wood.outputs[0].min).toBeCloseTo(0.08)
+    expect(wood.isRange).toBe(true)
+    expect(wood.resolvedItemId).toBeNull()
+    const woodBio = wood.outputs.find((o) => o.itemId === 'BioResidueItem')!
+    expect(woodBio.min).toBeCloseTo(0.0256) // 4 × 0.08 × 0.08
+    expect(woodBio.max).toBeCloseTo(0.08) // 4 × 0.25 × 0.08 (SaguaroRib)
+    const woodScrap = wood.outputs.find((o) => o.itemId === 'WoodScrapItem')!
+    expect(woodScrap.min).toBe(0) // SaguaroRib yields none
+    expect(woodScrap.max).toBeCloseTo(0.0544) // 4 × 0.17 × 0.08
 
     const board = result.breakdown.find((r) => r.sourceItemOrTagId === 'WoodBoard')!
     expect(board.isRange).toBe(true)
@@ -171,21 +234,28 @@ describe('computeRecipeGarbage — tag ingredients', () => {
     expect(board.outputs[0].min).toBeCloseTo(0.048) // 2 × 0.3 × 0.08
     expect(board.outputs[0].max).toBeCloseTo(0.08) // 2 × 0.5 × 0.08
 
+    // Both rows contribute WoodScrap, so the total sums the two ranges.
     const scrap = result.totals.find((t) => t.itemId === 'WoodScrapItem')!
-    expect(scrap.min).toBeCloseTo(0.048)
-    expect(scrap.max).toBeCloseTo(0.08)
+    expect(scrap.min).toBeCloseTo(0.048) // 0 + 0.048
+    expect(scrap.max).toBeCloseTo(0.1344) // 0.0544 + 0.08
   })
 
   it('collapses to an exact amount when the build pins the tag to one item', () => {
+    // Both of this recipe's tags range, so both have to be pinned before the
+    // totals can be exact — pinning only one leaves the other's spread in them.
     const { result } = fromDataset('eco-v14', 'PrimitiveBinRecipe', {
+      Wood: 'OakLogItem',
       WoodBoard: 'SoftwoodBoardItem',
     })
     const board = result.breakdown.find((r) => r.sourceItemOrTagId === 'WoodBoard')!
     expect(board.isRange).toBe(false)
     expect(board.resolvedItemId).toBe('SoftwoodBoardItem')
+    const wood = result.breakdown.find((r) => r.sourceItemOrTagId === 'Wood')!
+    expect(wood.isRange).toBe(false)
+    expect(wood.resolvedItemId).toBe('OakLogItem')
     expect(exactTotals(result.totals)).toEqual({
-      BioResidueItem: 0.08,
-      WoodScrapItem: 0.08, // 2 × 0.5 × 0.08
+      WoodScrapItem: 0.1344, // 4 × 0.17 × 0.08 + 2 × 0.5 × 0.08
+      BioResidueItem: 0.0256, // 4 × 0.08 × 0.08
     })
   })
 

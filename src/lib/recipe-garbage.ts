@@ -118,10 +118,10 @@ function salvageOf(
 /**
  * Bounds across every item a tag accepts.
  *
- * 23 of v14's 46 ingredient tags genuinely disagree — `WoodBoard` spans
+ * 24 of v14's 46 ingredient tags genuinely disagree — `WoodBoard` spans
  * WoodScrap 0.3 / 0.4 / 0.5, `Fabric` has five distinct salvage profiles — and
- * they appear in 347 recipes, so picking one item and printing its figure as
- * fact would be wrong more often than right.
+ * they appear in hundreds of recipes, so picking one item and printing its
+ * figure as fact would be wrong more often than right.
  *
  * A candidate that produces none of a given output contributes 0 to that
  * output's minimum, so a tag mixing salvage-bearing and salvage-free items
@@ -129,9 +129,9 @@ function salvageOf(
  * importer has already filtered to names that resolve to real items — the same
  * list the price solver walks for min/max pricing, so a tag's waste range and
  * its cost describe the same set. (This filtering is load-bearing: `Wood` lists
- * 50 associated names but only 10 are items, and those 10 all carry BioResidue
- * 0.25, so `Wood` is exact. Ranging over the raw list would show a bogus
- * "0 – x" for it.)
+ * 50 associated names but only 10 are items, and ranging over the other 40 —
+ * blocks that carry no salvage at all — would floor every output at 0 and show
+ * a bogus "0 – x" on tags that are genuinely exact, such as `HewnLog`.)
  */
 function salvageRange(
   candidates: readonly string[],

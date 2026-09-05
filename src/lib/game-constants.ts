@@ -102,7 +102,10 @@ export const CALORIES_PER_RUBBLE_PICKUP = 1
 export const MAX_TRUNK_PICKUP_SIZE = 5
 
 /** Talent that grants +1 flat damage to axes and pickaxes via
- * `BonusAction.UseTool`. The only UseTool bonus in the shipped datasets. */
+ * `BonusAction.UseTool`. Scoped to axes and pickaxes by a `ToolBonusCause` the
+ * dataset does not carry, so `EMPOWER_TOOL_KINDS` below reproduces that gate.
+ * (v14.1.0 added two more UseTool bonuses -- Hunting's Deadeye and Power Shot --
+ * scoped the same way to bows; the gathering calculator models those separately.) */
 export const EMPOWER_TALENT_NAME = 'BlacksmithEmpowerTalent'
 
 /** Tool kinds whose damage `BlacksmithEmpowerTalent` boosts. */

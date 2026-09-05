@@ -71,11 +71,14 @@ describe.each(LEGACY)('%s modules normalize into the unified shape', (id) => {
   })
 })
 
-// v14 is the first dataset with the native bonus shape; these pin the counts the
-// extractor produced from eco-game-files/v14.0.1, so a re-extraction that silently
-// drops modules or garbage fails here.
+// v14 is the first dataset with the native bonus shape, and the only one still
+// being re-extracted — v11-v13 above are frozen. The module assertions pin
+// values read out of the game files, so a game patch that retunes a module is
+// meant to fail them; the garbage assertion below deliberately does not work
+// that way.
 describe('eco-v14 modules and garbage', () => {
-  const parsed = parseDataset(load('eco-v14'), 'ds-v14')
+  const raw = load('eco-v14')
+  const parsed = parseDataset(raw, 'ds-v14')
 
   it('imports all 59 modules with the four-slot distribution', () => {
     expect(parsed.pluginModules).toHaveLength(59)
@@ -146,8 +149,21 @@ describe('eco-v14 modules and garbage', () => {
     }
   })
 
-  it('imports the garbage tables', () => {
-    expect(parsed.itemSalvage).toHaveLength(2386)
-    expect(parsed.recipeGarbage).toHaveLength(82)
+  it('imports the garbage tables without dropping a row', () => {
+    // Both tables are emitted one row per JSON entry, and an item name that
+    // fails to resolve drops its row silently (`import-dataset.ts`) — which is
+    // the regression this guards. Counting the source entries rather than
+    // hardcoding a total keeps it aimed at the importer: a game patch that adds
+    // or removes salvage moves both sides together and stays green, while a
+    // resolver that starts missing names moves only one side and fails.
+    const salvageEntries = raw.Items.reduce((n, i) => n + (i.SalvageCost?.length ?? 0), 0)
+    const garbageEntries = raw.Recipes.reduce((n, r) => n + (r.GarbageOutputs?.length ?? 0), 0)
+    // Guard the degenerate pass: a dataset that lost its garbage data entirely
+    // would satisfy 0 === 0.
+    expect(salvageEntries).toBeGreaterThan(0)
+    expect(garbageEntries).toBeGreaterThan(0)
+
+    expect(parsed.itemSalvage).toHaveLength(salvageEntries)
+    expect(parsed.recipeGarbage).toHaveLength(garbageEntries)
   })
 })
