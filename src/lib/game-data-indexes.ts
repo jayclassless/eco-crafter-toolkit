@@ -14,7 +14,7 @@ import {
 } from '@/hooks/use-solver-snapshot'
 import { compareKeys } from '@/lib/collator'
 import type { ReachabilityGraph, ReachabilityRecipe } from '@/lib/item-reachability'
-import type { ModuleSlot, RoomCategory, RoomTier } from '@/types/game-data'
+import type { GatheringConstants, ModuleSlot, RoomCategory, RoomTier } from '@/types/game-data'
 
 /** A module a crafting table accepts, in the shape the module UI needs. Names
  * are raw (non-localized) game names — callers localize via `useLocalizedName`. */
@@ -103,6 +103,10 @@ interface GameDataIndexes {
    * per dataset, with the JSON-encoded columns already rehydrated. */
   roomCategoriesByDatasetId: Map<string, RoomCategory[]>
   roomTiersByDatasetId: Map<string, RoomTier[]>
+  /** A single object per dataset, not a list — this table is a singleton.
+   * Absent for datasets imported before the section existed; consumers fall back
+   * to the constants in `game-constants.ts`. */
+  gatheringConstantsByDatasetId: Map<string, GatheringConstants>
   /** Items that should terminate a dependency expansion — gathered, foraged or
    * excavated raw materials, identified by tag. Used by the recipe dependency
    * tree, which used to recompute this on every call. */
@@ -599,6 +603,23 @@ function buildRoomCategoriesByDatasetId(store: Store): Map<string, RoomCategory[
   return map
 }
 
+function buildGatheringConstantsByDatasetId(store: Store): Map<string, GatheringConstants> {
+  const map = new Map<string, GatheringConstants>()
+  for (const rowId of store.getRowIds('gatheringConstants')) {
+    const row = store.getRow('gatheringConstants', rowId)
+    const datasetId = (row.datasetId as string) ?? ''
+    if (!datasetId) continue
+    map.set(datasetId, {
+      id: rowId,
+      datasetId,
+      bowHeadshotMultiplier: (row.bowHeadshotMultiplier as number) ?? 0,
+      bowHeadshotMultiplierDeadeye: (row.bowHeadshotMultiplierDeadeye as number) ?? 0,
+      maxTrunkPickupSize: (row.maxTrunkPickupSize as number) ?? 0,
+    })
+  }
+  return map
+}
+
 function buildRoomTiersByDatasetId(store: Store): Map<string, RoomTier[]> {
   const map = new Map<string, RoomTier[]>()
   for (const rowId of store.getRowIds('roomTiers')) {
@@ -755,6 +776,7 @@ function build(store: Store): GameDataIndexes {
     buildingMaterialItemIdsByDatasetId: housingItemIds.materials,
     roomCategoriesByDatasetId: buildRoomCategoriesByDatasetId(store),
     roomTiersByDatasetId: buildRoomTiersByDatasetId(store),
+    gatheringConstantsByDatasetId: buildGatheringConstantsByDatasetId(store),
   }
 }
 

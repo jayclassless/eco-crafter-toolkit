@@ -1,8 +1,17 @@
 import type { Store } from 'tinybase'
 
 import { type Compare, compareKeys } from '@/lib/collator'
-import { EMPOWER_TALENT_NAME, EMPOWER_TOOL_KINDS } from '@/lib/game-constants'
+import {
+  BOW_HEADSHOT_MULTIPLIER_BONUS_ERA,
+  BOW_HEADSHOT_MULTIPLIER_DEADEYE_LEGACY,
+  BOW_HEADSHOT_MULTIPLIER_LEGACY,
+  EMPOWER_TALENT_NAME,
+  EMPOWER_TOOL_KINDS,
+  MAX_TRUNK_PICKUP_SIZE,
+} from '@/lib/game-constants'
+import { getGameDataIndexes } from '@/lib/game-data-indexes'
 import type {
+  BowDamageModel,
   GatheringKind,
   GatheringTalentState,
   GatheringTarget,
@@ -24,6 +33,7 @@ const TOOL_KIND_BY_TARGET: Record<GatheringKind, string> = {
 const LUCKY_BREAK_TALENT_NAME = 'MiningLuckyBreakTalent'
 const DEADEYE_TALENT_NAME = 'HuntingDeadeyeTalent'
 const ARROW_RECOVERY_TALENT_NAME = 'HuntingArrowRecoveryTalent'
+const POWER_SHOT_TALENT_NAME = 'HuntingPowerShotTalent'
 
 /** One tree species behind a log item. A log can have several (Redwood and
  * Old-Growth Redwood both yield Redwood Log). */
@@ -70,6 +80,9 @@ export interface GatheringCatalog {
   byItemId: Map<string, GatheringOption>
   tools: GatheringToolOption[]
   clothing: GatheringClothingOption[]
+  /** Dataset-wide values the calculation needs. Not per-option, but built from
+   * the same pass and invalidated on the same memo. */
+  constants: { bow: BowDamageModel; maxTrunkPickupSize: number }
 }
 
 type GetNameFn = (entityType: string, entityId: string) => string
@@ -199,7 +212,19 @@ export function buildGatheringCatalog(
   }
   tools.sort((a, b) => compareKeys(a.kind, b.kind) || a.tier - b.tier || compare(a.name, b.name))
 
-  return { options, byItemId: new Map(options.map((o) => [o.itemId, o])), tools, clothing }
+  const gatheringConstants =
+    getGameDataIndexes(gameDataStore).gatheringConstantsByDatasetId.get(datasetId)
+
+  return {
+    options,
+    byItemId: new Map(options.map((o) => [o.itemId, o])),
+    tools,
+    clothing,
+    constants: {
+      bow: resolveBowDamageModel(gameDataStore, datasetId),
+      maxTrunkPickupSize: gatheringConstants?.maxTrunkPickupSize ?? MAX_TRUNK_PICKUP_SIZE,
+    },
+  }
 }
 
 /** Tools that can gather `kind`, best tier last. */
@@ -239,10 +264,77 @@ function hasTalent(buildStore: Store, buildId: string, talentId: string): boolea
   return false
 }
 
+/**
+ * A talent's scalar value.
+ *
+ * 0 is a REAL value and must not be folded onto the fallback. From v14.1
+ * `HuntingPowerShotTalent` genuinely carries 0 — its magnitude moved into a
+ * bonus — and treating that as "missing" adds a phantom point of damage to
+ * every bow shot. Only an absent row or cell, which reads back as `undefined`,
+ * is what the fallback is for.
+ */
 function talentValue(gameDataStore: Store, talentId: string, fallback: number): number {
   if (!talentId) return fallback
   const value = gameDataStore.getCell('talents', talentId, 'value') as number | undefined
-  return value != null && value !== 0 ? value : fallback
+  return value ?? fallback
+}
+
+/**
+ * The magnitude of a talent's `UseTool` bonus of the given effect type, or 0
+ * when it has none.
+ *
+ * Several talents keep their value at 0 and put the real magnitude in a bonus —
+ * `BlacksmithEmpowerTalent` is one — so reading the scalar alone silently zeroes
+ * them. Bonus SCOPE is not carried by the dataset, so callers reproduce it
+ * themselves (see `EMPOWER_TOOL_KINDS`, and the bow-only call sites here).
+ */
+function useToolBonusValue(
+  gameDataStore: Store,
+  talentId: string,
+  effectType: 'Additive' | 'Multiplicative'
+): number {
+  if (!talentId) return 0
+  for (const rowId of gameDataStore.getRowIds('talentBonuses')) {
+    const row = gameDataStore.getRow('talentBonuses', rowId)
+    if (row.talentId === talentId && row.action === 'UseTool' && row.effectType === effectType) {
+      return (row.value as number) ?? 0
+    }
+  }
+  return 0
+}
+
+/**
+ * How this dataset's bow damage works.
+ *
+ * The ERA is decided by the talent shape — does Deadeye carry a `UseTool`
+ * additive bonus? — rather than by `GatheringConstants`. That matters for a
+ * player who installed a v14.1 dataset built before the constants section
+ * existed: they still get the right maths, and only the base multiplier falls
+ * back to a constant. Deciding the era from the constants section instead would
+ * leave them silently on the old formula.
+ */
+export function resolveBowDamageModel(gameDataStore: Store, datasetId: string): BowDamageModel {
+  const deadeyeId = findTalentIdByName(gameDataStore, datasetId, DEADEYE_TALENT_NAME)
+  const powerShotId = findTalentIdByName(gameDataStore, datasetId, POWER_SHOT_TALENT_NAME)
+  const deadeyeAdditive = useToolBonusValue(gameDataStore, deadeyeId, 'Additive')
+  const constants = getGameDataIndexes(gameDataStore).gatheringConstantsByDatasetId.get(datasetId)
+
+  if (deadeyeAdditive > 0) {
+    return {
+      era: 'bonus',
+      headshotMultiplier: constants?.bowHeadshotMultiplier ?? BOW_HEADSHOT_MULTIPLIER_BONUS_ERA,
+      deadeyeAdditive,
+      // 1 is the identity, so a dataset missing the bonus simply gets no boost.
+      powerShotMultiplicative: useToolBonusValue(gameDataStore, powerShotId, 'Multiplicative') || 1,
+    }
+  }
+  return {
+    era: 'legacy',
+    headshotMultiplier: constants?.bowHeadshotMultiplier ?? BOW_HEADSHOT_MULTIPLIER_LEGACY,
+    // 0 is the "absent" sentinel for this column, so `||` is the right pick.
+    headshotMultiplierDeadeye:
+      constants?.bowHeadshotMultiplierDeadeye || BOW_HEADSHOT_MULTIPLIER_DEADEYE_LEGACY,
+  }
 }
 
 /**
@@ -292,9 +384,16 @@ export function seedGatheringControls(
       efficiency: hasTalent(buildStore, buildId, tool?.efficiencyTalentId ?? ''),
       efficiencyValue: talentValue(gameDataStore, tool?.efficiencyTalentId ?? '', 0.8),
       strength: hasTalent(buildStore, buildId, tool?.strengthTalentId ?? ''),
-      strengthValue: 1,
+      // 1 for the axe/pickaxe strength talents in every version, and 0 for
+      // v14.1's Power Shot, whose magnitude is a bonus instead. No talent
+      // resolved means no damage, so 0 is the right fallback.
+      strengthValue: talentValue(gameDataStore, tool?.strengthTalentId ?? '', 0),
       empower: hasTalent(buildStore, buildId, empowerId),
-      empowerValue: 1,
+      // Empower keeps its value at 0 and carries the magnitude in a bonus; fall
+      // back to the scalar for any dataset shaped the other way round.
+      empowerValue:
+        useToolBonusValue(gameDataStore, empowerId, 'Additive') ||
+        talentValue(gameDataStore, empowerId, 0),
       luckyBreak: hasTalent(buildStore, buildId, luckyBreakId),
       deadeye: hasTalent(buildStore, buildId, deadeyeId),
       arrowRecovery: hasTalent(buildStore, buildId, arrowRecoveryId),

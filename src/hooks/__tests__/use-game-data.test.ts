@@ -31,6 +31,7 @@ const emptyParsed = (): ParsedDataset => ({
   treeSpecies: [],
   roomCategories: [],
   roomTiers: [],
+  gatheringConstants: [],
   localizedNames: [],
 })
 

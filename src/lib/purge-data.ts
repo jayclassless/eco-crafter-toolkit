@@ -68,6 +68,7 @@ const DATASET_SCOPED_TABLES = [
   'treeSpecies',
   'roomCategories',
   'roomTiers',
+  'gatheringConstants',
 ] as const
 
 /**

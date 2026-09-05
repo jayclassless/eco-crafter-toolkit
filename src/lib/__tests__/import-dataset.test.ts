@@ -552,6 +552,52 @@ describe('computeMaxTalentLevel', () => {
   })
 })
 
+describe('validateDatasetJson — gathering constants', () => {
+  it('accepts a dataset with no GatheringConstants (pre-v14.1 extracts)', () => {
+    const data = makeMinimalDataset()
+    delete data.GatheringConstants
+    expect(validateDatasetJson(data).valid).toBe(true)
+  })
+
+  it('accepts both bow eras', () => {
+    const legacy = makeMinimalDataset()
+    legacy.GatheringConstants = {
+      BowHeadshotMultiplier: 1.5,
+      BowHeadshotMultiplierDeadeye: 2,
+      MaxTrunkPickupSize: 5,
+    }
+    expect(validateDatasetJson(legacy).valid).toBe(true)
+
+    const bonus = makeMinimalDataset()
+    bonus.GatheringConstants = { BowHeadshotMultiplier: 1.4, MaxTrunkPickupSize: 5 }
+    expect(validateDatasetJson(bonus).valid).toBe(true)
+  })
+
+  it('rejects a headshot multiplier below 1', () => {
+    // Below 1 a headshot would do LESS damage than a body shot, which no
+    // version has ever done and which would silently inflate every arrow count.
+    const data = makeMinimalDataset()
+    data.GatheringConstants = { BowHeadshotMultiplier: 0.9, MaxTrunkPickupSize: 5 }
+    expect(validateDatasetJson(data).errors.join(' ')).toContain('BowHeadshotMultiplier')
+  })
+
+  it('rejects a Deadeye multiplier below the base', () => {
+    const data = makeMinimalDataset()
+    data.GatheringConstants = {
+      BowHeadshotMultiplier: 1.5,
+      BowHeadshotMultiplierDeadeye: 1.2,
+      MaxTrunkPickupSize: 5,
+    }
+    expect(validateDatasetJson(data).errors.join(' ')).toContain('BowHeadshotMultiplierDeadeye')
+  })
+
+  it('rejects a non-positive trunk pickup size', () => {
+    const data = makeMinimalDataset()
+    data.GatheringConstants = { BowHeadshotMultiplier: 1.5, MaxTrunkPickupSize: 0 }
+    expect(validateDatasetJson(data).errors.join(' ')).toContain('MaxTrunkPickupSize')
+  })
+})
+
 describe('validateDatasetJson — housing', () => {
   it('accepts a dataset with no housing sections at all (pre-housing extracts)', () => {
     const data = makeMinimalDataset()

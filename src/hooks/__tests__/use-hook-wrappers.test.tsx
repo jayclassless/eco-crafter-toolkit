@@ -116,6 +116,7 @@ describe('hook wrappers (provider-backed)', () => {
         treeSpecies: [],
         roomCategories: [],
         roomTiers: [],
+        gatheringConstants: [],
         localizedNames: [],
       },
       'X'

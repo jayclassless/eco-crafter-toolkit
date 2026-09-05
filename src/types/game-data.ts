@@ -143,6 +143,19 @@ export interface RoomTier {
   diminishingReturnPercent: number
 }
 
+/** Bow and tree values the game states as literals rather than as entity data.
+ * One row per dataset; absent for datasets extracted before the section existed,
+ * in which case consumers use the pre-v14.1 defaults those datasets describe. */
+export interface GatheringConstants {
+  id: string
+  datasetId: string
+  bowHeadshotMultiplier: number
+  /** 0 when Deadeye contributes an additive talent bonus rather than replacing
+   * the multiplier outright (v14.1.0 onward). */
+  bowHeadshotMultiplierDeadeye: number
+  maxTrunkPickupSize: number
+}
+
 export interface ItemPart {
   id: string
   datasetId: string

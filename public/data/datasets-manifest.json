@@ -12,22 +12,22 @@
       "id": "eco-v13",
       "name": "Eco v13.0.4",
       "file": "eco-v13.json",
-      "revision": 10,
-      "updatedAt": "2026-08-23"
+      "revision": 11,
+      "updatedAt": "2026-09-05"
     },
     {
       "id": "eco-v12",
       "name": "Eco v12.0.7",
       "file": "eco-v12.json",
-      "revision": 7,
-      "updatedAt": "2026-08-23"
+      "revision": 8,
+      "updatedAt": "2026-09-05"
     },
     {
       "id": "eco-v11",
       "name": "Eco v11.0.6",
       "file": "eco-v11.json",
-      "revision": 6,
-      "updatedAt": "2026-08-23"
+      "revision": 7,
+      "updatedAt": "2026-09-05"
     }
   ]
 }

@@ -3,9 +3,13 @@ import { resolve } from 'path'
 
 import { describe, it, expect } from 'vitest'
 
+import { resolveBowDamageModel } from '@/components/price-calculator/gathering-calculator/gathering-data'
+import { clearGameDataIndexesCache } from '@/lib/game-data-indexes'
+import { createGameDataStore } from '@/stores/game-data-store'
 import type { DatasetJson } from '@/types/dataset-json'
 
-import { validateDatasetJson } from '../import-dataset'
+import { computeGathering, type GatheringTalentState } from '../gathering-calc'
+import { parseDataset, validateDatasetJson } from '../import-dataset'
 import { deriveTableModuleSlots } from '../module-slots'
 import { normalizeModuleBonuses } from '../normalize-module-bonuses'
 
@@ -312,6 +316,117 @@ describe.each(BUNDLED)('bundled %s module scope resolution (Rule B)', (id) => {
       }
     }
     expect(offenders).toEqual([])
+  })
+})
+
+describe('bow damage end to end, per bundled dataset', () => {
+  /** Real JSON -> parseDataset -> store -> catalog -> computeGathering, so a
+   * break in any layer between the extractor and the arrow count shows up here
+   * rather than only in a unit test of one of them. */
+  function arrowsToKill(id: string, talents: Partial<GatheringTalentState>): number {
+    const store = createGameDataStore()
+    const parsed = parseDataset(load(id), 'ds-e2e')
+    store.transaction(() => {
+      for (const gc of parsed.gatheringConstants)
+        store.setRow('gatheringConstants', gc.id, { ...gc })
+      for (const t of parsed.talents) store.setRow('talents', t.id, { ...t })
+      for (const b of parsed.talentBonuses) store.setRow('talentBonuses', b.id, { ...b })
+    })
+    clearGameDataIndexesCache(store)
+    const model = resolveBowDamageModel(store, 'ds-e2e')
+
+    const result = computeGathering({
+      // Composite Bow at Hunting 7 on a wolf, the case the app used to get wrong.
+      target: { kind: 'carcass', animalHealth: 5.5 },
+      tool: { kind: 'Bow', baseCalories: 20, baseDamage: 1.5, damageUsesToolCurve: true },
+      skillLevel: 7,
+      talents: {
+        efficiency: false,
+        efficiencyValue: 0.8,
+        strength: false,
+        // The value the seeding layer would read for this dataset's Power Shot.
+        strengthValue: model.era === 'bonus' ? 0 : 1,
+        empower: false,
+        empowerValue: 1,
+        luckyBreak: false,
+        deadeye: false,
+        arrowRecovery: false,
+        arrowRecoveryValue: 0.5,
+        ...talents,
+      },
+      clothingCalorieMultiplier: 1,
+      calorieCost: 20,
+      hitRate: 1,
+      headshot: true,
+      arrowPrice: 0.5,
+      bow: model,
+    })!
+    return result.lines[0].count
+  }
+
+  it.each(['eco-v11', 'eco-v12', 'eco-v13'] as const)('%s uses the pre-v14.1 maths', (id) => {
+    // base 3, headshot x1.5 = 4.5 -> 2 arrows; Deadeye x2 = 6 -> 1.
+    expect(arrowsToKill(id, {})).toBe(2)
+    expect(arrowsToKill(id, { deadeye: true })).toBe(1)
+  })
+
+  it('eco-v14 needs two arrows with Power Shot where the old maths said one', () => {
+    // The regression in plain sight: base 3 x 1.3 = 3.9, headshot x1.4 = 5.46,
+    // which does not kill a 5.5 HP wolf. The old model gave (3 + 1) x 1.5 = 6.
+    expect(arrowsToKill('eco-v14', { strength: true })).toBe(2)
+    expect(arrowsToKill('eco-v14', {})).toBe(2)
+    expect(arrowsToKill('eco-v14', { deadeye: true })).toBe(1)
+    expect(arrowsToKill('eco-v14', { strength: true, deadeye: true })).toBe(1)
+  })
+})
+
+describe('bundled GatheringConstants', () => {
+  const talent = (id: string, name: string) =>
+    load(id)
+      .Skills.flatMap((sk) => sk.Talents)
+      .find((t) => t.Name === name)
+
+  it.each(BUNDLED)('%s ships the section', (id) => {
+    const gc = load(id).GatheringConstants
+    expect(gc).toBeDefined()
+    expect(gc!.MaxTrunkPickupSize).toBe(5)
+  })
+
+  it.each(['eco-v11', 'eco-v12', 'eco-v13'] as const)(
+    '%s carries the pre-v14.1 bow maths',
+    (id) => {
+      const gc = load(id).GatheringConstants!
+      expect(gc.BowHeadshotMultiplier).toBe(1.5)
+      expect(gc.BowHeadshotMultiplierDeadeye).toBe(2)
+      // Matching talent shape: a plain value, no bonus.
+      expect(talent(id, 'HuntingDeadeyeTalent')?.Bonuses).toBeUndefined()
+      expect(talent(id, 'HuntingPowerShotTalent')?.Value).toBe(1)
+    }
+  )
+
+  it('eco-v14 carries the bonus-era bow maths', () => {
+    const gc = load('eco-v14').GatheringConstants!
+    expect(gc.BowHeadshotMultiplier).toBe(1.4)
+    // Deadeye is an additive bonus now, so there is no replacement multiplier.
+    expect(gc.BowHeadshotMultiplierDeadeye).toBeUndefined()
+    expect(talent('eco-v14', 'HuntingDeadeyeTalent')).toMatchObject({
+      Value: 0,
+      Bonuses: [{ Action: 'UseTool', EffectType: 'Additive', Value: 0.7 }],
+    })
+    expect(talent('eco-v14', 'HuntingPowerShotTalent')).toMatchObject({
+      Value: 0,
+      Bonuses: [{ Action: 'UseTool', EffectType: 'Multiplicative', Value: 1.3 }],
+    })
+  })
+
+  it.each(BUNDLED)('%s declares exactly one bow era', (id) => {
+    // The app picks its formula from the talent shape, so a dataset that looked
+    // like both eras at once — or neither — would resolve arbitrarily.
+    const hasReplacement = load(id).GatheringConstants?.BowHeadshotMultiplierDeadeye != null
+    const hasBonus = (talent(id, 'HuntingDeadeyeTalent')?.Bonuses ?? []).some(
+      (b) => b.Action === 'UseTool' && b.EffectType === 'Additive'
+    )
+    expect(hasReplacement).toBe(!hasBonus)
   })
 })
 

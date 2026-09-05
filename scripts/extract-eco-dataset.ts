@@ -36,6 +36,7 @@ import type {
   DatasetJson,
   ElementJson,
   GarbageQuantityJson,
+  GatheringConstantsJson,
   GatheringToolJson,
   ItemJson,
   LocalizedNames,
@@ -396,6 +397,24 @@ interface RawRoomCategory {
   negatesValue: boolean
 }
 const rawRoomCategories: RawRoomCategory[] = []
+
+/** Gathering values the game states as literals in its own source rather than as
+ * entity data. They vary by version — the bow headshot multiplier was 1.5/2.0
+ * through v14.0.3 and became 1.4 plus an additive Deadeye bonus in v14.1.0 — so
+ * like the room tiers above they ship per dataset instead of being hardcoded in
+ * the app.
+ *
+ * Only values written in the moddable C# belong here. The tool damage/calorie
+ * curves and the rubble pickup cost are compiled into the server and cannot be
+ * read by this script at all; they stay as app-side constants. */
+interface RawGatheringConstants {
+  bowHeadshotMultiplier: number
+  /** The multiplier when Deadeye is held, in the versions that express Deadeye as
+   * a replacement value. Undefined once Deadeye becomes an additive bonus. */
+  bowHeadshotMultiplierDeadeye?: number
+  maxTrunkPickupSize: number
+}
+const rawGatheringConstants: Partial<RawGatheringConstants> = {}
 
 /** An AnimalSpecies. Its ResourceList[0] is the carcass it drops. */
 interface RawAnimal {
@@ -912,6 +931,45 @@ function parseHousingValuesFile(src: string) {
         `${rawRoomCategories.length} categor(ies) — the initializer format moved.`
     )
   }
+}
+
+/** Parse `__core__/Tools/BowItem.cs` for the headshot damage multiplier.
+ *
+ * Two shapes, one per era, each a single line anchored on its own identifier:
+ *
+ *   // through v14.0.3 — Deadeye replaces the multiplier outright
+ *   var locationMultiplier = hitHead ? …HasTalent(typeof(HuntingDeadeyeTalent)) ? 2f : 1.5f : 1f;
+ *   // v14.1.0 onward — Deadeye contributes an additive talent bonus instead
+ *   var headShotMultiplier = 1.4f;
+ *
+ * Throws when neither matches: a silent default here would be indistinguishable
+ * from the game retuning the value, which is the whole reason it is extracted. */
+function parseBowItemFile(src: string) {
+  const modern = /\bheadShotMultiplier\s*=\s*(-?[\d.]+)f\b/.exec(src)
+  if (modern) {
+    rawGatheringConstants.bowHeadshotMultiplier = parseFloatLit(modern[1])
+    return
+  }
+  const legacy =
+    /\blocationMultiplier\s*=\s*hitHead\s*\?[^;]*?\?\s*(-?[\d.]+)f\s*:\s*(-?[\d.]+)f\s*:\s*(-?[\d.]+)f\s*;/.exec(
+      src
+    )
+  if (legacy) {
+    rawGatheringConstants.bowHeadshotMultiplierDeadeye = parseFloatLit(legacy[1])
+    rawGatheringConstants.bowHeadshotMultiplier = parseFloatLit(legacy[2])
+    return
+  }
+  throw new Error('[extract] BowItem.cs headshot multiplier not found — the expression moved.')
+}
+
+/** Parse `__core__/Objects/TreeObject.cs` for `MaxTrunkPickupSize`, the piece size
+ * a felled trunk must be sliced down to before any of it can be picked up. */
+function parseTreeObjectFile(src: string) {
+  const m = /\bconst\s+int\s+MaxTrunkPickupSize\s*=\s*(\d+)\s*;/.exec(src)
+  if (!m) {
+    throw new Error('[extract] TreeObject.cs MaxTrunkPickupSize not found — the declaration moved.')
+  }
+  rawGatheringConstants.maxTrunkPickupSize = Number(m[1])
 }
 
 /** Parse the `new HomeFurnishingValue() { … }` initializer out of an item class
@@ -2288,6 +2346,19 @@ async function main() {
       `${rawRoomCategories.length} room categor(ies)`
   )
 
+  // Gathering constants the game writes as literals. Both files ship in every
+  // supported version, so a read failure is a bug rather than a degradation —
+  // the parsers throw when the value they expect is not there.
+  parseBowItemFile(await fs.readFile(path.join(coreRoot, 'Tools', 'BowItem.cs'), 'utf8'))
+  parseTreeObjectFile(await fs.readFile(path.join(coreRoot, 'Objects', 'TreeObject.cs'), 'utf8'))
+  console.log(
+    `[extract] gathering constants: bow headshot ${rawGatheringConstants.bowHeadshotMultiplier}` +
+      (rawGatheringConstants.bowHeadshotMultiplierDeadeye != null
+        ? ` (${rawGatheringConstants.bowHeadshotMultiplierDeadeye} with Deadeye)`
+        : ' (Deadeye via talent bonus)') +
+      `, max trunk pickup ${rawGatheringConstants.maxTrunkPickupSize}`
+  )
+
   // Merge room material tier onto the item each block places. Mirrors the
   // minable/rubble join above: the attribute lives on the block class, the
   // item is usually declared in a different file.
@@ -2864,6 +2935,19 @@ async function main() {
       DiminishingReturnPercent: t.diminishingReturnPercent,
     }))
 
+  const { bowHeadshotMultiplier, bowHeadshotMultiplierDeadeye, maxTrunkPickupSize } =
+    rawGatheringConstants
+  if (bowHeadshotMultiplier == null || maxTrunkPickupSize == null) {
+    throw new Error('[extract] gathering constants incomplete — a parser above should have thrown.')
+  }
+  const gatheringConstantsJson: GatheringConstantsJson = {
+    BowHeadshotMultiplier: bowHeadshotMultiplier,
+    MaxTrunkPickupSize: maxTrunkPickupSize,
+  }
+  if (bowHeadshotMultiplierDeadeye != null) {
+    gatheringConstantsJson.BowHeadshotMultiplierDeadeye = bowHeadshotMultiplierDeadeye
+  }
+
   const dataset: DatasetJson = {
     Version: args.version,
     Skills: [...skillByName.values()].sort((a, b) => a.Name.localeCompare(b.Name)),
@@ -2874,6 +2958,7 @@ async function main() {
     TreeSpecies: treeSpeciesJsons,
     RoomCategories: roomCategoryJsons,
     RoomTiers: roomTierJsons,
+    GatheringConstants: gatheringConstantsJson,
   }
 
   const validation = validateDatasetJson(dataset)
@@ -2939,6 +3024,16 @@ async function main() {
       diffNames('Items', existing.Items, dataset.Items)
       diffNames('Tags', existing.Tags, dataset.Tags)
       diffNames('Recipes', existing.Recipes, dataset.Recipes)
+
+      // Scalars rather than a list, so they get their own before/after line —
+      // a count column could not show a retuned multiplier at all.
+      const oldConsts = JSON.stringify(existing.GatheringConstants ?? null)
+      const newConsts = JSON.stringify(dataset.GatheringConstants ?? null)
+      if (oldConsts !== newConsts) {
+        console.log('\n  GatheringConstants:')
+        console.log(`    was: ${oldConsts}`)
+        console.log(`    now: ${newConsts}`)
+      }
     } catch (e) {
       console.warn('[compare] failed:', (e as Error).message)
     }

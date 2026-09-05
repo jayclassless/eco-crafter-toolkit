@@ -11,6 +11,7 @@ import {
   defaultToolFor,
   findArrowItemId,
   findUserPriceId,
+  resolveBowDamageModel,
   retainTalents,
   seedGatheringControls,
   shouldReseedSkillLevel,
@@ -313,6 +314,222 @@ describe('seedGatheringControls', () => {
       shovel
     )
     expect(seeded.talents.efficiency).toBe(false)
+  })
+})
+
+describe('talent magnitudes come from the data, not from constants', () => {
+  /** Adds a bow plus its Power Shot / Deadeye talents in whichever shape. */
+  function addBow(opts: {
+    powerShotValue: number
+    powerShotMultiplicative?: number
+    deadeyeAdditive?: number
+  }) {
+    addItem('bow', 'WoodenBowItem')
+    gameDataStore.setRow('skills', 'hunting', {
+      id: 'hunting',
+      datasetId: DS,
+      name: 'HuntingSkill',
+      maxLevel: 7,
+      laborReducePercent: '[]',
+    })
+    gameDataStore.setRow('talents', 'powerShot', {
+      id: 'powerShot',
+      datasetId: DS,
+      skillId: 'hunting',
+      name: 'HuntingPowerShotTalent',
+      talentGroupName: 'g',
+      value: opts.powerShotValue,
+      level: 6,
+    })
+    gameDataStore.setRow('talents', 'deadeye', {
+      id: 'deadeye',
+      datasetId: DS,
+      skillId: 'hunting',
+      name: 'HuntingDeadeyeTalent',
+      talentGroupName: 'g',
+      value: opts.deadeyeAdditive == null ? 1 : 0,
+      level: 6,
+    })
+    if (opts.powerShotMultiplicative != null) {
+      gameDataStore.setRow('talentBonuses', 'psb', {
+        id: 'psb',
+        datasetId: DS,
+        talentId: 'powerShot',
+        bonusIndex: 0,
+        action: 'UseTool',
+        effectType: 'Multiplicative',
+        value: opts.powerShotMultiplicative,
+      })
+    }
+    if (opts.deadeyeAdditive != null) {
+      gameDataStore.setRow('talentBonuses', 'deb', {
+        id: 'deb',
+        datasetId: DS,
+        talentId: 'deadeye',
+        bonusIndex: 0,
+        action: 'UseTool',
+        effectType: 'Additive',
+        value: opts.deadeyeAdditive,
+      })
+    }
+    addTool('bowTool', 'bow', 'Bow', 1, {
+      calorieSkillId: 'hunting',
+      strengthTalentId: 'powerShot',
+    })
+    clearGameDataIndexesCache(gameDataStore)
+  }
+
+  const seedFor = (kind: 'rock' | 'carcass') => {
+    const { tools } = buildGatheringCatalog(gameDataStore, DS, getName, getCompare('en-US'))
+    return seedGatheringControls(
+      gameDataStore,
+      buildStore,
+      BUILD,
+      DS,
+      kind,
+      defaultToolFor(tools, kind)
+    )
+  }
+
+  it('reads a strength talent value of 0 as 0, not as a missing value', () => {
+    // The regression this whole change exists for. A talent whose magnitude
+    // moved into a bonus keeps a value of 0; folding that onto a fallback of 1
+    // adds a phantom point of damage to every bow shot.
+    addBow({ powerShotValue: 0, powerShotMultiplicative: 1.3, deadeyeAdditive: 0.7 })
+    expect(seedFor('carcass').talents.strengthValue).toBe(0)
+  })
+
+  it('reads a strength talent value of 1 as 1', () => {
+    addBow({ powerShotValue: 1 })
+    expect(seedFor('carcass').talents.strengthValue).toBe(1)
+  })
+
+  it('takes Empower from its bonus, since its own value is 0', () => {
+    gameDataStore.setRow('talents', 'empower', {
+      id: 'empower',
+      datasetId: DS,
+      skillId: 'mining',
+      name: 'BlacksmithEmpowerTalent',
+      talentGroupName: 'g',
+      value: 0,
+      level: 3,
+    })
+    gameDataStore.setRow('talentBonuses', 'empb', {
+      id: 'empb',
+      datasetId: DS,
+      talentId: 'empower',
+      bonusIndex: 0,
+      action: 'UseTool',
+      effectType: 'Additive',
+      value: 1,
+    })
+    clearGameDataIndexesCache(gameDataStore)
+    expect(seedFor('rock').talents.empowerValue).toBe(1)
+  })
+
+  it('falls back to the scalar when Empower carries no bonus', () => {
+    gameDataStore.setRow('talents', 'empower', {
+      id: 'empower',
+      datasetId: DS,
+      skillId: 'mining',
+      name: 'BlacksmithEmpowerTalent',
+      talentGroupName: 'g',
+      value: 1,
+      level: 3,
+    })
+    clearGameDataIndexesCache(gameDataStore)
+    expect(seedFor('rock').talents.empowerValue).toBe(1)
+  })
+})
+
+describe('resolveBowDamageModel', () => {
+  function addDeadeyeBonus(value: number) {
+    gameDataStore.setRow('talents', 'deadeye', {
+      id: 'deadeye',
+      datasetId: DS,
+      skillId: 'mining',
+      name: 'HuntingDeadeyeTalent',
+      talentGroupName: 'g',
+      value: 0,
+      level: 6,
+    })
+    gameDataStore.setRow('talentBonuses', 'deb', {
+      id: 'deb',
+      datasetId: DS,
+      talentId: 'deadeye',
+      bonusIndex: 0,
+      action: 'UseTool',
+      effectType: 'Additive',
+      value,
+    })
+  }
+
+  function addConstants(row: Record<string, unknown>) {
+    gameDataStore.setRow('gatheringConstants', 'gc', { id: 'gc', datasetId: DS, ...row })
+  }
+
+  it('reads the legacy era when Deadeye carries no bonus', () => {
+    addConstants({
+      bowHeadshotMultiplier: 1.5,
+      bowHeadshotMultiplierDeadeye: 2,
+      maxTrunkPickupSize: 5,
+    })
+    clearGameDataIndexesCache(gameDataStore)
+    expect(resolveBowDamageModel(gameDataStore, DS)).toEqual({
+      era: 'legacy',
+      headshotMultiplier: 1.5,
+      headshotMultiplierDeadeye: 2,
+    })
+  })
+
+  it('reads the bonus era when Deadeye carries an additive bonus', () => {
+    addDeadeyeBonus(0.7)
+    gameDataStore.setRow('talents', 'powerShot', {
+      id: 'powerShot',
+      datasetId: DS,
+      skillId: 'mining',
+      name: 'HuntingPowerShotTalent',
+      talentGroupName: 'g',
+      value: 0,
+      level: 6,
+    })
+    gameDataStore.setRow('talentBonuses', 'psb', {
+      id: 'psb',
+      datasetId: DS,
+      talentId: 'powerShot',
+      bonusIndex: 0,
+      action: 'UseTool',
+      effectType: 'Multiplicative',
+      value: 1.3,
+    })
+    addConstants({ bowHeadshotMultiplier: 1.4, maxTrunkPickupSize: 5 })
+    clearGameDataIndexesCache(gameDataStore)
+    expect(resolveBowDamageModel(gameDataStore, DS)).toEqual({
+      era: 'bonus',
+      headshotMultiplier: 1.4,
+      deadeyeAdditive: 0.7,
+      powerShotMultiplicative: 1.3,
+    })
+  })
+
+  it('uses the bonus-era default when the dataset predates the constants row', () => {
+    // A player who installed a v14.1 dataset built before the section existed
+    // still gets the right maths — only the base multiplier falls back. Keying
+    // the era off the constants row instead would strand them on 1.5/2.0.
+    addDeadeyeBonus(0.7)
+    clearGameDataIndexesCache(gameDataStore)
+    const model = resolveBowDamageModel(gameDataStore, DS)
+    expect(model.era).toBe('bonus')
+    expect(model).toMatchObject({ headshotMultiplier: 1.4, powerShotMultiplicative: 1 })
+  })
+
+  it('uses the legacy defaults when there is no constants row at all', () => {
+    clearGameDataIndexesCache(gameDataStore)
+    expect(resolveBowDamageModel(gameDataStore, DS)).toEqual({
+      era: 'legacy',
+      headshotMultiplier: 1.5,
+      headshotMultiplierDeadeye: 2,
+    })
   })
 })
 

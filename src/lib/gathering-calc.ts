@@ -1,6 +1,9 @@
 import {
+  BOW_HEADSHOT_MULTIPLIER_DEADEYE_LEGACY,
+  BOW_HEADSHOT_MULTIPLIER_LEGACY,
   CALORIES_PER_RUBBLE_PICKUP,
   MAX_TRUNK_PICKUP_SIZE,
+  POWER_SHOT_BONUS_APPLIED_FIRST,
   TOOL_CALORIE_STRATEGY,
   TOOL_DAMAGE_STRATEGY,
 } from './game-constants'
@@ -47,13 +50,55 @@ export interface GatheringTool {
   damageUsesToolCurve: boolean
 }
 
+/**
+ * How the installed dataset's bow damage works.
+ *
+ * The engine rewrote this in v14.1: Deadeye and Power Shot stopped being plain
+ * talent values and became bonuses run through the shared bonus pipeline. Both
+ * shapes still ship, because the app supports v11-v14 datasets and the older
+ * maths remain correct for the older ones.
+ *
+ * Dataset-derived and never user-toggled, so it is an input rather than part of
+ * `GatheringTalentState` (which is the dialog's mutable state).
+ */
+export type BowDamageModel =
+  | {
+      /** v11 - v14.0.x: one of two fixed multipliers, chosen by Deadeye. */
+      era: 'legacy'
+      headshotMultiplier: number
+      headshotMultiplierDeadeye: number
+    }
+  | {
+      /** v14.1+: bonuses. The pipeline applies EVERY bonus matching the action
+       * and tool, with no per-talent isolation — holding one talent does not
+       * stop the other's bonus from taking part. What each guard decides is
+       * only WHETHER a given value is transformed at all. */
+      era: 'bonus'
+      headshotMultiplier: number
+      /** Deadeye's additive bonus. */
+      deadeyeAdditive: number
+      /** Power Shot's multiplicative bonus. */
+      powerShotMultiplicative: number
+    }
+
+/** Used when a dataset predates `GatheringConstants`; such a dataset is always
+ * pre-v14.1, so the legacy maths are the right assumption. */
+export const LEGACY_BOW_DAMAGE_MODEL: BowDamageModel = {
+  era: 'legacy',
+  headshotMultiplier: BOW_HEADSHOT_MULTIPLIER_LEGACY,
+  headshotMultiplierDeadeye: BOW_HEADSHOT_MULTIPLIER_DEADEYE_LEGACY,
+}
+
 export interface GatheringTalentState {
   /** Multiplies calories, e.g. 0.8 for Mining/Logging Tool Efficiency. Never
    * available for shovels or bows, whose C# names an abstract talent that is
    * never granted. */
   efficiency: boolean
   efficiencyValue: number
-  /** Adds flat damage, e.g. +1 for Tool Strength / Hunting Power Shot. */
+  /** The tool's strength talent. Adds flat damage on every version for axes and
+   * pickaxes; for bows it added a flat point through v14.0.x and became a
+   * damage MULTIPLIER in v14.1 (see `BowDamageModel`), at which point
+   * `strengthValue` reads 0 and the multiplier carries the effect. */
   strength: boolean
   strengthValue: number
   /** BlacksmithEmpowerTalent: +1 damage to axes and pickaxes. */
@@ -62,7 +107,8 @@ export interface GatheringTalentState {
   /** rock: MiningLuckyBreakTalent forces the max-chunk rubble set, which
    * removes the rubble-splitting swings rather than adding yield. */
   luckyBreak: boolean
-  /** carcass: HuntingDeadeyeTalent raises the headshot multiplier 1.5 -> 2.0. */
+  /** carcass: HuntingDeadeyeTalent raises the headshot multiplier. How much
+   * depends on the dataset's era — see `BowDamageModel`. */
   deadeye: boolean
   /** carcass: HuntingArrowRecoveryTalent recovers a fraction of the arrows
    * lodged in the animal (misses are never recoverable). */
@@ -84,6 +130,12 @@ export interface GatheringInputs {
   /** rock: calories per rubble picked up. 1 in the shipped game versions, but
    * user-editable since it is a compiled constant rather than dataset data. */
   caloriesPerRubblePickup?: number
+  /** carcass: how this dataset's bow damage works. Defaults to the pre-v14.1
+   * maths, which is what a dataset without `GatheringConstants` describes. */
+  bow?: BowDamageModel
+  /** log: the piece size a felled trunk must be sliced to. Dataset-driven;
+   * falls back to the built-in constant. */
+  maxTrunkPickupSize?: number
   /** log: how many logs one tree yields, over which felling is amortized. */
   logsPerTree?: number
   /** carcass: fraction of shots that connect. Misses still burn a shot, an
@@ -147,14 +199,76 @@ export function caloriesPerAction(inputs: GatheringInputs): number {
   return scaled * efficiency * clothingCalorieMultiplier
 }
 
-export function damagePerHit(inputs: GatheringInputs): number {
-  const { tool, talents, skillLevel } = inputs
-  const base = tool.damageUsesToolCurve
+/** The tool's own damage, before any talent. */
+function toolBaseDamage(inputs: GatheringInputs): number {
+  const { tool, skillLevel } = inputs
+  return tool.damageUsesToolCurve
     ? round2(tool.baseDamage * strategyAt(TOOL_DAMAGE_STRATEGY, skillLevel, 1))
     : tool.baseDamage
+}
+
+/**
+ * A bow's body damage and headshot multiplier.
+ *
+ * Returned together because from v14.1 they are not independent: the same
+ * ordered bonus list feeds both, so a headshot is not a fixed multiple of a body
+ * shot.
+ *
+ * The asymmetry below is deliberate and reproduces the engine — do NOT
+ * "symmetrize" it. Body damage is transformed only when Power Shot is held and
+ * the headshot multiplier only when Deadeye is held, so holding Deadeye ALONE
+ * adds nothing to body damage even though its bonus is additive. Holding both
+ * makes each transform apply both bonuses.
+ */
+function bowDamage(inputs: GatheringInputs): {
+  bodyDamage: number
+  headshotMultiplier: number
+} {
+  const { talents } = inputs
+  const model = inputs.bow ?? LEGACY_BOW_DAMAGE_MODEL
+  // The bow's damage value sums the skill curve with its strength talent. That
+  // term is present in both eras; from v14.1 the talent's own value is 0 and the
+  // effect moved into the multiplicative bonus below, so keeping the sum here
+  // covers both and stays right if a future version restores the flat point.
+  const base = toolBaseDamage(inputs) + (talents.strength ? talents.strengthValue : 0)
+
+  if (model.era === 'legacy') {
+    return {
+      bodyDamage: base,
+      headshotMultiplier: talents.deadeye
+        ? model.headshotMultiplierDeadeye
+        : model.headshotMultiplier,
+    }
+  }
+
+  const applyBonuses = (value: number): number => {
+    let v = value
+    if (POWER_SHOT_BONUS_APPLIED_FIRST) {
+      if (talents.strength) v *= model.powerShotMultiplicative
+      if (talents.deadeye) v += model.deadeyeAdditive
+    } else {
+      if (talents.deadeye) v += model.deadeyeAdditive
+      if (talents.strength) v *= model.powerShotMultiplicative
+    }
+    return v
+  }
+
+  return {
+    bodyDamage: talents.strength ? applyBonuses(base) : base,
+    headshotMultiplier: talents.deadeye
+      ? applyBonuses(model.headshotMultiplier)
+      : model.headshotMultiplier,
+  }
+}
+
+export function damagePerHit(inputs: GatheringInputs): number {
+  // Bows run their own pipeline, and can never carry Empower — the game scopes
+  // that talent to pickaxes and axes.
+  if (inputs.tool.kind === 'Bow') return bowDamage(inputs).bodyDamage
+  const { talents } = inputs
   const strength = talents.strength ? talents.strengthValue : 0
   const empower = talents.empower ? talents.empowerValue : 0
-  return base + strength + empower
+  return toolBaseDamage(inputs) + strength + empower
 }
 
 /** Swings to destroy something with `health` hit points. */
@@ -242,7 +356,8 @@ export function computeGathering(inputs: GatheringInputs): GatheringResult | nul
       // has to be cut until every piece yields at most MAX_TRUNK_PICKUP_SIZE
       // logs, and n pieces take n-1 cuts. A tree small enough to carry whole
       // needs no cuts at all.
-      const sliceSwings = Math.max(0, Math.ceil(logsPerTree / MAX_TRUNK_PICKUP_SIZE) - 1)
+      const maxTrunkPickup = inputs.maxTrunkPickupSize ?? MAX_TRUNK_PICKUP_SIZE
+      const sliceSwings = Math.max(0, Math.ceil(logsPerTree / maxTrunkPickup) - 1)
 
       lines.push(line('fell', fellSwings, fellSwings * calPerAction, logsPerTree, calorieCost))
       if (sliceSwings > 0) {
@@ -258,8 +373,11 @@ export function computeGathering(inputs: GatheringInputs): GatheringResult | nul
       const hitRate = inputs.hitRate ?? 1
       if (!(health > 0) || !(dmg > 0) || !(hitRate > 0) || hitRate > 1) return null
 
-      const headshotMultiplier = inputs.headshot ? (talents.deadeye ? 2 : 1.5) : 1
-      const arrowsToKill = swingsFor(health, dmg * headshotMultiplier)
+      const { bodyDamage, headshotMultiplier } = bowDamage(inputs)
+      const arrowsToKill = swingsFor(
+        health,
+        inputs.headshot ? bodyDamage * headshotMultiplier : bodyDamage
+      )
       const shots = arrowsToKill / hitRate
       // Recovery only applies to arrows lodged in the harvested animal, so it
       // scales with hits landed, never with total shots fired.

@@ -497,6 +497,30 @@ describe('housing indexes', () => {
   })
 })
 
+describe('gatheringConstantsByDatasetId', () => {
+  it('indexes one row per dataset and keeps them apart', () => {
+    const store = createGameDataStore()
+    store.setRow('gatheringConstants', 'gc1', {
+      id: 'gc1',
+      datasetId: 'ds1',
+      bowHeadshotMultiplier: 1.4,
+      bowHeadshotMultiplierDeadeye: 0,
+      maxTrunkPickupSize: 5,
+    })
+    store.setRow('gatheringConstants', 'gc2', {
+      id: 'gc2',
+      datasetId: 'ds2',
+      bowHeadshotMultiplier: 1.5,
+      bowHeadshotMultiplierDeadeye: 2,
+      maxTrunkPickupSize: 5,
+    })
+    const index = getGameDataIndexes(store).gatheringConstantsByDatasetId
+    expect(index.get('ds1')).toMatchObject({ bowHeadshotMultiplier: 1.4 })
+    expect(index.get('ds2')).toMatchObject({ bowHeadshotMultiplierDeadeye: 2 })
+    expect(index.get('ds3')).toBeUndefined()
+  })
+})
+
 describe('rawMaterialItemIds', () => {
   const item = (id: string, cells: Record<string, unknown> = {}) =>
     store.setRow('items', id, { id, datasetId: 'ds', name: id, ...cells })

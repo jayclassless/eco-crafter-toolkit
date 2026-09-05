@@ -16,6 +16,33 @@ export interface DatasetJson {
   // rather than being constants in the app.
   RoomCategories?: RoomCategoryJson[]
   RoomTiers?: RoomTierJson[]
+  // Gathering values the game states as literals in its own source rather than
+  // as entity data (see the Gathering Calculator). Optional for the same reason
+  // as the sections above: datasets extracted before this existed omit it, and
+  // consumers fall back to the pre-v14.1 values, which is what those datasets
+  // describe anyway.
+  GatheringConstants?: GatheringConstantsJson
+}
+
+/** Bow and tree values that vary by game version but are not entity data. They
+ * ship per dataset rather than as app constants because the game has already
+ * changed them once: the bow headshot multiplier was 1.5, doubling to 2.0 with
+ * Deadeye, through v14.0.3, and became 1.4 with Deadeye contributing an additive
+ * talent bonus in v14.1.0.
+ *
+ * Deliberately NOT the home for the tool damage/calorie curves or the rubble
+ * pickup cost: those are compiled into the server, so the extractor cannot see
+ * them and they remain constants in `game-constants.ts`. */
+export interface GatheringConstantsJson {
+  /** Bow headshot damage multiplier, before any talent bonus. */
+  BowHeadshotMultiplier: number
+  /** The multiplier when Deadeye is held, in versions that express Deadeye as a
+   * replacement value. Absent from v14.1.0 on, where Deadeye instead carries an
+   * additive bonus applied to `BowHeadshotMultiplier`. */
+  BowHeadshotMultiplierDeadeye?: number
+  /** `TreeEntity.MaxTrunkPickupSize` — the piece size a felled trunk must be
+   * sliced down to before any of it can be picked up. */
+  MaxTrunkPickupSize: number
 }
 
 /** A room category. Categories reference each other by `Name`, which is also

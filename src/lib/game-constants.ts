@@ -98,7 +98,10 @@ export const CALORIES_PER_RUBBLE_PICKUP = 1
  * Slicing is NOT damage-gated — `TreeEntity.TrySliceTrunk` performs the cut in a
  * post-effect with no health check, so one swing is always one slice regardless
  * of axe damage. (`TreeSpecies.LogHealth` looks like it should govern this, but
- * nothing in the game ever reads it.) */
+ * nothing in the game ever reads it.)
+ *
+ * Fallback only: a dataset carrying `GatheringConstants` supplies the real
+ * figure. Every shipped version has used 5. */
 export const MAX_TRUNK_PICKUP_SIZE = 5
 
 /** Talent that grants +1 flat damage to axes and pickaxes via
@@ -110,3 +113,28 @@ export const EMPOWER_TALENT_NAME = 'BlacksmithEmpowerTalent'
 
 /** Tool kinds whose damage `BlacksmithEmpowerTalent` boosts. */
 export const EMPOWER_TOOL_KINDS = new Set(['Pickaxe', 'Axe'])
+
+/** Bow headshot multipliers, used only when a dataset predates the
+ * `GatheringConstants` section and cannot supply the real figures. The
+ * pre-v14.1 game picked one of two fixed multipliers; v14.1 replaced that with a
+ * lower base plus an additive Deadeye bonus. */
+export const BOW_HEADSHOT_MULTIPLIER_LEGACY = 1.5
+export const BOW_HEADSHOT_MULTIPLIER_DEADEYE_LEGACY = 2
+export const BOW_HEADSHOT_MULTIPLIER_BONUS_ERA = 1.4
+
+/**
+ * Which of the two bow talent bonuses is applied first.
+ *
+ * From v14.1 both Deadeye and Power Shot are bonuses on the same action and
+ * tool, and they are applied in the order the player LEARNED them — which no
+ * dataset records and the app cannot know. So this is a modelling choice, not an
+ * extracted fact.
+ *
+ * Power Shot first gives `(base x 1.3) + 0.7` and a `1.4 x 1.3 + 0.7 = 2.52`
+ * headshot; Deadeye first gives `(base + 0.7) x 1.3` and `2.73`. The two
+ * disagree on the final arrow count in about 6% of tool/level/animal
+ * combinations. Power Shot first yields the LOWER damage, so more arrows and a
+ * higher cost estimate — the safe direction for a planning tool. Flip this one
+ * constant to model the other order.
+ */
+export const POWER_SHOT_BONUS_APPLIED_FIRST = true

@@ -54,6 +54,7 @@ export function createGameDataOps(gameDataStore: Store) {
           'treeSpecies',
           'roomCategories',
           'roomTiers',
+          'gatheringConstants',
         ] as const) {
           for (const rowId of gameDataStore.getRowIds(table)) {
             if (gameDataStore.getCell(table, rowId, 'datasetId') === datasetId) {
@@ -157,6 +158,9 @@ export function createGameDataOps(gameDataStore: Store) {
       for (const rt of parsed.roomTiers) {
         gameDataStore.setRow('roomTiers', rt.id, { ...rt, datasetId })
       }
+      for (const gc of parsed.gatheringConstants) {
+        gameDataStore.setRow('gatheringConstants', gc.id, { ...gc, datasetId })
+      }
     })
 
     try {
@@ -194,6 +198,7 @@ export function createGameDataOps(gameDataStore: Store) {
       'treeSpecies',
       'roomCategories',
       'roomTiers',
+      'gatheringConstants',
     ] as const
 
     gameDataStore.transaction(() => {

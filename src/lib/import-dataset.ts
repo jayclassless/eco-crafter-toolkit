@@ -18,6 +18,7 @@ import type {
   RecipeUnlock,
   LocalizedName,
   GatheringTool,
+  GatheringConstants,
   RoomCategory,
   RoomTier,
   TreeSpecies,
@@ -296,6 +297,27 @@ export function validateDatasetJson(data: unknown): ValidationResult {
     errors.push(`Dataset has ${housingItemCount} housing item(s) but no RoomCategories`)
   }
 
+  const gc = typed.GatheringConstants
+  if (gc) {
+    // A headshot multiplier below 1 would make headshots do LESS damage than a
+    // body shot, which no version has ever done and which would silently inflate
+    // every arrow count.
+    if (!(gc.BowHeadshotMultiplier >= 1)) {
+      errors.push(`BowHeadshotMultiplier ${gc.BowHeadshotMultiplier} is below 1`)
+    }
+    if (gc.BowHeadshotMultiplierDeadeye != null) {
+      if (!(gc.BowHeadshotMultiplierDeadeye >= gc.BowHeadshotMultiplier)) {
+        errors.push(
+          `BowHeadshotMultiplierDeadeye ${gc.BowHeadshotMultiplierDeadeye} is below ` +
+            `BowHeadshotMultiplier ${gc.BowHeadshotMultiplier}`
+        )
+      }
+    }
+    if (!Number.isInteger(gc.MaxTrunkPickupSize) || gc.MaxTrunkPickupSize < 1) {
+      errors.push(`MaxTrunkPickupSize ${gc.MaxTrunkPickupSize} is not a positive integer`)
+    }
+  }
+
   return { valid: errors.length === 0, errors }
 }
 
@@ -320,6 +342,8 @@ export interface ParsedDataset {
   treeSpecies: TreeSpecies[]
   roomCategories: RoomCategory[]
   roomTiers: RoomTier[]
+  /** At most one row, or none for a dataset extracted before the section existed. */
+  gatheringConstants: GatheringConstants[]
   localizedNames: LocalizedName[]
 }
 
@@ -344,6 +368,7 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
   const treeSpecies: TreeSpecies[] = []
   const roomCategories: RoomCategory[] = []
   const roomTiers: RoomTier[] = []
+  const gatheringConstants: GatheringConstants[] = []
   const localizedNames: LocalizedName[] = []
 
   const skillIdByName = new Map<string, string>()
@@ -827,6 +852,18 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
       diminishingReturnPercent: rt.DiminishingReturnPercent,
     })
   }
+  if (data.GatheringConstants) {
+    gatheringConstants.push({
+      id: generateId(),
+      datasetId,
+      bowHeadshotMultiplier: data.GatheringConstants.BowHeadshotMultiplier,
+      // 0 stands for "absent", meaning Deadeye contributes an additive talent
+      // bonus instead of replacing the multiplier. Safe as a presence gate
+      // because 0 is not a legal multiplier.
+      bowHeadshotMultiplierDeadeye: data.GatheringConstants.BowHeadshotMultiplierDeadeye ?? 0,
+      maxTrunkPickupSize: data.GatheringConstants.MaxTrunkPickupSize,
+    })
+  }
 
   return {
     skills,
@@ -849,6 +886,7 @@ export function parseDataset(data: DatasetJson, datasetId: string): ParsedDatase
     treeSpecies,
     roomCategories,
     roomTiers,
+    gatheringConstants,
     localizedNames,
   }
 }

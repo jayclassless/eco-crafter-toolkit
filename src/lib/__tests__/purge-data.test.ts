@@ -357,6 +357,11 @@ describe('purging housing reference tables', () => {
         datasetId,
         tierVal: 0,
       })
+      f.gameDataStore.setRow('gatheringConstants', `${datasetId}-gc`, {
+        id: `${datasetId}-gc`,
+        datasetId,
+        bowHeadshotMultiplier: 1.5,
+      })
     }
 
     await purgeData(
@@ -367,5 +372,6 @@ describe('purging housing reference tables', () => {
 
     expect(f.gameDataStore.getRowIds('roomCategories')).toEqual(['ds2-cat'])
     expect(f.gameDataStore.getRowIds('roomTiers')).toEqual(['ds2-tier'])
+    expect(f.gameDataStore.getRowIds('gatheringConstants')).toEqual(['ds2-gc'])
   })
 })

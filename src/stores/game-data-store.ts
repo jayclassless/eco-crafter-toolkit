@@ -163,6 +163,17 @@ export function createGameDataStore() {
       hardCap: { type: 'number', default: 0 },
       diminishingReturnPercent: { type: 'number', default: 0 },
     },
+    // One row per dataset. Values the game writes as literals in its own source;
+    // the defaults are the pre-v14.1 figures, so a dataset imported before this
+    // table existed keeps behaving exactly as it did.
+    gatheringConstants: {
+      id: { type: 'string' },
+      datasetId: { type: 'string' },
+      bowHeadshotMultiplier: { type: 'number', default: 1.5 },
+      // 0 means Deadeye adds a talent bonus instead of replacing the multiplier.
+      bowHeadshotMultiplierDeadeye: { type: 'number', default: 0 },
+      maxTrunkPickupSize: { type: 'number', default: 5 },
+    },
     itemParts: {
       id: { type: 'string' },
       datasetId: { type: 'string' },

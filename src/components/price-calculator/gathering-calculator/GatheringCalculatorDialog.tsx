@@ -191,12 +191,15 @@ export function GatheringCalculatorDialog({
       clothingCalorieMultiplier: clothingMultiplier,
       calorieCost,
       caloriesPerRubblePickup: storedPickupCalories,
+      bow: catalog.constants.bow,
+      maxTrunkPickupSize: catalog.constants.maxTrunkPickupSize,
       logsPerTree,
       hitRate,
       headshot,
       arrowPrice,
     })
   }, [
+    catalog,
     selected,
     tool,
     talents,

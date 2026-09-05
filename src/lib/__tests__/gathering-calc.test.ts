@@ -5,6 +5,8 @@ import {
   computeGathering,
   damagePerHit,
   strategyAt,
+  LEGACY_BOW_DAMAGE_MODEL,
+  type BowDamageModel,
   type GatheringInputs,
   type GatheringTalentState,
 } from '../gathering-calc'
@@ -79,6 +81,9 @@ function carcassInputs(overrides: Partial<GatheringInputs> = {}): GatheringInput
     calorieCost: 20,
     hitRate: 1,
     arrowPrice: 0.5,
+    // Stated rather than left to the default, so these stay pinned to the older
+    // maths even if the default ever moves. They are the v11-v13 regression set.
+    bow: LEGACY_BOW_DAMAGE_MODEL,
     ...overrides,
   }
 }
@@ -254,6 +259,14 @@ describe('computeGathering — log', () => {
     expect(r.caloriesPerItem).toBeCloseTo((26 * 20) / 60, 10)
   })
 
+  it('takes the trunk pickup cap from the dataset', () => {
+    // Every shipped version uses 5, but the value is extracted rather than
+    // assumed, so a version that lowers it must change the slice count: 60 logs
+    // in pieces of 3 is 20 pieces = 19 cuts.
+    const r = computeGathering(logInputs({ maxTrunkPickupSize: 3 }))!
+    expect(r.lines.find((l) => l.key === 'slice')!.count).toBe(19)
+  })
+
   it('reports per-tree calories alongside the per-log share', () => {
     // The per-log share of felling is a small fraction, which on its own reads
     // as though felling were nearly free. The per-source figure is the one a
@@ -317,7 +330,7 @@ describe('computeGathering — log', () => {
   })
 })
 
-describe('computeGathering — carcass', () => {
+describe('computeGathering — carcass (v11-v14.0.x bow maths)', () => {
   it('counts arrows from health and damage', () => {
     // Elk 8.5 HP, wooden bow damage 1 => 9 arrows.
     const r = computeGathering(carcassInputs())!
@@ -368,6 +381,67 @@ describe('computeGathering — carcass', () => {
   it('returns null for an impossible hit rate', () => {
     expect(computeGathering(carcassInputs({ hitRate: 0 }))).toBeNull()
     expect(computeGathering(carcassInputs({ hitRate: 1.5 }))).toBeNull()
+  })
+})
+
+/** v14.1's bonus-era numbers, as the dataset carries them. */
+const BONUS_BOW: BowDamageModel = {
+  era: 'bonus',
+  headshotMultiplier: 1.4,
+  deadeyeAdditive: 0.7,
+  powerShotMultiplicative: 1.3,
+}
+
+describe('computeGathering — carcass (v14.1 bow maths)', () => {
+  /** Same wooden bow and elk as above, but Power Shot's flat point is gone —
+   * the talent's own value is 0 and its effect is the multiplicative bonus. */
+  function bonusInputs(
+    talents: Partial<GatheringTalentState> = {},
+    overrides: Partial<GatheringInputs> = {}
+  ): GatheringInputs {
+    return carcassInputs({
+      bow: BONUS_BOW,
+      talents: { ...NO_TALENTS, strengthValue: 0, ...talents },
+      ...overrides,
+    })
+  }
+
+  const shots = (i: GatheringInputs) => computeGathering(i)!.lines[0].count
+
+  it.each([
+    // talents                                   body dmg  body  head mult  head
+    ['neither', {}, 1, 9, 1.4, 7],
+    ['Power Shot', { strength: true }, 1.3, 7, 1.4, 5],
+    ['Deadeye', { deadeye: true }, 1, 9, 2.1, 5],
+    ['both', { strength: true, deadeye: true }, 2, 5, 2.52, 2],
+  ] as const)('resolves %s', (_label, talents, bodyDamage, bodyShots, _headMult, headShots) => {
+    expect(damagePerHit(bonusInputs(talents))).toBeCloseTo(bodyDamage, 10)
+    expect(shots(bonusInputs(talents))).toBe(bodyShots)
+    expect(shots(bonusInputs(talents, { headshot: true }))).toBe(headShots)
+  })
+
+  it('leaves body damage untouched for Deadeye alone', () => {
+    // The engine only transforms body damage when Power Shot is held, so
+    // Deadeye's +0.7 does NOT reach it despite being an additive bonus. This
+    // looks like a bug in our code and is not — do not "symmetrize" the guards.
+    expect(damagePerHit(bonusInputs({ deadeye: true }))).toBe(1)
+    expect(damagePerHit(bonusInputs({ strength: true, deadeye: true }))).toBeCloseTo(2, 10)
+  })
+
+  it('applies Power Shot before Deadeye when both are held', () => {
+    // Which bonus lands first is talent acquisition order, which no dataset
+    // records — POWER_SHOT_BONUS_APPLIED_FIRST is the modelling choice. Flipping
+    // it gives (1 + 0.7) x 1.3 = 2.21 and one fewer arrow, so this is the
+    // assertion that fails if someone flips the constant without meaning to.
+    const both = bonusInputs({ strength: true, deadeye: true })
+    expect(damagePerHit(both)).toBeCloseTo(1 * 1.3 + 0.7, 10)
+    expect(damagePerHit(both)).not.toBeCloseTo((1 + 0.7) * 1.3, 10)
+    expect(shots(both)).toBe(5)
+  })
+
+  it('still honours the skill curve underneath the bonuses', () => {
+    // Hunting 7 doubles the bow's base, and the multiplier applies after.
+    expect(damagePerHit(bonusInputs({ strength: true }, { skillLevel: 7 }))).toBeCloseTo(2.6, 10)
   })
 })
 
