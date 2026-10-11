@@ -125,15 +125,20 @@ export function PlantingRow({
     setCell('hasRegrown', false)
   }
 
+  // Derived in render rather than in the handler below: oxlint's react(purity)
+  // rule treats a handler that calls an imported helper as render-reachable and
+  // then flags the `new Date()` beside it.
+  const regrows = crop != null && isRegrowCrop(crop)
+
   const handleHarvest = () => {
-    if (crop && isRegrowCrop(crop)) {
-      // Regen crops regrow from a fraction of maturity; replant on a shorter cycle.
-      setCell('hasRegrown', true)
-      setCell('plantedAt', new Date().toISOString())
-    } else {
+    if (!regrows) {
       setCell('plantedAt', '')
       setCell('hasRegrown', false)
+      return
     }
+    // Regen crops regrow from a fraction of maturity; replant on a shorter cycle.
+    setCell('plantedAt', new Date().toISOString())
+    setCell('hasRegrown', true)
   }
 
   const window =
