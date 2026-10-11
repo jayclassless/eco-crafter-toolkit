@@ -1,6 +1,6 @@
 # Eco Crafter Toolkit Change Log
 
-## 0.10.0 (TBD)
+## 0.10.0 (2026-10-11)
 
 - Fixed the Gathering Calculator to address changes in bow damage and the
   Hunting talents in v14.1.
