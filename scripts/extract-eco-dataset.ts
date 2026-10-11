@@ -131,6 +131,20 @@ async function walk(dir: string, out: string[] = []): Promise<string[]> {
   return out
 }
 
+/**
+ * Read a C# source file with `typeof( Foo )` padding collapsed to `typeof(Foo)`.
+ *
+ * Every parser below matches the tight `typeof(\w+)` form. A handful of game
+ * files pad the argument -- `typeof( SimmeredMeatItem)` in the Culinary Research
+ * Paper Advanced Meat ingredients, `typeof(StuffedTurkeyRecipe )` in the Stuff
+ * It talent's recipe set -- and those entries were silently dropped. Collapsing
+ * once here covers every regex instead of loosening each one.
+ */
+async function readCsSource(file: string): Promise<string> {
+  const src = await fs.readFile(file, 'utf8')
+  return src.replace(/typeof\(\s*([\w.]+)\s*\)/g, 'typeof($1)')
+}
+
 // ---------------------------------------------------------------------------
 // Regex helpers
 
@@ -2121,7 +2135,7 @@ async function main() {
 
   // Pass 1: read files and dispatch by directory
   for (const file of csFiles) {
-    const src = await fs.readFile(file, 'utf8')
+    const src = await readCsSource(file)
     if (file.includes(`${path.sep}Tech${path.sep}`)) parseSkillFile(src)
     if (file.includes(`${path.sep}Benefit${path.sep}`)) parseTalentFile(src)
     if (file.includes(`${path.sep}Plant${path.sep}`)) parsePlantFile(src)
@@ -2235,7 +2249,7 @@ async function main() {
     const base = path.basename(file)
     // Sample talents file contains test data, not real talents.
     if (base === 'SampleTalents.cs') continue
-    const src = await fs.readFile(file, 'utf8')
+    const src = await readCsSource(file)
     parseBonusFile(src)
   }
   if (benefitsFiles.length > 0) {
@@ -2251,7 +2265,7 @@ async function main() {
   const treeDir = path.join(coreRoot, 'Organisms', 'Tree')
   const treeFiles = await walk(treeDir).catch(() => [] as string[])
   for (const file of treeFiles) {
-    parseTreeHealthFile(await fs.readFile(file, 'utf8'))
+    parseTreeHealthFile(await readCsSource(file))
   }
 
   // Merge gathering data onto the item each source yields. Mirrors the crop
@@ -2330,7 +2344,7 @@ async function main() {
 
   // Tag definitions
   try {
-    const tagSrc = await fs.readFile(path.join(coreRoot, 'Systems', 'TagDefinitions.cs'), 'utf8')
+    const tagSrc = await readCsSource(path.join(coreRoot, 'Systems', 'TagDefinitions.cs'))
     parseTagDefinitionsFile(tagSrc)
   } catch (e) {
     console.warn('[extract] TagDefinitions.cs missing:', (e as Error).message)
@@ -2339,7 +2353,7 @@ async function main() {
   // Housing: room material tiers and room categories. Every supported version
   // ships this file, so a read failure is a bug rather than a degradation —
   // parseHousingValuesFile throws if either array comes back empty.
-  const housingSrc = await fs.readFile(path.join(coreRoot, 'Systems', 'HousingValues.cs'), 'utf8')
+  const housingSrc = await readCsSource(path.join(coreRoot, 'Systems', 'HousingValues.cs'))
   parseHousingValuesFile(housingSrc)
   console.log(
     `[extract] parsed ${rawRoomTiers.length} room tier(s), ` +
@@ -2349,8 +2363,8 @@ async function main() {
   // Gathering constants the game writes as literals. Both files ship in every
   // supported version, so a read failure is a bug rather than a degradation —
   // the parsers throw when the value they expect is not there.
-  parseBowItemFile(await fs.readFile(path.join(coreRoot, 'Tools', 'BowItem.cs'), 'utf8'))
-  parseTreeObjectFile(await fs.readFile(path.join(coreRoot, 'Objects', 'TreeObject.cs'), 'utf8'))
+  parseBowItemFile(await readCsSource(path.join(coreRoot, 'Tools', 'BowItem.cs')))
+  parseTreeObjectFile(await readCsSource(path.join(coreRoot, 'Objects', 'TreeObject.cs')))
   console.log(
     `[extract] gathering constants: bow headshot ${rawGatheringConstants.bowHeadshotMultiplier}` +
       (rawGatheringConstants.bowHeadshotMultiplierDeadeye != null

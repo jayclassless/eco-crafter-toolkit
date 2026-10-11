@@ -568,6 +568,20 @@ describe.each(BONUS_SYSTEM)('bundled %s talent bonus scope', (id) => {
     expect(hit.labor).toEqual([])
   })
 
+  it('keeps a recipe the game writes as a padded typeof in the bonus scope', () => {
+    // Stuff It: Advanced Baking — CraftTime x0.7 on five named recipes. The game
+    // writes the third as `typeof(StuffedTurkeyRecipe )`, which the extractor's
+    // `typeof(\w+)` patterns skipped, so Stuffed Turkey silently lost the bonus.
+    const hit = attachedTo('AdvancedBakingStuffItTalent:0')
+    expect(hit.craftTime.sort()).toEqual([
+      'BearclawRecipe',
+      'ElkWellingtonRecipe',
+      'MacaronsRecipe',
+      'PirozhokRecipe',
+      'StuffedTurkeyRecipe',
+    ])
+  })
+
   it('emits a modifier for every price-relevant bonus whose scope resolves', () => {
     // A bonus that resolves to a non-empty recipe set but attaches nothing means
     // an action fell out of the allowlist, or a scope clause was silently
@@ -723,5 +737,17 @@ describe('housing data differs across versions', () => {
     expect(count('eco-v12')).toBe(478)
     expect(count('eco-v13')).toBe(478)
     expect(count('eco-v14')).toBe(486)
+  })
+})
+
+// The game occasionally pads a type reference -- `typeof( SimmeredMeatItem)` --
+// and every `typeof(\w+)` pattern in the extractor used to skip it, dropping
+// the element without a warning. Present in every bundled version.
+describe.each(BUNDLED)('bundled %s padded typeof references', (id) => {
+  it('keeps Simmered Meat in the Culinary Research Paper Advanced Meat recipe', () => {
+    const recipe = load(id).Recipes.find(
+      (r) => r.Name === 'CulinaryResearchPaperAdvancedMeatRecipe'
+    )!
+    expect(recipe.Ingredients.map((i) => i.ItemOrTag)).toContain('SimmeredMeatItem')
   })
 })
