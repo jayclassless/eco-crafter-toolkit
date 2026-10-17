@@ -2,10 +2,10 @@
   "datasets": [
     {
       "id": "eco-v14",
-      "name": "Eco v14.2.0",
+      "name": "Eco v14.2.1",
       "file": "eco-v14.json",
-      "revision": 8,
-      "updatedAt": "2026-10-11",
+      "revision": 9,
+      "updatedAt": "2026-10-16",
       "default": true
     },
     {
